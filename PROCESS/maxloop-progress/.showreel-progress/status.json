@@ -4,11 +4,11 @@
     {
       "id": "brief",
       "name": "需求与脚本",
-      "status": "running",
-      "message": "v0.7 整夜 maxloop 开工：双 critic 收敛出 9 条可证伪真缺陷，阶段零正在拿真实 GitHub 竞品锚点",
+      "status": "ready",
+      "message": "阶段零：10 个真实竞品仓库锚点 + Anki 官方手册逐字引用 + 搜索索引正反证据，落盘 best-practices",
       "done": null,
       "total": null,
-      "updatedAt": "2026-11-07T17:00:24.280Z"
+      "updatedAt": "2026-11-07T23:23:38.589Z"
     },
     {
       "id": "style",
@@ -29,11 +29,11 @@
     {
       "id": "scenes",
       "name": "镜头制作",
-      "status": "running",
-      "message": "9 条真问题全部落地：判别测试 1/31 红 → 42/0 绿，全量单测 9/9 套件通过；正在跑真浏览器 e2e 与打包产物验证",
+      "status": "ready",
+      "message": "9 条真缺陷全落地：判别测试 1/31 红 → 42/0 绿，全量单测 9/9，真浏览器 e2e 193/0，打包版 18/0",
       "done": 9,
       "total": 9,
-      "updatedAt": "2026-11-07T17:20:53.503Z"
+      "updatedAt": "2026-11-07T23:23:38.748Z"
     },
     {
       "id": "audio",
@@ -46,17 +46,17 @@
     {
       "id": "review",
       "name": "最终预览",
-      "status": "running",
-      "message": "收尾目标：全量单测 + 真浏览器 e2e + 打包版 + 自动更新全绿，v0.7.0 发布，明早汇报",
+      "status": "ready",
+      "message": "v0.7.0 构建+代码+tag 已推 GitHub；Release 因 GitHub 会话过期待斯瑞一键发（已留命令）；明早播报已排",
       "done": null,
       "total": null,
-      "updatedAt": "2026-11-07T17:00:24.573Z"
+      "updatedAt": "2026-11-07T23:23:38.893Z"
     }
   ],
-  "current": "scenes",
+  "current": "review",
   "preview": null,
   "previews": [],
   "shots": [],
   "artifacts": [],
-  "updatedAt": "2026-11-07T17:20:53.503Z"
+  "updatedAt": "2026-11-07T23:23:38.893Z"
 }
