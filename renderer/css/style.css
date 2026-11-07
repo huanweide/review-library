@@ -407,3 +407,56 @@ body { margin: 0; font-family: -apple-system, "Segoe UI", "PingFang SC", "Micros
   .set-grid { grid-template-columns: 1fr; }
   .topbar { flex-wrap: wrap; }
 }
+
+/* ===== v0.6 竞品级能力：全局搜索 / 学习报告 / 图谱 / 挖空 / 四档自评 ===== */
+/* 新 UI 的空状态刻意不复用 .empty：旧 e2e 用 querySelector('.empty') 断言书内资料页文案，
+   任何更早出现的 .empty 都会把断言抢走（真回归抓到过）。 */
+.extra-empty { padding: 22px; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 9px; font-size: 13px; }
+/* 全局搜索框刻意不用 .search 类：书内资料页的 #mat-search 依赖 querySelector('.search')，
+   两个同 class 输入框会让旧逻辑填错框（真 e2e 回归抓到过）。 */
+.gsearch { width: 100%; padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; color: #0f172a; background: #fff; }
+.set-label { display: block; font-size: 13px; color: var(--muted); margin: 2px 0 12px; }
+.set-label select { display: block; margin-top: 6px; min-width: 220px; }
+
+.search-results { margin-top: 12px; max-height: 62vh; overflow: auto; }
+.search-hit { padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; cursor: pointer; background: #fff; }
+.search-hit:hover { border-color: var(--accent, #3a7afe); background: #f8fbff; }
+.hit-type { display: inline-block; font-size: 11px; color: #1d4ed8; background: #eaf1ff; border-radius: 4px; padding: 1px 6px; margin-right: 6px; }
+.hit-book { font-size: 11px; color: var(--muted); margin-right: 6px; }
+.hit-loc { font-size: 11px; color: #94a3b8; }
+.hit-title { font-size: 13px; font-weight: 600; color: #0f172a; margin-top: 5px; }
+.hit-snippet { font-size: 12px; color: #475569; line-height: 1.6; margin-top: 3px; }
+
+.report-body { margin-top: 10px; }
+.report-cards { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+.report-card { flex: 1 1 120px; border: 1px solid var(--line); border-radius: 9px; padding: 10px 14px; background: #f8fafc; }
+.report-card span { display: block; font-size: 11px; color: var(--muted); }
+.report-card b { display: block; font-size: 22px; color: #1d4ed8; margin-top: 3px; }
+.report-h4 { font-size: 13px; color: #334155; margin: 14px 0 6px; }
+.report-h4 small { font-weight: 400; color: var(--muted); }
+.report-svg { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.report-weak-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.report-weak { border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; background: #fff; }
+.report-weak b { display: block; font-size: 12px; color: #0f172a; }
+.report-weak span { font-size: 11px; color: var(--muted); }
+
+.extra-box { border: 1px solid var(--line); border-radius: 9px; background: #fff; padding: 12px; margin: 8px 0 12px; }
+.extra-box-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.extra-box-head b { font-size: 13px; color: #0f172a; }
+.extra-box-head span { font-size: 11px; color: var(--muted); }
+.extra-box-foot { font-size: 11px; color: var(--muted); margin-top: 6px; }
+.graph-svg { width: 100%; height: auto; border: 1px dashed var(--line); border-radius: 8px; background: #fcfdff; }
+
+.cloze-card { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; background: #fbfcff; }
+.cloze-title { font-size: 11px; color: var(--muted); }
+.cloze-masked { font-size: 14px; line-height: 1.8; color: #0f172a; margin: 6px 0; }
+.cloze-answer { font-size: 13px; color: #1d4ed8; background: #eaf1ff; border-radius: 6px; padding: 5px 9px; margin-bottom: 7px; }
+
+.rate-box { border: 1px solid var(--line); border-radius: 9px; background: #fbfcff; padding: 12px; margin-top: 14px; }
+.rate-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px dashed var(--line); }
+.rate-stem { flex: 1 1 200px; font-size: 12px; color: #334155; }
+.rate-btns { display: flex; gap: 5px; }
+.rate-btn { font-size: 11px; padding: 3px 9px; border: 1px solid var(--line); border-radius: 5px; background: #fff; color: #475569; cursor: pointer; }
+.rate-btn:hover { border-color: #3a7afe; }
+.rate-btn.on { background: #3a7afe; border-color: #3a7afe; color: #fff; }
+.rate-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 10px; }

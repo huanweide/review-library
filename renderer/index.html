@@ -17,6 +17,8 @@
     </div>
     <nav class="topnav">
       <button id="nav-shelf" class="nav-btn on">书架</button>
+      <button id="nav-search" class="nav-btn">全局搜索</button>
+      <button id="nav-report" class="nav-btn">学习报告</button>
       <button id="nav-settings" class="nav-btn">设置</button>
     </nav>
   </header>
@@ -94,6 +96,40 @@
         <div id="shortcut-status" class="set-test-result"></div>
         <div class="set-tip">检查更新 / 桌面快捷方式仅在打包后的安装版（NSIS 安装器）中生效；开发模式与单文件 portable 版不启用自动更新。自动更新从 GitHub 发布页拉取，需要联网。</div>
       </section>
+
+      <section class="set-card">
+        <h3>⑤ 数据备份（全在本地）</h3>
+        <div class="set-grid">
+          <button id="set-export" class="btn ghost">导出整库备份</button>
+          <button id="set-import" class="btn ghost">从备份恢复</button>
+          <input id="set-import-file" type="file" accept=".json" style="display:none">
+        </div>
+        <div id="backup-status" class="set-test-result"></div>
+        <div class="set-tip">备份是单个 JSON 文件，含全部书、资料原件、分析结果、试卷与错题本。恢复会<b>覆盖当前数据目录里的书</b>，执行前会再确认一次。全程不发网络请求。</div>
+      </section>
+    </div>
+  </main>
+
+  <!-- 全局搜索视图（跨书 / 正文 / 知识点 / 题目 / 错题） -->
+  <main id="search-view" class="view hidden">
+    <div class="settings-wrap">
+      <div class="page-head"><h2>全局搜索</h2><span class="page-sub">跨书搜资料正文、知识点、题目与错题，点结果直接进书</span></div>
+      <section class="set-card">
+        <input id="global-search" class="gsearch" type="text" placeholder="输入关键词，例如：致密度、相图、配位数" autocomplete="off">
+        <div id="global-search-status" class="set-test-result"></div>
+        <div id="global-search-list" class="search-results"></div>
+      </section>
+    </div>
+  </main>
+
+  <!-- 学习报告视图（正确率趋势 / 每日复习量 / 薄弱演化） -->
+  <main id="report-view" class="view hidden">
+    <div class="settings-wrap">
+      <div class="page-head"><h2>学习报告</h2><span class="page-sub">只统计已落盘的批改与复习记录，不联网、不猜</span></div>
+      <section class="set-card">
+        <label class="set-label">选择书<select id="report-book"></select></label>
+        <div id="report-body" class="report-body"><div class="extra-empty">正在读取学习记录…</div></div>
+      </section>
     </div>
   </main>
 
@@ -169,8 +205,12 @@
           <div id="study-status" class="study-status">尚未分析。选好材料后点「开始分析」。</div>
           <div class="study-toolbar">
             <button id="study-mask" class="btn ghost sm" type="button">遮蔽答案（无答案模式）</button>
+            <button id="study-graph" class="btn ghost sm" type="button">知识点思维导图</button>
+            <button id="study-cloze" class="btn ghost sm" type="button">挖空自测</button>
             <span class="toolbar-hint">默认显示答案；开启后只留题目+解题策略，点「看答案」可单独偷看</span>
           </div>
+          <div id="graph-box" class="extra-box hidden"></div>
+          <div id="cloze-box" class="extra-box hidden"></div>
           <div id="study-result"></div>
           <div id="study-actions" class="hidden">
             <button id="study-save" class="btn ghost">审阅后保存结果</button>
@@ -308,5 +348,6 @@
   <script src="js/syllabus-ui.js"></script>
   <script src="js/app.js"></script>
   <script src="js/weak-ui.js"></script>
+  <script src="js/extra-ui.js"></script>
 </body>
 </html>

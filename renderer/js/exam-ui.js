@@ -108,6 +108,8 @@
       $('exam-submit').classList.add('hidden');
       $('exam-remedial').classList.toggle('hidden', !(r.weakPointIds && r.weakPointIds.length));
       $('exam-feedback').classList.remove('hidden');
+      // 四档掌握度自评：看完答案才评分，评分决定下次复习时间（不重复记一次真实复习）
+      if (window.ExtraUI) window.ExtraUI.renderRatings(r.grading, this.paper.id, this.bookId);
       // 试卷可能很长，批改完直接把结果滚到眼前，别让用户自己找
       try { $('exam-result').scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {}
       this.renderList();

@@ -508,6 +508,21 @@ async function getMaterial(bookId, nameInc) { const b = JSON.parse(await get(BAS
   await page.click('#study-save'); await wait(300);
   check('审阅后保存结果', await page.evaluate(() => document.getElementById('study-status').textContent.includes('已保存')));
 
+  // 18d) v0.6：知识点思维导图（真节点+连线，本地 SVG）与挖空自测（主动回忆）
+  await page.click('#study-graph'); await wait(600);
+  check('v0.6：思维导图渲染出真实 SVG 节点', await page.evaluate(() => document.querySelectorAll('#graph-box svg circle').length >= 2));
+  check('v0.6：思维导图有知识点连线（不是纯文本分组）', await page.evaluate(() =>
+    document.querySelectorAll('#graph-box svg line[stroke="#3a7afe"], #graph-box svg line[stroke="#cbd5e1"]').length >= 1));
+  await page.screenshot({ path: path.join(SHOTS, '22-mindmap.png') });
+  await page.click('#study-cloze'); await wait(600);
+  check('v0.6：挖空自测生成卡片且答案默认隐藏', await page.evaluate(() =>
+    document.querySelectorAll('.cloze-card').length >= 1 && !!document.querySelector('.cloze-answer.hidden')));
+  await page.evaluate(() => { const b = document.querySelector('.cloze-reveal'); if (b) b.click(); });
+  await wait(120);
+  check('v0.6：点「看答案」后揭示原文答案', await page.evaluate(() => {
+    const a = document.querySelector('.cloze-answer'); return !!a && !a.classList.contains('hidden') && a.innerText.trim().length > 3;
+  }));
+
   // 19) 练习闭环：试卷不含答案 → 交卷批改 → 只针对薄弱点出巩固卷
   await page.click('#study-exam'); await wait(700);
   check('生成试卷后跳到练习页', await page.evaluate(() => !document.getElementById('pane-exam').classList.contains('hidden')));
@@ -526,6 +541,12 @@ async function getMaterial(bookId, nameInc) { const b = JSON.parse(await get(BAS
   });
   await page.click('#exam-submit'); await wait(700);
   check('逐题批改结果出现', await page.evaluate(() => document.querySelectorAll('.grade-item').length >= 2));
+  check('v0.6：批改后出现四档掌握度自评区', await page.evaluate(() =>
+    !!document.getElementById('rate-box') && document.querySelectorAll('#rate-box .rate-btn').length >= 4));
+  await page.evaluate(() => { const b = document.querySelector('#rate-box .rate-btn[data-rate="3"]'); if (b) b.click(); });
+  await page.click('#rate-save'); await wait(600);
+  check('v0.6：自评保存后明确反馈已重排下次复习', await page.evaluate(() =>
+    document.getElementById('rate-status').textContent.includes('下次复习时间已重排')));
   check('交卷后才显示标准答案', await page.evaluate(() => document.getElementById('exam-result').innerText.includes('标准答案')));
   check('判定与错因可见', await page.evaluate(() => document.querySelectorAll('.verdict').length >= 2 && !!document.querySelector('.cause')));
   check('反馈五问出现', await page.evaluate(() => !document.getElementById('exam-feedback').classList.contains('hidden') && document.querySelectorAll('#exam-feedback textarea').length >= 4));
@@ -644,6 +665,26 @@ async function getMaterial(bookId, nameInc) { const b = JSON.parse(await get(BAS
   check('题库出卷含判断题(正确/错误 两选)', await page.evaluate(() => Array.from(document.querySelectorAll('.paper-q')).some(q => q.querySelectorAll('input[type=radio]').length === 2)));
   check('题库出卷交卷前不显示答案', await page.evaluate(() => !document.getElementById('exam-paper').innerText.includes('标准答案')));
   await page.screenshot({ path: path.join(SHOTS, '21-syllabus-bank-exam.png') });
+
+  // 22) v0.6 全局能力：跨书全文搜索 / 学习报告 / 整库备份入口（真实浏览器点得到）
+  await page.click('#nav-search'); await wait(300);
+  check('v0.6：全局搜索视图可见', await page.evaluate(() => !document.getElementById('search-view').classList.contains('hidden')));
+  await page.fill('#global-search', '讲义'); await wait(900);
+  check('v0.6：全局搜索命中结果（跨书/正文/知识点/题目）', await page.evaluate(() =>
+    document.querySelectorAll('#global-search-list .search-hit').length >= 1));
+  check('v0.6：搜索结果标出类型与所属书', await page.evaluate(() => {
+    const e = document.querySelector('.search-hit');
+    return !!e && !!e.querySelector('.hit-type') && !!e.querySelector('.hit-book') && !!e.querySelector('.hit-snippet');
+  }));
+  await page.screenshot({ path: path.join(SHOTS, '23-global-search.png') });
+  await page.click('#nav-report'); await wait(900);
+  check('v0.6：学习报告显示统计卡片', await page.evaluate(() => document.querySelectorAll('#report-body .report-card').length >= 4));
+  check('v0.6：学习报告含本地 SVG 正确率趋势线', await page.evaluate(() =>
+    !!document.querySelector('#report-body svg path[stroke="#3a7afe"]')));
+  await page.screenshot({ path: path.join(SHOTS, '24-report.png') });
+  await page.click('#nav-settings'); await wait(300);
+  check('v0.6：设置页含整库导出与恢复入口', await page.evaluate(() =>
+    !!document.getElementById('set-export') && !!document.getElementById('set-import') && !!document.getElementById('backup-status')));
 
   // 16) 零外链硬约束：CSP + 本地 vendor，全程不得向外部域名发请求
   check('全程零外部域名请求', externalRequests.length === 0, externalRequests.slice(0, 3).join(' | '));

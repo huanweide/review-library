@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "stages": [
+    {
+      "id": "brief",
+      "name": "需求与脚本",
+      "status": "running",
+      "message": "阶段零完成：5 个真实竞品仓库锚点（Anki 32647★ / FSRS 4127★ / Logseq 45507★ / SiYuan 47119★ / Trilium 38732★），7 类功能基准，融合 6 项、打回 5 项，对照表已落盘",
+      "done": null,
+      "total": null,
+      "updatedAt": "2026-11-07T16:23:15.106Z"
+    },
+    {
+      "id": "style",
+      "name": "风格与画面",
+      "status": "pending",
+      "message": "",
+      "done": null,
+      "total": null
+    },
+    {
+      "id": "narration",
+      "name": "口播样例",
+      "status": "pending",
+      "message": "",
+      "done": null,
+      "total": null
+    },
+    {
+      "id": "scenes",
+      "name": "镜头制作",
+      "status": "pending",
+      "message": "",
+      "done": null,
+      "total": null
+    },
+    {
+      "id": "audio",
+      "name": "配乐与音效",
+      "status": "pending",
+      "message": "",
+      "done": null,
+      "total": null
+    },
+    {
+      "id": "review",
+      "name": "最终预览",
+      "status": "pending",
+      "message": "",
+      "done": null,
+      "total": null
+    }
+  ],
+  "current": "brief",
+  "preview": null,
+  "previews": [],
+  "shots": [],
+  "artifacts": [],
+  "updatedAt": "2026-11-07T16:23:15.106Z"
+}

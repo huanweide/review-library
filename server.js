@@ -9,6 +9,12 @@ const insight = require('./lib/insight');
 const study = require('./lib/study');
 const llm = require('./lib/llm');
 const media = require('./lib/media');
+// v0.6 竞品级能力（全部纯本地，零外部依赖）
+const searchLib = require('./lib/search');
+const graphLib = require('./lib/graph');
+const analyticsLib = require('./lib/analytics');
+const clozeLib = require('./lib/cloze');
+const backupLib = require('./lib/backup');
 
 const ROOT = process.env.LIBRARY_ROOT || path.join(__dirname, 'library');
 const PORT = parseInt(process.env.PORT, 10) || 5178;
@@ -80,6 +86,16 @@ async function handleApi(req, res, u) {
       if (parts[2] === 'grade' && method === 'POST') {
         const ex = store.getExam(m.bookId, m.examId);
         if (!ex) return send(res, 404, { error: '试卷不存在' });
+        // 幂等：批改是一次性事件。重复交卷只返回既有结果，不重算、不追加错题历史。
+        if (ex.grading && ex.grading.length) {
+          return send(res, 200, {
+            ok: true, replayed: true, grading: ex.grading, weakPointIds: ex.weakPointIds || [],
+            summary: { total: ex.grading.length,
+              correct: ex.grading.filter(g => g.verdict === '正确').length,
+              partial: ex.grading.filter(g => g.verdict === '部分正确').length,
+              wrong: ex.grading.filter(g => g.verdict === '错误').length }
+          });
+        }
         const r = study.gradeExam(ex, m.answers || {});
         store.saveExam(m.bookId, ex);
         // M1：批改后把薄弱知识点累积进错题本（跨会话持久），不阻塞批改返回
@@ -88,6 +104,10 @@ async function handleApi(req, res, u) {
       }
       if (parts[2] === 'mistakes' && parts[3] && method === 'GET') {
         return send(res, 200, study.summarizeMistakes(store, parts[3]));
+      }
+      // 四档自评：看完答案后重排下次复习时间，不重复记一次真实复习。
+      if (parts[2] === 'rate' && method === 'POST') {
+        return send(res, 200, study.applyRatings(store, m.bookId, m.examId, m.ratings || {}));
       }
       if (parts[2] === 'review' && method === 'POST') {
         const r = study.reviewExam(store, m.bookId, Date.now(), m.maxQ);
@@ -110,6 +130,29 @@ async function handleApi(req, res, u) {
       if (parts[2] === 'syllabusExam' && method === 'POST') {
         return send(res, 200, await study.bankExam(store, m.bookId, m.opts || {}));
       }
+    }
+    // ===== v0.6：全局搜索 / 知识图谱 / 学习报告 / 挖空 / 整库备份 =====
+    if (parts[1] === 'search' && parts.length === 2 && method === 'POST') {
+      const m = JSON.parse(await readBody(req) || '{}');
+      return send(res, 200, searchLib.searchAll(store, m.q, { limit: m.limit }));
+    }
+    if (parts[1] === 'graph' && parts[2] && parts.length === 3 && method === 'GET') {
+      return send(res, 200, graphLib.buildGraph(store.getAnalysis(parts[2]) || {}));
+    }
+    if (parts[1] === 'report' && parts[2] && parts.length === 3 && method === 'GET') {
+      const days = Math.max(1, Math.min(365, Number(u.searchParams.get('days')) || 30));
+      return send(res, 200, analyticsLib.buildReport(store, parts[2], Date.now(), { days }));
+    }
+    if (parts[1] === 'cloze' && parts[2] && parts.length === 3 && method === 'GET') {
+      const a = store.getAnalysis(parts[2]) || {};
+      return send(res, 200, { cards: clozeLib.makeDeck(a.points || [], { limit: 40 }) });
+    }
+    if (parts[1] === 'backup' && parts[2] === 'export' && method === 'GET') {
+      return send(res, 200, { data: backupLib.exportAll(store) });
+    }
+    if (parts[1] === 'backup' && parts[2] === 'import' && method === 'POST') {
+      const m = JSON.parse(await readBody(req) || '{}');
+      return send(res, 200, backupLib.importAll(store, m.data, { mode: m.mode || 'replace' }));
     }
     // /api/books
     if (parts[1] === 'books' && parts.length === 2) {

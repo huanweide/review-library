@@ -8,6 +8,12 @@ const media = require('../lib/media');
 const study = require('../lib/study');
 const llm = require('../lib/llm');
 const { readApiEnv } = require('../lib/env-config');
+// v0.6 竞品级能力（与 server.js 的 /api 路由一一对应，四层镜像不许缺边）
+const searchLib = require('../lib/search');
+const graphLib = require('../lib/graph');
+const analyticsLib = require('../lib/analytics');
+const clozeLib = require('../lib/cloze');
+const backupLib = require('../lib/backup');
 
 // asar 是只读虚拟文件系统，数据目录绝不能落在 __dirname/..（打包后会直接崩）。
 // 优先级：环境变量 REVIEW_LIBRARY_ROOT
@@ -70,6 +76,14 @@ ipcMain.handle('study:getExam', (e, b, id) => {
 });
 ipcMain.handle('study:grade', (e, b, id, ans) => {
   const ex = store.getExam(b, id); if (!ex) return { ok: false, reason: '试卷不存在' };
+  // 幂等：与 server.js /api/study/grade 同口径，重复交卷不重算、不刷错题统计。
+  if (ex.grading && ex.grading.length) return {
+    ok: true, replayed: true, grading: ex.grading, weakPointIds: ex.weakPointIds || [],
+    summary: { total: ex.grading.length,
+      correct: ex.grading.filter(g => g.verdict === '正确').length,
+      partial: ex.grading.filter(g => g.verdict === '部分正确').length,
+      wrong: ex.grading.filter(g => g.verdict === '错误').length }
+  };
   const r = study.gradeExam(ex, ans || {}); store.saveExam(b, ex);
   store.recordGrade(b, ex, store.getAnalysis(b));
   return r;
@@ -90,6 +104,14 @@ ipcMain.handle('study:remedial', (e, b, id) => {
 });
 ipcMain.handle('study:syllabus', (e, bookId) => study.buildBookOutline(store, bookId));
 ipcMain.handle('study:syllabusExam', (e, bookId, opts) => study.bankExam(store, bookId, opts || {}));
+ipcMain.handle('study:rate', (e, bookId, examId, ratings) => study.applyRatings(store, bookId, examId, ratings || {}));
+// v0.6：全局搜索 / 知识图谱 / 学习报告 / 挖空 / 整库备份（全部纯本地）
+ipcMain.handle('extra:search', (e, q, limit) => searchLib.searchAll(store, q, { limit }));
+ipcMain.handle('extra:graph', (e, bookId) => graphLib.buildGraph(store.getAnalysis(bookId) || {}));
+ipcMain.handle('extra:report', (e, bookId, days) => analyticsLib.buildReport(store, bookId, Date.now(), { days: days || 30 }));
+ipcMain.handle('extra:cloze', (e, bookId) => ({ cards: clozeLib.makeDeck((store.getAnalysis(bookId) || {}).points || [], { limit: 40 }) }));
+ipcMain.handle('extra:backupExport', () => ({ data: backupLib.exportAll(store) }));
+ipcMain.handle('extra:backupImport', (e, data, mode) => backupLib.importAll(store, data, { mode: mode || 'replace' }));
 ipcMain.handle('insight:generate', (e, bookId, prompt) => insight.generate(store, bookId, prompt));
 ipcMain.handle('dialog:openFiles', async () => {
   const r = await dialog.showOpenDialog({ properties: ['openFile', 'multiSelections'] });

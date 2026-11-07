@@ -32,7 +32,7 @@
     }
   };
 
-  const VIEWS = ['shelf', 'settings', 'book'];
+  const VIEWS = ['shelf', 'settings', 'book', 'search-view', 'report-view'];
   const PANES = ['materials', 'study', 'exam', 'weak', 'syllabus'];
 
   const App = {
@@ -50,6 +50,8 @@
       // 全局导航
       document.getElementById('nav-shelf').onclick = () => App.showShelf();
       document.getElementById('nav-settings').onclick = () => App.showSettings();
+      document.getElementById('nav-search').onclick = () => App.showSearch();
+      document.getElementById('nav-report').onclick = () => App.showReport();
       // 收录书
       document.getElementById('c-cancel').onclick = () => document.getElementById('create-modal').classList.add('hidden');
       document.getElementById('c-ok').onclick = async () => {
@@ -128,9 +130,13 @@
       VIEWS.forEach(v => document.getElementById(v).classList.toggle('hidden', v !== name));
       document.getElementById('nav-shelf').classList.toggle('on', name === 'shelf');
       document.getElementById('nav-settings').classList.toggle('on', name === 'settings');
+      document.getElementById('nav-search').classList.toggle('on', name === 'search-view');
+      document.getElementById('nav-report').classList.toggle('on', name === 'report-view');
     },
     showShelf() { this.showView('shelf'); Shelf.render(); },
     showSettings() { this.showView('settings'); Settings.init(); },
+    showSearch() { this.showView('search-view'); if (window.ExtraUI) ExtraUI.enterSearch(); },
+    showReport() { this.showView('report-view'); if (window.ExtraUI) ExtraUI.enterReport(); },
 
     async openBook(id) {
       this.currentId = id;

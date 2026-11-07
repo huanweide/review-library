@@ -43,7 +43,17 @@ contextBridge.exposeInMainWorld('api', {
     review: (b, maxQ) => ipcRenderer.invoke('study:review', b, maxQ),
     remedial: (b, e) => ipcRenderer.invoke('study:remedial', b, e),
     syllabus: (b) => ipcRenderer.invoke('study:syllabus', b),
-    syllabusExam: (b, o) => ipcRenderer.invoke('study:syllabusExam', b, o)
+    syllabusExam: (b, o) => ipcRenderer.invoke('study:syllabusExam', b, o),
+    rate: (b, e, r) => ipcRenderer.invoke('study:rate', b, e, r)
+  },
+  // v0.6 竞品级能力：全局搜索 / 知识图谱 / 学习报告 / 挖空 / 整库备份
+  extra: {
+    search: (q, limit) => ipcRenderer.invoke('extra:search', q, limit),
+    graph: (b) => ipcRenderer.invoke('extra:graph', b),
+    report: (b, d) => ipcRenderer.invoke('extra:report', b, d),
+    cloze: (b) => ipcRenderer.invoke('extra:cloze', b),
+    backupExport: () => ipcRenderer.invoke('extra:backupExport'),
+    backupImport: (data, mode) => ipcRenderer.invoke('extra:backupImport', data, mode)
   },
   dialog: { openFiles: () => ipcRenderer.invoke('dialog:openFiles') }
 });

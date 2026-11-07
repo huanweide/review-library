@@ -58,7 +58,17 @@
       review: (b, n) => POST('/api/study/review', { bookId: b, maxQ: n }),
       remedial: (b, e) => POST('/api/study/remedial', { bookId: b, examId: e }),
       syllabus: (b) => J('/api/study/syllabus/' + encodeURIComponent(b)),
-      syllabusExam: (b, o) => POST('/api/study/syllabusExam', { bookId: b, opts: o || {} })
+      syllabusExam: (b, o) => POST('/api/study/syllabusExam', { bookId: b, opts: o || {} }),
+      rate: (b, e, r) => POST('/api/study/rate', { bookId: b, examId: e, ratings: r })
+    },
+    // v0.6：与 Electron preload 的 extra 命名空间一一对应（HTTP 模式同样可用）
+    extra: {
+      search: (q, limit) => POST('/api/search', { q, limit }),
+      graph: (b) => J('/api/graph/' + encodeURIComponent(b)),
+      report: (b, d) => J('/api/report/' + encodeURIComponent(b) + '?days=' + (d || 30)),
+      cloze: (b) => J('/api/cloze/' + encodeURIComponent(b)),
+      backupExport: () => J('/api/backup/export'),
+      backupImport: (data, mode) => POST('/api/backup/import', { data, mode: mode || 'replace' })
     },
     dialog: { openFiles: null }
   };
