@@ -452,6 +452,22 @@ async function getMaterial(bookId, nameInc) { const b = JSON.parse(await get(BAS
   }));
   check('BC：计算/应用类题含验算提示区(verify)', await page.evaluate(() => !!document.querySelector('.q-method-verify')));
 
+  // 18c) 降级披露（Graceful Degradation）：结果含义变了必须让用户看见，且不能误报。
+  const degradeUI = await page.evaluate(() => {
+    const orig = window.StudyUI.analysis;
+    const a = JSON.parse(JSON.stringify(orig));
+    a.visionDegraded = true;
+    window.StudyUI.analysis = a; window.StudyUI.renderResult();
+    const shown = !!document.querySelector('#study-result .degrade-banner');
+    a.visionDegraded = false;
+    window.StudyUI.analysis = a; window.StudyUI.renderResult();
+    const hidden = !document.querySelector('#study-result .degrade-banner');
+    window.StudyUI.analysis = orig; window.StudyUI.renderResult();
+    return { shown, hidden };
+  });
+  check('降级时结果页显示「本次未读图」披露条', degradeUI.shown);
+  check('未降级时不误报披露条', degradeUI.hidden);
+
   // === M3：多模态视觉闭环（零外链）===
   // 注入一份含 assetRefs 的 mock 分析结果（引用真实 PPTX 内嵌图），验证：
   //   1) 知识点/题目卡渲染出缩略图(.asset-thumb)

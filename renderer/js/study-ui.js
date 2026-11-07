@@ -206,6 +206,11 @@
         a.points.length + ' 个知识点 / ' + a.questions.length + ' 道题';
       $('study-status').className = 'study-status ok';
       let h = '<div class="res-note">' + esc(a.note || '') + '</div>';
+      // 降级披露（Graceful Degradation）：结果含义变了（图没被读取），必须在结果页最上方让用户一眼看见。
+      if (a.visionDegraded) {
+        h += '<div class="degrade-banner"><b>本次未读图</b>：当前模型不支持视觉输入，资料中的图片没有被读取，' +
+          '结果不含任何图片引用或图说明。想让 AI 看图，请在设置页换用带视觉能力的模型（如 deepseek-flash / Qwen3-VL）。</div>';
+      }
       h += this.qualityHTML(a.quality);
 
       if (a.boundary.excluded.length) {

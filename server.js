@@ -173,7 +173,9 @@ async function handleApi(req, res, u) {
 }
 
 function serveStatic(req, res, u) {
-  let p = decodeURIComponent(u.pathname);
+  let p;
+  try { p = decodeURIComponent(u.pathname); }
+  catch (e) { res.writeHead(400); return res.end('bad request'); }
   if (p === '/' || p === '') p = '/index.html';
   const file = path.join(__dirname, 'renderer', path.normalize(p).replace(/^(\.\.[\/\\])+/, ''));
   if (!file.startsWith(path.join(__dirname, 'renderer'))) { res.writeHead(403); return res.end('forbidden'); }
@@ -186,12 +188,20 @@ function serveStatic(req, res, u) {
 }
 
 const server = http.createServer(async (req, res) => {
-  const u = parseUrl(req);
-  if (u.pathname.startsWith('/api/')) {
-    const handled = await handleApi(req, res, u);
-    if (handled === false) serveStatic(req, res, u);
-  } else {
-    serveStatic(req, res, u);
+  // 请求级异常绝不能升格为进程级异常：单个畸形请求不许打死整个服务。
+  // 根因：原来 async 回调里同步抛出会变成 unhandledRejection，Node 默认直接退出。
+  try {
+    const u = parseUrl(req);
+    if (u.pathname.startsWith('/api/')) {
+      const handled = await handleApi(req, res, u);
+      if (handled === false) serveStatic(req, res, u);
+    } else {
+      serveStatic(req, res, u);
+    }
+  } catch (e) {
+    if (process.env.DEBUG) console.error('[request error]', e);
+    if (!res.headersSent) { try { res.writeHead(500); } catch (e2) {} }
+    try { res.end('internal error'); } catch (e2) {}
   }
 });
 
