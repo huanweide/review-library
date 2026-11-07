@@ -17,3 +17,6 @@ nul
 
 # 系统
 Thumbs.db
+
+# playwright-cli 快照/临时产物
+.playwright-cli/
