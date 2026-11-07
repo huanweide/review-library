@@ -124,6 +124,15 @@ function installUpdate() {
   try { require('electron-updater').autoUpdater.quitAndInstall(); return { ok: true }; }
   catch (e) { return { ok: false, error: String(e && e.message || e) }; }
 }
+// 上游报错可能带一大坨响应体/请求头（GitHub 404 会），对用户只需一句人话。
+function friendlyUpdateError(msg) {
+  const s = String(msg || '');
+  if (/404/.test(s) && /releases/.test(s)) return 'GitHub 上还没有这个仓库的发布版本（404）。仓库建好并发布 Release 后即可自动更新。';
+  if (/404/.test(s)) return 'GitHub 上找不到目标（404）。仓库或 Release 尚未创建。';
+  if (/ENOTFOUND|ETIMEDOUT|ECONNREFUSED|network/i.test(s)) return '连不上 GitHub，检查网络或代理设置。';
+  if (/401|403/.test(s)) return 'GitHub 拒绝访问（401/403），可能需要鉴权。';
+  return s.split('\n')[0].slice(0, 160) || '未知错误';
+}
 ipcMain.handle('app:checkUpdate', () => checkForUpdate());
 ipcMain.handle('app:installUpdate', () => installUpdate());
 
@@ -135,7 +144,7 @@ function setupAutoUpdater() {
   autoUpdater.on('checking-for-update', () => send('update-status', { state: 'checking' }));
   autoUpdater.on('update-available', (i) => send('update-status', { state: 'available', version: i && i.version, notes: (i && i.releaseNotes) || '' }));
   autoUpdater.on('update-not-available', () => send('update-status', { state: 'uptodate' }));
-  autoUpdater.on('error', (e) => send('update-status', { state: 'error', message: String((e && e.message) || e) }));
+  autoUpdater.on('error', (e) => send('update-status', { state: 'error', message: friendlyUpdateError((e && e.message) || e) }));
   autoUpdater.on('download-progress', (p) => send('update-status', { state: 'downloading', percent: Math.floor((p && p.percent) || 0) }));
   autoUpdater.on('update-downloaded', () => send('update-status', { state: 'downloaded' }));
 }

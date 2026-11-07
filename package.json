@@ -2,6 +2,7 @@
   "name": "review-library",
   "version": "0.3.0",
   "author": "retri",
+  "repository": "https://github.com/huanweide/review-library",
   "private": true,
   "description": "项目级离线复习资料管理系统：分层图书馆，一本书=一项考试+一项科目+其资料分析，支持成百上千本书与资料的真落盘增删改查。",
   "main": "app/main.js",
@@ -17,19 +18,39 @@
   "build": {
     "appId": "cn.sirui.reviewlibrary",
     "productName": "ReviewLibrary",
-    "repository": "https://github.com/huanweide/review-library",
-    "directories": { "output": "dist" },
+    "directories": {
+      "output": "dist"
+    },
     "files": [
       "app/**/*",
       "lib/**/*",
       "renderer/**/*",
       "server.js",
-      "package.json"
+      "package.json",
+      "node_modules/electron-updater/**/*",
+      "node_modules/electron-updater/out/**/*",
+      "node_modules/builder-util-runtime/**/*",
+      "node_modules/js-yaml/**/*",
+      "node_modules/lazy-val/**/*",
+      "node_modules/jszip/**/*",
+      "node_modules/temp/**/*",
+      "node_modules/tough-cookie/**/*",
+      "node_modules/immer/**/*"
     ],
     "win": {
       "target": [
-        { "target": "nsis", "arch": ["x64"] },
-        { "target": "portable", "arch": ["x64"] }
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
       "signAndEditExecutable": false
     },
@@ -45,14 +66,24 @@
       "artifactName": "ReviewLibrary-${version}-portable.exe"
     },
     "publish": [
-      { "provider": "github", "owner": "huanweide", "repo": "review-library" }
+      {
+        "provider": "github",
+        "owner": "huanweide",
+        "repo": "review-library"
+      }
     ],
-    "asar": true
+    "asar": true,
+    "buildVersion": "0.3.0",
+    "extraMetadata": {
+      "main": "app/main.js"
+    }
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
   },
   "devDependencies": {
     "electron": "^31.0.0",
     "electron-builder": "^24.13.3",
-    "electron-updater": "^6.6.2",
     "playwright-core": "^1.64.1"
   }
 }
