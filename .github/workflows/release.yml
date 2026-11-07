@@ -1,0 +1,65 @@
+name: Build and Release
+
+# 触发器：推送 v* 标签时自动构建并发布到 GitHub Release。
+# 也支持在 Actions 页面手动 Run（workflow_dispatch）。
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+# 云端内置令牌需要写权限才能创建 Release 并上传资产。
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # 复用 Electron 二进制与 NSIS 工具链缓存，避免每次重新下载
+      - name: Cache Electron
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+          key: ${{ runner.os }}-electron-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-
+
+      - name: Install dependencies
+        run: npm ci
+        # 宿主若带 ELECTRON_RUN_AS_NODE 会让 Electron 退化成纯 Node，必须清掉
+        env:
+          ELECTRON_RUN_AS_NODE: ''
+
+      # 只构建不发布：产出 NSIS 安装器 + 免安装版 + latest.yml + .blockmap
+      - name: Build (publish never)
+        run: npx electron-builder --win nsis portable --publish never
+        env:
+          ELECTRON_RUN_AS_NODE: ''
+
+      # 用云端 GITHUB_TOKEN 创建「正式（非 draft）」Release 并上传资产。
+      # latest.yml 是 electron-updater 自动更新必需的元数据，必须随包上传。
+      - name: Publish to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/ReviewLibrary-Setup-*.exe
+            dist/ReviewLibrary-Setup-*.exe.blockmap
+            dist/ReviewLibrary-*-portable.exe
+            dist/latest.yml
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
