@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- 零云端硬约束：connect-src 只允许同源。云端 API 一律由本地服务/Electron 主进程转发，
+       浏览器永远只请求同源 /api，所以这条规则不用放宽。 -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob:; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; frame-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'none'">
+  <title>复习资料图书馆</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-theme="light">
+  <header class="topbar">
+    <div class="brand-wrap">
+      <div class="brand">复习资料图书馆</div>
+      <div class="brand-sub">项目级离线资料管理 · 分析 · 出题 · 复习闭环</div>
+    </div>
+    <nav class="topnav">
+      <button id="nav-shelf" class="nav-btn on">书架</button>
+      <button id="nav-settings" class="nav-btn">设置</button>
+    </nav>
+  </header>
+
+  <!-- 书架视图 -->
+  <main id="shelf" class="view">
+    <div class="shelf-head">
+      <div class="shelf-head-left">
+        <h2>我的书架</h2>
+        <div class="shelf-hint">书架即收录：点「＋ 收录一本书」添加；点封面进入该书。</div>
+      </div>
+      <button id="open-trash" class="btn ghost">🗑 回收站 <span id="trash-count" class="badge-count">0</span></button>
+    </div>
+    <div id="book-grid" class="book-grid"></div>
+  </main>
+
+  <!-- 设置视图（全局） -->
+  <main id="settings" class="view hidden">
+    <div class="settings-wrap">
+      <div class="page-head"><h2>设置</h2><span class="page-sub">引擎、API 连接与出题参数</span></div>
+
+      <section class="set-card">
+        <h3>① 分析引擎</h3>
+        <label class="radio-row"><input type="radio" name="set-engine" value="local" checked> <b>本地引擎（默认）</b><span>完全离线、零外链。只从资料原文抽重点与出题，不产生新知识。</span></label>
+        <label class="radio-row"><input type="radio" name="set-engine" value="llm"> <b>云端引擎</b><span>用你自己填的 API 分析资料、生成题目。质量和费用取决于你选的模型。</span></label>
+        <div id="set-engine-now" class="set-status"></div>
+      </section>
+
+      <section id="llm-fields" class="set-card hidden">
+        <h3>② API 连接</h3>
+        <label>服务商预设<select id="set-provider">
+          <option value="custom">自定义（自己填）</option>
+          <option value="siliconflow">硅基流动 SiliconFlow</option>
+          <option value="deepseek">DeepSeek 官方</option>
+        </select></label>
+        <div id="set-provider-note" class="set-provider-note" style="display:none"></div>
+        <div id="set-env-note" class="set-env-note"></div>
+        <label>API 地址（硅基流动带 /v1；DeepSeek 官方不带 /v1）<input id="set-base" type="text" placeholder="https://api.siliconflow.cn/v1" autocomplete="off" spellcheck="false"></label>
+        <label>API 密钥<input id="set-key" type="password" placeholder="sk-…" autocomplete="new-password" spellcheck="false"></label>
+        <label>模型名<input id="set-model" type="text" placeholder="如 deepseek-flash / Qwen/Qwen3-VL-8B-Instruct" autocomplete="off" spellcheck="false"></label>
+        <div id="set-vision-flag" class="set-vision-flag"></div>
+        <div class="set-actions">
+          <button id="set-test" class="btn ghost">测试连接</button>
+          <button id="set-clear-key" class="btn ghost danger">清空密钥</button>
+          <span id="set-test-result" class="set-test-result"></span>
+        </div>
+        <div class="set-warn">
+          <b>填之前先看清三件事（大白话）</b>
+          <p>1. 选云端引擎后，你勾选的资料文字会发到上面这个地址，由那家模型处理。<b>发什么、发给谁，由你填的地址决定</b>，本程序不替你选服务商。</p>
+          <p>2. 调用会产生你自己的 API 费用。建议先在服务商后台设一个消费上限。</p>
+          <p>3. 密钥<b>只存在当前浏览器标签页</b>（关掉标签页就没了，下次要重填），不写进项目文件、不写日志、不上传、不出现在截图里。公用电脑别填。其余设置（地址、模型名、参数）会记住，密钥不会。</p>
+        </div>
+      </section>
+
+      <section class="set-card">
+        <h3>③ 出题参数</h3>
+        <div class="set-grid">
+          <label>知识点数量<input id="set-points" type="number" min="3" max="12" value="5"></label>
+          <label>每张卷题目数<input id="set-qcount" type="number" min="2" max="30" value="8"></label>
+          <label>题目去重阈值<input id="set-dedupe" type="number" min="0.6" max="0.99" step="0.01" value="0.82"></label>
+        </div>
+        <div class="set-tip">去重阈值＝两道题的题干要多像才算重复。调高（如 0.95）只合并几乎一模一样的；调低（如 0.7）合并更多近似题，但可能误删本来不同的题。默认 0.82，改完重新分析才生效。云端的校验与重试固定开启，不需要配置。</div>
+        <label>默认复习要求提示词<input id="set-prompt" type="text" placeholder="如：重点看相图与结晶部分"></label>
+        <div class="set-actions"><button id="set-save" class="btn primary">保存设置</button><span id="set-save-result" class="set-test-result"></span></div>
+      </section>
+
+      <section class="set-card">
+        <h3>④ 应用与更新</h3>
+        <div class="set-grid">
+          <button id="set-check-update" class="btn ghost">检查更新</button>
+          <button id="set-make-shortcut" class="btn ghost">创建桌面快捷方式</button>
+          <button id="set-install-update" class="btn primary" style="display:none">安装并重启</button>
+        </div>
+        <div id="update-status" class="set-test-result"></div>
+        <div id="shortcut-status" class="set-test-result"></div>
+        <div class="set-tip">检查更新 / 桌面快捷方式仅在打包后的安装版（NSIS 安装器）中生效；开发模式与单文件 portable 版不启用自动更新。自动更新从 GitHub 发布页拉取，需要联网。</div>
+      </section>
+    </div>
+  </main>
+
+  <!-- 书内视图 -->
+  <main id="book" class="view hidden">
+    <div class="book-head">
+      <button id="back-shelf" class="btn ghost">← 书架</button>
+      <div class="book-titles">
+        <div id="book-title" class="book-title"></div>
+        <div id="book-sub" class="book-sub"></div>
+      </div>
+      <button id="book-del" class="btn ghost danger">删除本书</button>
+    </div>
+    <div class="book-tabs">
+      <button class="book-tab on" data-pane="materials">资料</button>
+      <button class="book-tab" data-pane="syllabus">考纲</button>
+      <button class="book-tab" data-pane="study">分析</button>
+      <button class="book-tab" data-pane="exam">练习</button>
+      <button class="book-tab" data-pane="weak">薄弱</button>
+      <span id="engine-badge" class="engine-badge"></span>
+    </div>
+
+    <!-- 资料子页 -->
+    <div id="pane-materials" class="book-pane">
+      <div class="book-body">
+        <aside id="layers" class="layers"></aside>
+        <section class="materials">
+          <div class="mat-toolbar">
+            <input id="mat-search" class="search" type="text" placeholder="搜文件名 / 标签 / 提示词">
+            <button id="gen-insight" class="btn ghost">生成复习提纲</button>
+            <button id="add-mat" class="btn primary">＋ 添加资料</button>
+          </div>
+          <div class="mat-filters" id="mat-filters">
+            <label>来源<select id="f-source"><option value="all">全部</option><option value="user">用户上传</option><option value="system">系统生成</option></select></label>
+            <label>标签<select id="f-tag"><option value="all">全部</option></select></label>
+            <label>时间<select id="f-since"><option value="all">全部时间</option><option value="7">近 7 天</option><option value="30">近 30 天</option><option value="365">近 1 年</option></select></label>
+            <label>类型<select id="f-ext"><option value="all">全部格式</option><option value="pdf">PDF</option><option value="office">Word/Excel/PPT</option><option value="image">图片</option><option value="text">文本/Markdown</option></select></label>
+            <button id="f-clear" class="btn ghost sm">清空筛选</button>
+            <span id="mat-count" class="mat-count"></span>
+          </div>
+          <div id="material-grid" class="material-grid"></div>
+        </section>
+      </div>
+    </div>
+
+    <!-- 考纲子页（M1 结构化视图：忠实呈现考纲.md + 题库.json 挂题） -->
+    <div id="pane-syllabus" class="book-pane hidden">
+      <div class="syllabus-wrap">
+        <div class="syllabus-head">
+          <div id="syllabus-title" class="syllabus-title"></div>
+          <div id="syllabus-meta" class="syllabus-meta"></div>
+        </div>
+        <div id="syllabus-actions" class="syllabus-actions">
+          <button id="syllabus-exam" class="btn primary">从题库出卷（<span id="syllabus-exam-n">0</span> 题）</button>
+          <span id="syllabus-exam-status" class="study-run-status"></span>
+        </div>
+        <div id="syllabus-body" class="syllabus-body"></div>
+      </div>
+    </div>
+
+    <!-- 分析子页 -->
+    <div id="pane-study" class="book-pane hidden">
+      <div class="study-wrap">
+        <aside class="study-side">
+          <h3>① 先划材料边界</h3>
+          <p class="hint">勾选本次要分析的资料。没勾的会明确列进「排除」，不会偷偷读。</p>
+          <div id="bd-list" class="bd-list"></div>
+          <label class="study-label">复习要求提示词<textarea id="study-prompt" rows="3" placeholder="如：重点看相图与结晶部分"></textarea></label>
+          <button id="study-run" class="btn primary full">开始分析</button>
+          <div id="study-run-status" class="study-run-status"></div>
+        </aside>
+        <section class="study-main">
+          <div id="study-status" class="study-status">尚未分析。选好材料后点「开始分析」。</div>
+          <div class="study-toolbar">
+            <button id="study-mask" class="btn ghost sm" type="button">遮蔽答案（无答案模式）</button>
+            <span class="toolbar-hint">默认显示答案；开启后只留题目+解题策略，点「看答案」可单独偷看</span>
+          </div>
+          <div id="study-result"></div>
+          <div id="study-actions" class="hidden">
+            <button id="study-save" class="btn ghost">审阅后保存结果</button>
+            <button id="study-exam" class="btn primary">生成试卷 → 去练习</button>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- 练习子页 -->
+    <div id="pane-exam" class="book-pane hidden">
+      <div class="exam-wrap">
+        <aside class="exam-side">
+          <h3>试卷</h3>
+          <div id="exam-list" class="exam-list"></div>
+          <button id="exam-new" class="btn primary full">从最近分析生成新卷</button>
+          <button id="exam-bank" class="btn ghost full">从题库.json 出卷（来源依据）</button>
+          <button id="exam-review" class="btn ghost full">生成今日复习卷（到期薄弱点）</button>
+          <div id="exam-new-status" class="study-run-status"></div>
+          <div id="exam-review-status" class="study-run-status"></div>
+        </aside>
+        <section class="exam-main">
+          <div id="exam-paper"></div>
+          <div id="exam-result"></div>
+          <div class="exam-actions">
+            <button id="exam-submit" class="btn primary hidden">交卷批改</button>
+            <button id="exam-remedial" class="btn ghost hidden">只针对错题生成巩固卷</button>
+          </div>
+          <div id="exam-feedback" class="feedback hidden">
+            <h3>学完反馈（可选，用于记录掌握程度）</h3>
+            <label>我能复述的内容<textarea rows="2"></textarea></label>
+            <label>我卡住的地方<textarea rows="2"></textarea></label>
+            <label>当前难度评分（1-5）<input type="number" min="1" max="5" value="3"></label>
+            <label>我希望下一步<textarea rows="2"></textarea></label>
+            <label>这个知识点让我联想到的已学内容<textarea rows="2"></textarea></label>
+            <button id="exam-feedback-save" class="btn ghost">记录反馈</button>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- 薄弱子页（M1 错题本地图） -->
+    <div id="pane-weak" class="book-pane hidden">
+      <div class="weak-wrap">
+        <div class="page-head"><h2>薄弱地图</h2><span class="page-sub">每次批改的错题会累积在这里，跨会话持久；反复答错的知识点被标为 leech，优先复习。</span></div>
+        <div id="weak-summary" class="weak-summary"></div>
+        <div id="weak-list" class="weak-list"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- 收录书 modal -->
+  <div id="create-modal" class="modal hidden">
+    <div class="modal-card">
+      <h3>收录一本书</h3>
+      <label>书名（科目）<input id="c-title" type="text" placeholder="如：材料科学基础"></label>
+      <label>考试<input id="c-exam" type="text" placeholder="如：2026 秋季期末"></label>
+      <label>科目<input id="c-subject" type="text" placeholder="如：材料科学与工程"></label>
+      <div class="field">封面色<div id="c-colors" class="swatches"></div></div>
+      <label>备注<textarea id="c-note" rows="2"></textarea></label>
+      <div class="modal-actions">
+        <button id="c-cancel" class="btn ghost">取消</button>
+        <button id="c-ok" class="btn primary">收录</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 添加资料 modal -->
+  <div id="add-modal" class="modal hidden">
+    <div class="modal-card">
+      <h3>添加资料</h3>
+      <input id="add-files" type="file" multiple>
+      <div id="add-files-info" class="hint">未选择文件</div>
+      <label>放入第几层（1 = 核心提纲层）<input id="add-layer" type="number" min="1" value="1"></label>
+      <label>复习要求提示词（可选）<textarea id="add-prompt" rows="2" placeholder="如：重点看相图与结晶部分"></textarea></label>
+      <label>标签（逗号分隔，可选）<input id="add-tags" type="text" placeholder="如：核心, 必看"></label>
+      <div class="modal-actions">
+        <button id="add-cancel" class="btn ghost">取消</button>
+        <button id="add-ok" class="btn primary">添加</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 预览 modal -->
+  <div id="preview-modal" class="modal hidden">
+    <div class="modal-card wide">
+      <div class="modal-head"><h3 id="preview-title"></h3><button id="preview-close" class="btn ghost">关闭</button></div>
+      <div id="preview-body" class="preview-body"></div>
+    </div>
+  </div>
+
+  <!-- 确认 modal -->
+  <div id="confirm-modal" class="modal hidden">
+    <div class="modal-card">
+      <p id="confirm-msg" class="confirm-msg"></p>
+      <div class="modal-actions">
+        <button id="confirm-no" class="btn ghost">取消</button>
+        <button id="confirm-ok" class="btn primary danger">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 输入 modal -->
+  <div id="prompt-modal" class="modal hidden">
+    <div class="modal-card">
+      <p id="prompt-msg" class="confirm-msg"></p>
+      <input id="prompt-input" type="text" class="prompt-input">
+      <div class="modal-actions">
+        <button id="prompt-no" class="btn ghost">取消</button>
+        <button id="prompt-ok" class="btn primary">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 回收站 modal -->
+  <div id="trash-modal" class="modal hidden">
+    <div class="modal-card wide">
+      <div class="modal-head"><h3>回收站</h3><button id="trash-close" class="btn ghost">关闭</button></div>
+      <div id="trash-list" class="trash-list"></div>
+    </div>
+  </div>
+
+  <!-- 本地 vendor：三个库全部落盘，运行时不向任何 CDN 发请求 -->
+  <script src="vendor/purify.min.js"></script>
+  <script src="vendor/mammoth.browser.js"></script>
+  <script src="vendor/xlsx.full.min.js"></script>
+  <script type="module" src="js/pdf-extract.js"></script>
+  <script src="js/preview.js"></script>
+  <script src="js/api-client.js"></script>
+  <script src="js/settings.js"></script>
+  <script src="js/shelf.js"></script>
+  <script src="js/book.js"></script>
+  <script src="js/study-ui.js"></script>
+  <script src="js/exam-ui.js"></script>
+  <script src="js/syllabus-ui.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/weak-ui.js"></script>
+</body>
+</html>

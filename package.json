@@ -1,0 +1,58 @@
+{
+  "name": "review-library",
+  "version": "0.3.0",
+  "author": "retri",
+  "private": true,
+  "description": "项目级离线复习资料管理系统：分层图书馆，一本书=一项考试+一项科目+其资料分析，支持成百上千本书与资料的真落盘增删改查。",
+  "main": "app/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "node server.js",
+    "test": "node test/store.test.js",
+    "build:dir": "electron-builder --dir",
+    "dist": "electron-builder --win portable",
+    "dist:installer": "electron-builder --win nsis",
+    "release": "electron-builder --win nsis --publish always"
+  },
+  "build": {
+    "appId": "cn.sirui.reviewlibrary",
+    "productName": "ReviewLibrary",
+    "repository": "https://github.com/huanweide/review-library",
+    "directories": { "output": "dist" },
+    "files": [
+      "app/**/*",
+      "lib/**/*",
+      "renderer/**/*",
+      "server.js",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ],
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "artifactName": "ReviewLibrary-Setup-${version}.exe"
+    },
+    "portable": {
+      "artifactName": "ReviewLibrary-${version}-portable.exe"
+    },
+    "publish": [
+      { "provider": "github", "owner": "huanweide", "repo": "review-library" }
+    ],
+    "asar": true
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3",
+    "electron-updater": "^6.6.2",
+    "playwright-core": "^1.64.1"
+  }
+}

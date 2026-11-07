@@ -1,0 +1,19 @@
+# 依赖与构建产物
+node_modules/
+dist/
+out/
+.cache/
+
+# 用户数据（复习资料图书馆运行时会生成，绝不入库）
+library/
+*.db
+*.sqlite
+.DS_Store
+
+# 截图 / 临时
+_e2e/shots/
+*.log
+nul
+
+# 系统
+Thumbs.db
