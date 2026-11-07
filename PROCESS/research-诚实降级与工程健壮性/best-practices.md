@@ -56,6 +56,8 @@ source: 真实检索输出（见下方逐字符锚点），非记忆推测
 | 5 | 状态标签在 UI 上有文字定义（StudyForge） | `lib/store.js` 读接口承诺 `caption` 但 `setAssetCaption` 未导出，写回必失败被吞 | **导出缺失方法**（P2 缺陷 4） |
 | 6 | 服务对畸形输入不崩（通用健壮性） | `decodeURIComponent` 未捕获，一个 `/%ZZ` 让整个进程退出 | **静态服务异常兜底**（P2 缺陷 5） |
 | 7 | FSRS-6 排程、向量检索、云同步、插件市场（StudyForge / DeepStudent / SiYuan） | 已有 Leitner 复习盒 + 薄弱地图，离线零外链定位 | **不融合**：见下 R/C/N 打回理由 |
+| 8 | 死代码必须真跑一次才算接线（StudyForge「不知道就明说」的反向推论） | `setAssetCaption` 导出前无人调用，内部引用了不存在的函数 | **执行中挖出**：判别测试第一次真调用暴露 `writeBookMeta is not defined`（P1，非阶段零预判） |
+| 9 | 图片是合法材料本体，不是文本附属（DeepStudent「cite the page」/ M3 定位） | 「无可抽取文本」检查排在图收集之前 | **执行中挖出**：纯图 PPT 被硬拦，M3 主场景不可用（P1，非阶段零预判） |
 
 ---
 
