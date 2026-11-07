@@ -29,10 +29,11 @@
     {
       "id": "scenes",
       "name": "镜头制作",
-      "status": "pending",
-      "message": "",
-      "done": null,
-      "total": null
+      "status": "running",
+      "message": "8 个真问题全解决：6 项竞品能力融合 + 2 条缺陷（含 P0 静默丢书）；判别测试 2/10 红 → 27/0 绿",
+      "done": 8,
+      "total": 8,
+      "updatedAt": "2026-11-07T16:28:37.810Z"
     },
     {
       "id": "audio",
@@ -51,10 +52,10 @@
       "total": null
     }
   ],
-  "current": "brief",
+  "current": "scenes",
   "preview": null,
   "previews": [],
   "shots": [],
   "artifacts": [],
-  "updatedAt": "2026-11-07T16:23:15.106Z"
+  "updatedAt": "2026-11-07T16:28:37.810Z"
 }

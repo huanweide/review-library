@@ -17,7 +17,7 @@
 | 方式 | 怎么启动 | 数据放哪 |
 |---|---|---|
 | **A. 本地服务（推荐先试）** | 双击 `启动.bat`，浏览器开 `http://localhost:5178` | 项目内 `library/` |
-| **B. 单文件 exe（最省事）** | 双击 `dist/ReviewLibrary-0.2.0-portable.exe` | exe 同级 `library/` |
+| **B. 单文件 exe（最省事）** | 双击 `dist/ReviewLibrary-0.6.0-portable.exe` | exe 同级 `library/` |
 | **C. 免安装桌面版** | 双击 `启动桌面版.bat`，或 `npm run build:dir` 后运行 `dist/win-unpacked/ReviewLibrary.exe` | exe 同级 `library/` |
 | **D. 开发模式** | `npm start`（需先 `npm install` 拉 electron） | 项目内 `library/` |
 
