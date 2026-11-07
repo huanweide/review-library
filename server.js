@@ -15,11 +15,14 @@ const graphLib = require('./lib/graph');
 const analyticsLib = require('./lib/analytics');
 const clozeLib = require('./lib/cloze');
 const backupLib = require('./lib/backup');
+const reviewLib = require('./lib/review');
 
 const ROOT = process.env.LIBRARY_ROOT || path.join(__dirname, 'library');
 const PORT = parseInt(process.env.PORT, 10) || 5178;
 const store = new Store(ROOT);
-const MAX_BODY = 80 * 1024 * 1024; // 单请求 80MB，足够一份大 PPT/PDF
+// 与 lib/backup.js 的 180MB 单文件上限配套（base64 后约 240MB）。
+// 旧版 80MB 会让一份 65MB 扫描件连「显式跳过」都做不到，直接静默不进备份。
+const MAX_BODY = 260 * 1024 * 1024;
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml' };
 
@@ -147,11 +150,37 @@ async function handleApi(req, res, u) {
       const a = store.getAnalysis(parts[2]) || {};
       return send(res, 200, { cards: clozeLib.makeDeck(a.points || [], { limit: 40 }) });
     }
+    // ===== v0.7：学完反馈落盘 / 跨书今日复习 / 备份完整性与设置 =====
+    // POST /api/feedback（写）  GET /api/feedback/:bookId（读回展示）
+    if (parts[1] === 'feedback' && parts.length === 2 && method === 'POST') {
+      const m = JSON.parse(await readBody(req) || '{}');
+      return send(res, 200, store.saveFeedback(m.bookId, { examId: m.examId, answers: m.answers, at: m.at }));
+    }
+    if (parts[1] === 'feedback' && parts[2] && parts.length === 3 && method === 'GET') {
+      return send(res, 200, store.listFeedback(parts[2]));
+    }
+    // GET /api/review/queue（跨书到期卡）  POST /api/review/rate（四档自评回写 SRS）
+    if (parts[1] === 'review' && parts[2] === 'queue' && method === 'GET') {
+      const limit = Math.max(1, Math.min(200, Number(u.searchParams.get('limit')) || 50));
+      return send(res, 200, reviewLib.queueAcrossBooks(store, Date.now(), { limit }));
+    }
+    if (parts[1] === 'review' && parts[2] === 'rate' && method === 'POST') {
+      const m = JSON.parse(await readBody(req) || '{}');
+      return send(res, 200, reviewLib.rateCard(store, m.bookId, m.pointId, m.rating, Date.now()));
+    }
+    // POST 带脱敏设置（引擎 / 模型 / 出题参数）；GET 保留给老调用方。
+    if (parts[1] === 'backup' && parts[2] === 'export' && method === 'POST') {
+      const m = JSON.parse(await readBody(req) || '{}');
+      return send(res, 200, backupLib.buildBackup(store, { settings: m.settings }));
+    }
     if (parts[1] === 'backup' && parts[2] === 'export' && method === 'GET') {
-      return send(res, 200, { data: backupLib.exportAll(store) });
+      return send(res, 200, backupLib.buildBackup(store));
     }
     if (parts[1] === 'backup' && parts[2] === 'import' && method === 'POST') {
       const m = JSON.parse(await readBody(req) || '{}');
+      // 旧版 mode 不设白名单：任何拼写错误都会静默走 merge，让 index 与 books 目录错位。
+      if (m.mode != null && m.mode !== 'replace') return send(res, 400, { error: '不支持的恢复模式（只支持 replace 覆盖恢复）' });
+      if (typeof m.data !== 'string' || !m.data.length) return send(res, 400, { error: '备份数据为空' });
       return send(res, 200, backupLib.importAll(store, m.data, { mode: m.mode || 'replace' }));
     }
     // /api/books
@@ -248,10 +277,12 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
+// 只绑回环：这是本机单人用的离线软件，破坏性接口（整库恢复）不该暴露到局域网。
+// NO_OPEN=1 供自动化测试静默启动，不弹浏览器。
+server.listen(PORT, '127.0.0.1', () => {
   console.log('复习资料图书馆 已启动： http://localhost:' + PORT);
   // Windows 下自动开浏览器；其它平台静默
-  if (process.platform === 'win32') {
+  if (process.platform === 'win32' && !process.env.NO_OPEN) {
     try { require('child_process').exec('cmd /c start http://localhost:' + PORT); } catch (e) {}
   }
 });

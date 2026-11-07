@@ -107,8 +107,10 @@
         if (st) st.textContent = err ? ('搜索失败：' + err) : ('命中 ' + rows.length + ' 条');
         if (!list) return;
         if (!rows.length) { list.innerHTML = '<div class="extra-empty">没有命中。换个关键词试试（支持资料正文里出现的词）。</div>'; return; }
+        // v0.7：后端 searchAll 本来返回了命中项 id，旧版渲染时丢掉，点结果只到 tab 首屏。
+        // 现在把 id 带到 DOM，资料命中直接打开那份资料的预览。
         list.innerHTML = rows.map(r =>
-          '<div class="search-hit" data-book="' + E(r.bookId) + '" data-type="' + E(r.type) + '">' +
+          '<div class="search-hit" data-book="' + E(r.bookId) + '" data-type="' + E(r.type) + '" data-id="' + E(r.id) + '">' +
           '<span class="hit-type">' + E(TYPE_LABEL[r.type] || r.type) + '</span>' +
           '<span class="hit-book">' + E(r.bookTitle) + '</span>' +
           '<span class="hit-loc">' + E(r.loc) + '</span>' +
@@ -117,9 +119,13 @@
         list.querySelectorAll('.search-hit').forEach(el => {
           el.onclick = async () => {
             if (!window.App) return;
-            await App.openBook(el.dataset.book);
-            const t = el.dataset.type;
+            const bid = el.dataset.book, id = el.dataset.id, t = el.dataset.type;
+            if (t === 'material' && id) {
+              await App.openBook(bid, { materialId: id, type: t, id });
+              return;
+            }
             const pane = t === 'mistake' ? 'weak' : (t === 'exam' ? 'exam' : (t === 'material' ? 'materials' : 'study'));
+            await App.openBook(bid, { type: t, id });
             await App.showPane(pane);
           };
         });
@@ -186,19 +192,38 @@
         box.innerHTML = '<div class="extra-empty">还没有可挖空的知识点：' + (err || '先分析并保存结果') + '</div>';
         return;
       }
-      box.innerHTML = '<div class="extra-box-head"><b>挖空自测</b><span>先自己在心里答，再点「看答案」。答案全部来自你的资料原文，不会编。</span></div>' +
+      box.innerHTML = '<div class="extra-box-head"><b>挖空自测</b><span>先自己在心里答，再点「看答案」；揭示后给一档自评，下次复习时间会跟着变。答案全部来自你的资料原文，不会编。</span></div>' +
         cards.map((c, i) =>
           '<div class="cloze-card" data-i="' + i + '">' +
           '<div class="cloze-title">' + E(c.title || c.category) + (c.hint ? ' · ' + E(c.hint) : '') + '</div>' +
           '<div class="cloze-masked">' + E(c.masked) + '</div>' +
           '<div class="cloze-answer hidden">答案：<b>' + E(c.answer) + '</b></div>' +
-          '<button class="btn ghost sm cloze-reveal" type="button">看答案</button></div>').join('');
+          '<button class="btn ghost sm cloze-reveal" type="button">看答案</button>' +
+          (c.id ? '<div class="cloze-rate hidden"><span class="cloze-rate-tip">揭示答案后再自评：</span>' +
+            RATES.map(([v, label]) => '<button type="button" class="rate-btn cloze-rate-btn" data-rate="' + v +
+              '" data-pid="' + E(c.id) + '">' + label + '</button>').join('') +
+            '<span class="cloze-rate-status"></span></div>' : '') + '</div>').join('');
       box.querySelectorAll('.cloze-reveal').forEach(btn => {
         btn.onclick = () => {
           const card = btn.closest('.cloze-card');
           const a = card.querySelector('.cloze-answer');
           const hidden = a.classList.toggle('hidden');
           btn.textContent = hidden ? '看答案' : '收起答案';
+          const rate = card.querySelector('.cloze-rate');
+          // 先揭示、后自评：没看答案时不给评分按钮（对齐 Anki Show Answer 流程）。
+          if (rate) rate.classList.toggle('hidden', hidden);
+        };
+      });
+      box.querySelectorAll('.cloze-rate-btn').forEach(btn => {
+        btn.onclick = async () => {
+          const card = btn.closest('.cloze-card');
+          const st = card.querySelector('.cloze-rate-status');
+          if (st) st.textContent = '保存中…';
+          try {
+            const r = await API.review.rate(bookId(), btn.dataset.pid, Number(btn.dataset.rate));
+            if (st) st.textContent = r && r.ok ? '已记录，下次复习时间已重排' : ('保存失败：' + ((r && r.reason) || '未知原因'));
+            card.querySelectorAll('.cloze-rate-btn').forEach(b => { b.disabled = true; });
+          } catch (e) { if (st) st.textContent = '保存失败：' + String(e && e.message || e); }
         };
       });
     },
@@ -247,7 +272,9 @@
     async exportBackup() {
       const st = $('backup-status'); if (st) st.textContent = '正在打包…';
       try {
-        const r = await API.extra.backupExport();
+        // 把非敏感设置一并写进备份（密钥在 sessionStorage，永远不带）。
+        const settings = (window.Settings && Settings.exportable) ? Settings.exportable() : {};
+        const r = await API.extra.backupExport(settings);
         if (!r || !r.data) throw new Error('导出为空');
         const blob = new Blob([r.data], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -256,8 +283,16 @@
         a.download = '复习资料图书馆-备份-' + new Date().toISOString().slice(0, 10) + '.json';
         document.body.appendChild(a); a.click(); a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 1500);
-        if (st) st.textContent = '备份已导出（' + Math.round(r.data.length / 1024) + ' KB）';
-      } catch (e) { if (st) st.textContent = '导出失败：' + String(e && e.message || e); }
+        const meta = r.meta || {}, ig = meta.integrity || {}, skipped = meta.skipped || [];
+        let msg = '备份已导出（' + Math.round(r.data.length / 1024) + ' KB · ' + (ig.files || 0) + ' 个文件）';
+        if (skipped.length) {
+          // 旧版对超大文件连提示都没有，用户以为「已导出」实际资料没进包。
+          msg += ' ⚠️ 有 ' + skipped.length + ' 个文件超过单文件上限、未进备份：' +
+            skipped.slice(0, 3).map(x => x.rel).join('、') + '。请手动复制这些原件。';
+          if (st) st.className = 'set-test-result err';
+        } else if (st) st.className = 'set-test-result ok';
+        if (st) st.textContent = msg;
+      } catch (e) { if (st) { st.className = 'set-test-result err'; st.textContent = '导出失败：' + String(e && e.message || e); } }
     },
     async importBackup(ev) {
       const st = $('backup-status');
@@ -271,7 +306,11 @@
         const text = await file.text();
         const r = await API.extra.backupImport(text, 'replace');
         if (!r || !r.ok) throw new Error((r && r.error) || '恢复失败');
-        if (st) st.textContent = '已恢复 ' + r.books + ' 本书、' + r.files + ' 个文件';
+        // 恢复后把引擎 / 模型 / 出题参数写回设置；密钥从不进备份，需用户自己重填。
+        if (r.settings && window.Settings && Settings.applyImported) Settings.applyImported(r.settings);
+        let msg = '已恢复 ' + r.books + ' 本书、' + r.files + ' 个文件（设置已一并还原）';
+        if (r.skipped && r.skipped.length) msg += '；⚠️ 该备份原本有 ' + r.skipped.length + ' 个文件被跳过，未含原件';
+        if (st) { st.className = 'set-test-result ok'; st.textContent = msg; }
         if (window.Shelf) Shelf.render();
       } catch (e) { if (st) st.textContent = '恢复失败：' + String(e && e.message || e); }
     }

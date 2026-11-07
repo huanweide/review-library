@@ -52,8 +52,17 @@ contextBridge.exposeInMainWorld('api', {
     graph: (b) => ipcRenderer.invoke('extra:graph', b),
     report: (b, d) => ipcRenderer.invoke('extra:report', b, d),
     cloze: (b) => ipcRenderer.invoke('extra:cloze', b),
-    backupExport: () => ipcRenderer.invoke('extra:backupExport'),
+    backupExport: (settings) => ipcRenderer.invoke('extra:backupExport', settings),
     backupImport: (data, mode) => ipcRenderer.invoke('extra:backupImport', data, mode)
+  },
+  // v0.7：学完反馈落盘 / 跨书今日复习（与 server.js 的 HTTP 路由一一镜像）
+  feedback: {
+    save: (b, examId, answers) => ipcRenderer.invoke('feedback:save', b, { examId, answers }),
+    list: (b) => ipcRenderer.invoke('feedback:list', b)
+  },
+  review: {
+    queue: (limit) => ipcRenderer.invoke('review:queue', limit),
+    rate: (b, pointId, rating) => ipcRenderer.invoke('review:rate', b, pointId, rating)
   },
   dialog: { openFiles: () => ipcRenderer.invoke('dialog:openFiles') }
 });

@@ -67,8 +67,17 @@
       graph: (b) => J('/api/graph/' + encodeURIComponent(b)),
       report: (b, d) => J('/api/report/' + encodeURIComponent(b) + '?days=' + (d || 30)),
       cloze: (b) => J('/api/cloze/' + encodeURIComponent(b)),
-      backupExport: () => J('/api/backup/export'),
+      backupExport: (settings) => POST('/api/backup/export', { settings: settings || {} }),
       backupImport: (data, mode) => POST('/api/backup/import', { data, mode: mode || 'replace' })
+    },
+    // v0.7：反馈落盘 / 跨书今日复习（与 Electron preload 一一镜像）
+    feedback: {
+      save: (b, examId, answers) => POST('/api/feedback', { bookId: b, examId, answers }),
+      list: (b) => J('/api/feedback/' + encodeURIComponent(b))
+    },
+    review: {
+      queue: (limit) => J('/api/review/queue?limit=' + (limit || 50)),
+      rate: (b, pointId, rating) => POST('/api/review/rate', { bookId: b, pointId, rating })
     },
     dialog: { openFiles: null }
   };

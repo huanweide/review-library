@@ -1,0 +1,45 @@
+=== maxloop v0.7 判别测试（v0.6.0 旧代码应红）===
+  PASS | V1-1 store 暴露 saveFeedback / listFeedback
+  PASS | V1-2 反馈可读回且内容完整
+  PASS | V1-3 反馈真的落盘（不是只存浏览器 localStorage）
+  PASS | V1-4 反馈文件进入整库备份（base64 解码后内容一致）
+  PASS | V1-5 导出→恢复到空库后反馈仍可读
+  PASS | V1-6 四层 API 镜像都接上 feedback
+  PASS | V1-7 UI 不再把反馈只写 localStorage
+  PASS | V2-1 备份携带 settings 字段
+  PASS | V2-2 API 密钥绝不进备份（脱敏；无 settings 字段时判失败，防假绿）
+  PASS | V2-3 导入结果回传 settings 供前端写回
+  PASS | V3-1 65MB 资料不再被静默跳过（真的进备份）
+  PASS | V3-2 导出结果带 skipped[] 完整性统计
+  PASS | V3-3 备份携带完整性摘要（文件数 / 字节数）
+  PASS | V3-4 源文件缺失时恢复大声失败且不消耗回收站项
+  PASS | V4-1 导入走 store 的跨进程锁（源码锚点 withLock）
+  PASS | V4-2 导入写文件走原子替换（源码锚点 writeAtomic，无裸 writeFileSync）
+  PASS | V4-3 非法 mode 被拒绝（不再静默把 index 覆盖成不一致）
+  PASS | V4-4 replace 恢复后旧 .trash 被清空（不留孤儿）
+  PASS | V4-5 恢复后 index 与 books 目录一致
+  PASS | V4-6 本地服务只绑回环地址
+  PASS | V4-7 /api/backup/import 路由内对 mode 做白名单校验并返回 400
+  PASS | V5-1 报告 dueCount === 真实 due 队列（旧版 0 ≠ 1）
+  PASS | V5-2 无 srs 字段的老数据也计入同一口径
+  PASS | V6-1 搜索结果渲染出 data-id（不再丢弃后端返回的 id）
+  PASS | V6-2 点击处理读取 dataset.id 并传给 openBook
+  PASS | V6-3 App.openBook 接收定位参数（第二形参）
+  PASS | V6-4 material 命中会打开预览（真实入口，不是只切 tab）
+  PASS | V7-1 lib/review.js 存在且导出 queueAcrossBooks / rateCard
+  PASS | V7-2 跨两本书聚合到期卡（不需要先选书）
+  PASS | V7-3 队列带书名 / 知识点 / 遮蔽后的题干 / 答案
+  PASS | V7-4 独立卡四档自评真的回写 SRS（dueAt 变大）
+  PASS | V7-5 自评不重复记一次「真实交卷」历史
+  PASS | V7-6 已评过的卡不再出现在今天的队列里
+  PASS | V7-7 顶部导航有「今日复习」入口
+  PASS | V7-8 全局视图注册 review-view
+  PASS | V7-9 闪卡流先揭示再自评（Show Answer → 四档）
+  PASS | V7-10 四层 API 镜像都接上 review
+  PASS | V9-1 npm test 跑全量判别套件而不是只跑 store.test.js
+  PASS | V9-2 存在统一测试入口 scripts/run-tests.js
+  PASS | V9-3 e2e 覆盖备份导出→恢复闭环（不只查按钮存在）
+  PASS | V9-4 e2e 覆盖今日复习闪卡流
+  PASS | V9-5 e2e 覆盖搜索命中跳转定位（必须断言 data-id 与预览打开）
+
+判别测试结果： 42 通过 / 0 失败

@@ -156,6 +156,20 @@
   const Settings = {
     load: loadCfg, cfg, getKey, setKey, saveCfg, updateBadge, _env: null,
     onChange(f) { listeners.push(f); },
+    // 备份/恢复用：只带非敏感设置。密钥在 sessionStorage，绝不写进备份文件。
+    exportable() {
+      const c = loadCfg();
+      return { engine: c.engine, baseURL: c.baseURL, model: c.model, pointCount: c.pointCount,
+        questionCount: c.questionCount, prompt: c.prompt, dedupeThreshold: c.dedupeThreshold };
+    },
+    applyImported(s) {
+      if (!s || typeof s !== 'object') return false;
+      const c = loadCfg();
+      Object.keys(DEFAULTS).forEach(k => { if (s[k] !== undefined && typeof s[k] !== 'object') c[k] = s[k]; });
+      saveCfg(c);
+      try { syncFields(c); } catch (e) { /* 恢复时表单可能还没渲染 */ }
+      return true;
+    },
     async init() {
       // 环境变量兜底：仅在 Electron 主进程侧读取，经 preload 桥接而来；HTTP/无主进程模式安全降级。
       try {

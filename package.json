@@ -1,6 +1,6 @@
 {
   "name": "review-library",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "author": "retri",
   "repository": "https://github.com/huanweide/review-library",
   "private": true,
@@ -9,7 +9,8 @@
   "scripts": {
     "start": "electron .",
     "dev": "node server.js",
-    "test": "node test/store.test.js",
+    "test": "node scripts/run-tests.js",
+    "test:e2e": "node _e2e/e2e.js",
     "build:dir": "electron-builder --dir",
     "dist": "electron-builder --win portable",
     "dist:installer": "electron-builder --win nsis",
@@ -73,7 +74,7 @@
       }
     ],
     "asar": true,
-    "buildVersion": "0.6.0",
+    "buildVersion": "0.7.0",
     "extraMetadata": {
       "main": "app/main.js"
     }

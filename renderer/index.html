@@ -18,6 +18,7 @@
     <nav class="topnav">
       <button id="nav-shelf" class="nav-btn on">书架</button>
       <button id="nav-search" class="nav-btn">全局搜索</button>
+      <button id="nav-review" class="nav-btn">今日复习</button>
       <button id="nav-report" class="nav-btn">学习报告</button>
       <button id="nav-settings" class="nav-btn">设置</button>
     </nav>
@@ -107,6 +108,18 @@
         <div id="backup-status" class="set-test-result"></div>
         <div class="set-tip">备份是单个 JSON 文件，含全部书、资料原件、分析结果、试卷与错题本。恢复会<b>覆盖当前数据目录里的书</b>，执行前会再确认一次。全程不发网络请求。</div>
       </section>
+    </div>
+  </main>
+
+  <!-- 今日复习视图（跨书聚合到期卡：先揭示答案，再四档自评） -->
+  <main id="review-view" class="view hidden">
+    <div class="settings-wrap">
+      <div class="page-head"><h2>今日复习</h2><span class="page-sub">把全部书里今天到期的知识点汇成一队，先自己答、再看答案、最后自评</span></div>
+      <section class="set-card">
+        <div id="review-status" class="review-status">正在读取到期队列…</div>
+        <div id="review-body" class="review-body"><div class="extra-empty">正在读取…</div></div>
+      </section>
+      <div class="set-tip">「重来」= 今天还要再见一次；「吃力 / 会了 / 太简单」= 依次拉长下次复习间隔。自评只改排程，不会当成又一次交卷、不会刷错次数。全部数据只存在本机。</div>
     </div>
   </main>
 
@@ -248,6 +261,7 @@
             <label>这个知识点让我联想到的已学内容<textarea rows="2"></textarea></label>
             <button id="exam-feedback-save" class="btn ghost">记录反馈</button>
           </div>
+          <div id="exam-feedback-history" class="feedback-history"></div>
         </section>
       </div>
     </div>
@@ -346,6 +360,7 @@
   <script src="js/study-ui.js"></script>
   <script src="js/exam-ui.js"></script>
   <script src="js/syllabus-ui.js"></script>
+  <script src="js/review-ui.js"></script>
   <script src="js/app.js"></script>
   <script src="js/weak-ui.js"></script>
   <script src="js/extra-ui.js"></script>

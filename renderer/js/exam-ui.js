@@ -8,7 +8,7 @@
   const ExamUI = {
     bookId: null, paper: null, lastExamId: null, grading: null,
 
-    async enter(bookId) { this.bookId = bookId; await this.renderList(); },
+    async enter(bookId) { this.bookId = bookId; await this.renderList(); await this.renderFeedbackHistory(); },
 
     async renderList() {
       const state = await API.study.state(this.bookId);
@@ -160,16 +160,36 @@
       $('exam-review-status').textContent = '今日复习卷已生成（' + (r.dueCount || 0) + ' 个到期薄弱点）。交卷后盒子会按对错升级或重置。';
     },
 
-    saveFeedback() {
+    // v0.7：反馈改走服务端落盘（books/<id>/study/feedback.json），换电脑恢复备份也不会丢，
+    // 并且真的能读回来给自己看。旧版只写 localStorage，写完既不落盘也不回显。
+    async renderFeedbackHistory() {
+      const el = $('exam-feedback-history');
+      if (!el || !this.bookId) return;
+      let rows = [];
+      try { rows = await API.feedback.list(this.bookId); } catch (e) { rows = []; }
+      if (!rows.length) { el.innerHTML = '<div class="feedback-history-empty">还没有记录过学完反馈。</div>'; return; }
+      const labels = ['我能复述', '卡住的地方', '难度评分', '下一步', '联想到'];
+      el.innerHTML = '<div class="feedback-history-head"><b>以前的学完反馈</b>' +
+        '<span>共 ' + rows.length + ' 条 · 已存在本机，会进整库备份</span></div>' +
+        rows.slice(0, 3).map(r => '<div class="feedback-history-item">' +
+          '<span class="feedback-history-when">' + esc(new Date(r.at).toLocaleString('zh-CN')) + '</span>' +
+          (r.answers || []).map((a, i) => a ? '<div><i>' + esc(labels[i] || ('第 ' + (i + 1) + ' 项')) + '：</i>' + esc(a) + '</div>' : '').join('') +
+          '</div>').join('');
+    },
+
+    async saveFeedback() {
       const box = $('exam-feedback');
       const data = Array.from(box.querySelectorAll('textarea,input')).map(x => x.value.trim());
+      const btn = $('exam-feedback-save');
+      if (btn) { btn.disabled = true; btn.textContent = '保存中…'; }
       try {
-        const k = 'rl-feedback-' + this.bookId;
-        const all = JSON.parse(localStorage.getItem(k) || '[]');
-        all.unshift({ at: Date.now(), examId: this.lastExamId, data });
-        localStorage.setItem(k, JSON.stringify(all.slice(0, 50)));
-      } catch (e) {}
-      $('exam-feedback-save').textContent = '已记录';
+        const r = await API.feedback.save(this.bookId, this.lastExamId, data);
+        if (!r || !r.ok) throw new Error('保存失败');
+        if (btn) btn.textContent = '已记录到本机';
+        await this.renderFeedbackHistory();
+      } catch (e) {
+        if (btn) btn.textContent = '保存失败，点此重试：' + String(e && e.message || e).slice(0, 40);
+      } finally { if (btn) btn.disabled = false; }
     }
   };
 

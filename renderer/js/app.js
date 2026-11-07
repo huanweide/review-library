@@ -32,7 +32,7 @@
     }
   };
 
-  const VIEWS = ['shelf', 'settings', 'book', 'search-view', 'report-view'];
+  const VIEWS = ['shelf', 'settings', 'book', 'search-view', 'review-view', 'report-view'];
   const PANES = ['materials', 'study', 'exam', 'weak', 'syllabus'];
 
   const App = {
@@ -51,6 +51,7 @@
       document.getElementById('nav-shelf').onclick = () => App.showShelf();
       document.getElementById('nav-settings').onclick = () => App.showSettings();
       document.getElementById('nav-search').onclick = () => App.showSearch();
+      document.getElementById('nav-review').onclick = () => App.showReview();
       document.getElementById('nav-report').onclick = () => App.showReport();
       // 收录书
       document.getElementById('c-cancel').onclick = () => document.getElementById('create-modal').classList.add('hidden');
@@ -131,18 +132,24 @@
       document.getElementById('nav-shelf').classList.toggle('on', name === 'shelf');
       document.getElementById('nav-settings').classList.toggle('on', name === 'settings');
       document.getElementById('nav-search').classList.toggle('on', name === 'search-view');
+      document.getElementById('nav-review').classList.toggle('on', name === 'review-view');
       document.getElementById('nav-report').classList.toggle('on', name === 'report-view');
     },
     showShelf() { this.showView('shelf'); Shelf.render(); },
     showSettings() { this.showView('settings'); Settings.init(); },
     showSearch() { this.showView('search-view'); if (window.ExtraUI) ExtraUI.enterSearch(); },
+    showReview() { this.showView('review-view'); if (window.ReviewUI) ReviewUI.enter(); },
     showReport() { this.showView('report-view'); if (window.ExtraUI) ExtraUI.enterReport(); },
 
-    async openBook(id) {
+    async openBook(id, opts) {
       this.currentId = id;
       this.showView('book');
       await BookView.render(id);
       await this.showPane('materials');
+      // 全局搜索命中资料时直接打开那份资料的预览，真正定位到原文（旧版只切到资料 tab 首屏）。
+      if (opts && opts.materialId && window.BookView && typeof BookView.openMaterialById === 'function') {
+        await BookView.openMaterialById(opts.materialId);
+      }
     },
 
     async showPane(name) {

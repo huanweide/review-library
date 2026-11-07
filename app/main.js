@@ -14,6 +14,7 @@ const graphLib = require('../lib/graph');
 const analyticsLib = require('../lib/analytics');
 const clozeLib = require('../lib/cloze');
 const backupLib = require('../lib/backup');
+const reviewLib = require('../lib/review');
 
 // asar 是只读虚拟文件系统，数据目录绝不能落在 __dirname/..（打包后会直接崩）。
 // 优先级：环境变量 REVIEW_LIBRARY_ROOT
@@ -110,8 +111,18 @@ ipcMain.handle('extra:search', (e, q, limit) => searchLib.searchAll(store, q, { 
 ipcMain.handle('extra:graph', (e, bookId) => graphLib.buildGraph(store.getAnalysis(bookId) || {}));
 ipcMain.handle('extra:report', (e, bookId, days) => analyticsLib.buildReport(store, bookId, Date.now(), { days: days || 30 }));
 ipcMain.handle('extra:cloze', (e, bookId) => ({ cards: clozeLib.makeDeck((store.getAnalysis(bookId) || {}).points || [], { limit: 40 }) }));
-ipcMain.handle('extra:backupExport', () => ({ data: backupLib.exportAll(store) }));
-ipcMain.handle('extra:backupImport', (e, data, mode) => backupLib.importAll(store, data, { mode: mode || 'replace' }));
+// v0.7：导出带脱敏设置与完整性摘要；导入与 HTTP 侧同口径拒绝非法 mode。
+ipcMain.handle('extra:backupExport', (e, settings) => backupLib.buildBackup(store, { settings }));
+ipcMain.handle('extra:backupImport', (e, data, mode) => {
+  if (mode != null && mode !== 'replace') return { ok: false, error: '不支持的恢复模式（只支持 replace 覆盖恢复）' };
+  return backupLib.importAll(store, data, { mode: mode || 'replace' });
+});
+// 学完反馈落盘（旧版只写 localStorage，恢复备份后全丢）
+ipcMain.handle('feedback:save', (e, bookId, payload) => store.saveFeedback(bookId, payload));
+ipcMain.handle('feedback:list', (e, bookId) => store.listFeedback(bookId));
+// 跨书今日复习队列 + 独立闪卡四档自评
+ipcMain.handle('review:queue', (e, limit) => reviewLib.queueAcrossBooks(store, Date.now(), { limit: limit || 50 }));
+ipcMain.handle('review:rate', (e, bookId, pointId, rating) => reviewLib.rateCard(store, bookId, pointId, rating, Date.now()));
 ipcMain.handle('insight:generate', (e, bookId, prompt) => insight.generate(store, bookId, prompt));
 ipcMain.handle('dialog:openFiles', async () => {
   const r = await dialog.showOpenDialog({ properties: ['openFile', 'multiSelections'] });

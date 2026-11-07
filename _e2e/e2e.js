@@ -75,7 +75,7 @@ async function getMaterial(bookId, nameInc) { const b = JSON.parse(await get(BAS
   const fPng = path.join(ROOT, '图1.png');
   fs.writeFileSync(fPng, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQAY3Y2wAAAAAElFTkSuQmCC', 'base64'));
 
-  const srv = spawn('node', [path.join(__dirname, '..', 'server.js')], { env: Object.assign({}, process.env, { PORT: String(PORT), LIBRARY_ROOT: ROOT }) });
+  const srv = spawn('node', [path.join(__dirname, '..', 'server.js')], { env: Object.assign({}, process.env, { PORT: String(PORT), LIBRARY_ROOT: ROOT, NO_OPEN: '1' }) });
   srv.stderr.on('data', d => process.env.DEBUG && console.error('SRV', d.toString()));
 
   // 等 server 起来
@@ -685,6 +685,98 @@ async function getMaterial(bookId, nameInc) { const b = JSON.parse(await get(BAS
   await page.click('#nav-settings'); await wait(300);
   check('v0.6：设置页含整库导出与恢复入口', await page.evaluate(() =>
     !!document.getElementById('set-export') && !!document.getElementById('set-import') && !!document.getElementById('backup-status')));
+
+  // 23) v0.7 真实入口闭环：反馈落盘读回 / 备份导出→恢复 / 非法模式拒绝
+  const fbRound = await page.evaluate(async () => {
+    const books = await API.books.list();
+    if (!books.length) return { ok: false };
+    const r = await API.feedback.save(books[0].id, 'e2e_exam', ['我能复述相图', '卡在计算']);
+    const rows = await API.feedback.list(books[0].id);
+    return { ok: !!(r && r.ok), rows: rows.length, first: rows[0] && rows[0].answers[0] };
+  });
+  check('v0.7：学完反馈走服务端落盘且能读回（不再只写 localStorage）',
+    fbRound.ok && fbRound.rows >= 1 && fbRound.first === '我能复述相图', JSON.stringify(fbRound));
+  check('v0.7：练习页有反馈历史容器（写完能看见）',
+    await page.evaluate(() => !!document.getElementById('exam-feedback-history')));
+
+  const backupRound = await page.evaluate(async () => {
+    const H = { 'Content-Type': 'application/json' };
+    const settings = (window.Settings && Settings.exportable) ? Settings.exportable() : {};
+    const res = await fetch('/api/backup/export', { method: 'POST', headers: H, body: JSON.stringify({ settings }) });
+    const j = await res.json();
+    const parsed = JSON.parse(j.data);
+    const before = (await API.books.list()).length;
+    const fbFile = (parsed.books[0].files || []).some(f => /feedback\.json$/.test(f.rel));
+    const imp = await fetch('/api/backup/import', { method: 'POST', headers: H, body: JSON.stringify({ data: j.data, mode: 'replace' }) });
+    const ir = await imp.json();
+    const after = (await API.books.list()).length;
+    const bad = await fetch('/api/backup/import', { method: 'POST', headers: H, body: JSON.stringify({ data: j.data, mode: 'merge' }) });
+    const applied = ir.settings ? Settings.applyImported(ir.settings) : false;
+    return {
+      hasSettings: !!parsed.settings, engine: parsed.settings && parsed.settings.engine,
+      noKey: !/apiKey|sk-/i.test(JSON.stringify(parsed.settings || {})),
+      hasIntegrity: !!parsed.integrity && typeof parsed.integrity.files === 'number',
+      skippedIsArray: Array.isArray(parsed.skipped), fbFile,
+      importOk: !!(ir && ir.ok), returnedSettings: !!(ir && ir.settings), applied,
+      before, after, badStatus: bad.status
+    };
+  });
+  check('v0.7：备份含脱敏设置 / 完整性摘要 / 反馈文件',
+    backupRound.hasSettings && backupRound.noKey && backupRound.hasIntegrity && backupRound.skippedIsArray && backupRound.fbFile,
+    JSON.stringify(backupRound));
+  check('v0.7：导出→恢复后书数不丢、设置回传并写回本机',
+    backupRound.importOk && backupRound.returnedSettings && backupRound.applied && backupRound.before > 0 && backupRound.after === backupRound.before,
+    JSON.stringify(backupRound));
+  check('v0.7：非法恢复模式被 400 拒绝', backupRound.badStatus === 400, 'status=' + backupRound.badStatus);
+
+  // 24) v0.7 今日复习闪卡流：先只给问题 → 显示答案 → 四档自评 → 队列前进
+  const probe = await page.evaluate(async () => {
+    const books = await API.books.list();
+    if (!books.length) return null;
+    return await API.review.rate(books[0].id, 'e2e_probe_point', 1); // Again = 当天到期
+  });
+  check('v0.7：独立自评接口把知识点排到今天', !!(probe && probe.ok && probe.dueAt), JSON.stringify(probe));
+  await page.click('#nav-review'); await wait(700);
+  check('v0.7：今日复习视图可见（顶部导航点得到）',
+    await page.evaluate(() => !document.getElementById('review-view').classList.contains('hidden')));
+  check('v0.7：首屏显示今天到期总数（跨书聚合）', /今天共/.test(await txt('#review-status')));
+  check('v0.7：闪卡默认只给问题、答案隐藏', await page.evaluate(() => {
+    const a = document.getElementById('review-answer');
+    return !!document.querySelector('.review-prompt') && !!a && a.classList.contains('hidden');
+  }));
+  await page.screenshot({ path: path.join(SHOTS, '25-review-flashcard.png') });
+  if (await page.evaluate(() => !!document.getElementById('show-answer'))) {
+    await page.click('#show-answer'); await wait(250);
+    check('v0.7：揭示答案后出现四档自评按钮', await page.evaluate(() =>
+      !document.getElementById('review-answer').classList.contains('hidden') &&
+      document.querySelectorAll('.review-rate-btn').length === 4));
+    await page.click('.review-rate-btn[data-rate="3"]'); await wait(700);
+    check('v0.7：自评后完成数 +1（排程真的回写）', /已完成 1 张/.test(await txt('#review-status')),
+      await txt('#review-status'));
+  } else {
+    check('v0.7：今日复习出现至少一张到期卡', false, '队列为空');
+  }
+
+  // 25) v0.7 搜索命中定位：点资料结果直接打开那份资料的预览
+  await page.click('#nav-search'); await wait(300);
+  await page.fill('#global-search', '讲义'); await wait(900);
+  const hit = await page.evaluate(() => {
+    const el = document.querySelector('.search-hit[data-type="material"][data-id]');
+    if (!el) return null;
+    el.id = 'e2e-search-hit';
+    return { id: el.dataset.id, type: el.dataset.type };
+  });
+  check('v0.7：搜索命中项带 data-id（定位信息不再被丢弃）', !!(hit && hit.id), JSON.stringify(hit));
+  if (hit) {
+    await page.click('#e2e-search-hit'); await wait(900);
+    check('v0.7：点资料命中直接打开预览（真定位到原文，不是只切 tab）', await page.evaluate(() => {
+      const m = document.getElementById('preview-modal');
+      const t = document.getElementById('preview-title');
+      return !!m && !m.classList.contains('hidden') && !!t && t.textContent.trim().length > 0;
+    }));
+    await page.screenshot({ path: path.join(SHOTS, '26-search-jump.png') });
+    await page.click('#preview-close'); await wait(200);
+  }
 
   // 16) 零外链硬约束：CSP + 本地 vendor，全程不得向外部域名发请求
   check('全程零外部域名请求', externalRequests.length === 0, externalRequests.slice(0, 3).join(' | '));

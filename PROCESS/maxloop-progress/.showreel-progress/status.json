@@ -5,10 +5,10 @@
       "id": "brief",
       "name": "需求与脚本",
       "status": "running",
-      "message": "阶段零完成：5 个真实竞品仓库锚点（Anki 32647★ / FSRS 4127★ / Logseq 45507★ / SiYuan 47119★ / Trilium 38732★），7 类功能基准，融合 6 项、打回 5 项，对照表已落盘",
+      "message": "v0.7 整夜 maxloop 开工：双 critic 收敛出 9 条可证伪真缺陷，阶段零正在拿真实 GitHub 竞品锚点",
       "done": null,
       "total": null,
-      "updatedAt": "2026-11-07T16:23:15.106Z"
+      "updatedAt": "2026-11-07T17:00:24.280Z"
     },
     {
       "id": "style",
@@ -30,10 +30,10 @@
       "id": "scenes",
       "name": "镜头制作",
       "status": "running",
-      "message": "8 个真问题全解决：6 项竞品能力融合 + 2 条缺陷（含 P0 静默丢书）；判别测试 2/10 红 → 27/0 绿",
-      "done": 8,
-      "total": 8,
-      "updatedAt": "2026-11-07T16:28:37.810Z"
+      "message": "9 条真问题全部落地：判别测试 1/31 红 → 42/0 绿，全量单测 9/9 套件通过；正在跑真浏览器 e2e 与打包产物验证",
+      "done": 9,
+      "total": 9,
+      "updatedAt": "2026-11-07T17:20:53.503Z"
     },
     {
       "id": "audio",
@@ -46,10 +46,11 @@
     {
       "id": "review",
       "name": "最终预览",
-      "status": "pending",
-      "message": "",
+      "status": "running",
+      "message": "收尾目标：全量单测 + 真浏览器 e2e + 打包版 + 自动更新全绿，v0.7.0 发布，明早汇报",
       "done": null,
-      "total": null
+      "total": null,
+      "updatedAt": "2026-11-07T17:00:24.573Z"
     }
   ],
   "current": "scenes",
@@ -57,5 +58,5 @@
   "previews": [],
   "shots": [],
   "artifacts": [],
-  "updatedAt": "2026-11-07T16:28:37.810Z"
+  "updatedAt": "2026-11-07T17:20:53.503Z"
 }

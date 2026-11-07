@@ -167,6 +167,18 @@
       return d;
     },
 
+    // v0.7：全局搜索命中某份资料时，直接打开它的预览，而不是把用户扔到资料列表首屏。
+    async openMaterialById(mid) {
+      const data = this.data || await API.books.get(this.id);
+      const m = ((data && data.materials) || []).find(x => x.id === mid);
+      if (!m) {
+        if (window.App && App.notice) App.notice('这份资料已不在书里（可能已删除或来自旧备份）', true);
+        return false;
+      }
+      await this.preview(m);
+      return true;
+    },
+
     async preview(m) {
       const r = await API.materials.read(this.id, m.id);
       const out = await Preview.render(r, { bookId: this.id, matId: m.id });
