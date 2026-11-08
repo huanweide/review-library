@@ -6,6 +6,7 @@ on:
   push:
     tags:
       - 'v*'
+      - 'review-analysis-v*'
   workflow_dispatch:
 
 # 云端内置令牌需要写权限才能创建 Release 并上传资产。
@@ -27,6 +28,7 @@ jobs:
 
       # 复用 Electron 二进制与 NSIS 工具链缓存，避免每次重新下载
       - name: Cache Electron
+        if: ${{ !startsWith(github.ref_name, 'review-analysis-v') }}
         uses: actions/cache@v4
         with:
           path: |
@@ -37,6 +39,7 @@ jobs:
             ${{ runner.os }}-electron-
 
       - name: Install dependencies
+        if: ${{ !startsWith(github.ref_name, 'review-analysis-v') }}
         run: npm ci
         # 宿主若带 ELECTRON_RUN_AS_NODE 会让 Electron 退化成纯 Node，必须清掉
         env:
@@ -44,13 +47,31 @@ jobs:
 
       # 只构建不发布：产出 NSIS 安装器 + 免安装版 + latest.yml + .blockmap
       - name: Build (publish never)
+        if: ${{ !startsWith(github.ref_name, 'review-analysis-v') }}
         run: npx electron-builder --win nsis portable --publish never
         env:
           ELECTRON_RUN_AS_NODE: ''
 
-      # 用云端 GITHUB_TOKEN 创建「正式（非 draft）」Release 并上传资产。
-      # latest.yml 是 electron-updater 自动更新必需的元数据，必须随包上传。
-      - name: Publish to GitHub Release
+      # 打包 DSH 插件为独立 zip（每个 tag 都产出，文件名带版本，对应可安装版本）
+      - name: Package DSH plugin zip
+        run: |
+          Compress-Archive -Path plugins/review-analysis -DestinationPath review-analysis-dsh-plugin-${{ github.ref_name }}.zip -Force
+          ls review-analysis-dsh-plugin-${{ github.ref_name }}.zip
+
+      # 插件 zip：每个 tag 都上传；notes 仅在插件 tag 时生成（避免与桌面步骤冲突）
+      - name: Publish plugin to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: review-analysis-dsh-plugin-${{ github.ref_name }}.zip
+          draft: false
+          prerelease: false
+          generate_release_notes: ${{ startsWith(github.ref_name, 'review-analysis-v') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 桌面安装器：仅主版本 v* tag 上传（插件 tag 跳过 Electron 构建，省 CI 时间）
+      - name: Publish desktop to GitHub Release
+        if: ${{ !startsWith(github.ref_name, 'review-analysis-v') }}
         uses: softprops/action-gh-release@v2
         with:
           files: |
