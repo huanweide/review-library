@@ -1,6 +1,6 @@
 {
   "name": "review-analysis",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Offline study-material analysis expert that turns a layered review-library into structured outlines, fully-expanded knowledge maps and closed-loop review reports — 100% local, zero cloud.",
   "author": {
     "name": "retri",
