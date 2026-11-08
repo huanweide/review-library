@@ -778,6 +778,58 @@ async function getMaterial(bookId, nameInc) { const b = JSON.parse(await get(BAS
     await page.click('#preview-close'); await wait(200);
   }
 
+  // 26) v0.8 考纲思维导图：规则版生成 → 中心辐射渲染 → 节点/题型/双链/单题面板 + 文字输入回归
+  // 回归：先复核上一轮「app 文字输入不了」——用资料页搜索框验证输入框可达可写
+  await page.click('.book-tab[data-pane="materials"]'); await wait(300);
+  await page.fill('#mat-search', '回归输入测试ABC'); await wait(200);
+  check('v0.8：文字输入框可达可写（搜索框写入成功，复核「文字输入不了」）',
+    await page.evaluate(() => document.getElementById('mat-search').value === '回归输入测试ABC'),
+    await page.evaluate(() => document.getElementById('mat-search').value));
+  await page.fill('#mat-search', ''); await wait(150);
+  await page.click('.book-tab[data-pane="mindmap"]'); await wait(500);
+  check('v0.8：思维导图子页可见', await vis('#pane-mindmap'));
+  check('v0.8：生成按钮(规则版)存在', await page.evaluate(() => !!document.getElementById('mm-gen-rule')));
+  await page.click('#mm-gen-rule'); await wait(1600);
+  check('v0.8：规则版生成完成(状态含「重建」)',
+    await page.evaluate(() => { const t = document.getElementById('mm-gen-status').textContent; return t.includes('重建') || t.includes('完成'); }),
+    await page.evaluate(() => document.getElementById('mm-gen-status').textContent));
+  check('v0.8：生成后下拉出现中心图(≥1)',
+    await page.evaluate(() => document.getElementById('mm-map-select').options.length >= 1),
+    await page.evaluate(() => document.getElementById('mm-map-select').options.length));
+  check('v0.8：思维导图渲染出中心圆', await page.evaluate(() => !!document.querySelector('#mm-canvas .mm-center')));
+  const mmNodeCount = await page.evaluate(() => document.querySelectorAll('#mm-canvas .mm-node').length);
+  check('v0.8：思维导图渲染出至少一个节点圆', mmNodeCount >= 1, 'nodes=' + mmNodeCount);
+  check('v0.8：有中心到节点的连线', await page.evaluate(() => document.querySelectorAll('#mm-canvas .mm-link').length >= 1));
+  await page.screenshot({ path: path.join(SHOTS, '27-mindmap-rule.png') });
+  const mmCtrTitle = await page.evaluate(() => { const t = document.querySelector('#mm-canvas .mm-center-text'); return t ? t.textContent : ''; });
+  check('v0.8：中心圆显示中心知识点', mmCtrTitle.length > 0, mmCtrTitle);
+  // 点击节点 → 侧栏详情（无限嵌套入口 + 题型分类）
+  await page.evaluate(() => { const n = document.querySelector('#mm-canvas .mm-node'); if (n) n.dispatchEvent(new MouseEvent('click', { bubbles: true })); });
+  await wait(220);
+  check('v0.8：点击节点后侧栏出现知识点标题', await page.evaluate(() => !!document.querySelector('#mm-detail .mm-d-title')));
+  check('v0.8：节点详情含题型分类(题库题已挂上)', await page.evaluate(() => document.querySelectorAll('#mm-detail .mm-qt').length >= 1));
+  // 右侧单题面板：搜集「每类仅 1 题」的题，点开看答案
+  const mmSq = await page.evaluate(() => document.querySelectorAll('#mm-questions .mm-sq').length);
+  check('v0.8：右侧「单题题型」面板有题', mmSq >= 1, 'sq=' + mmSq);
+  if (mmSq >= 1) {
+    await page.click('#mm-questions .mm-sq-btn'); await wait(150);
+    check('v0.8：点开单题面板题卡可看答案', await page.evaluate(() => {
+      const a = document.querySelector('#mm-questions .mm-sq-ans');
+      return !!a && !a.classList.contains('hidden') && a.textContent.trim().length > 0;
+    }));
+  }
+  // 双链跳转：存在关联按钮则验证可跳转；不存在则跳过（不强行要求）
+  const mmHasRel = await page.evaluate(() => document.querySelectorAll('#mm-detail .mm-rel-btn').length > 0);
+  if (mmHasRel) {
+    const mmBefore = await page.evaluate(() => { const t = document.querySelector('#mm-detail .mm-d-title'); return t ? t.textContent : ''; });
+    await page.click('#mm-detail .mm-rel-btn'); await wait(250);
+    const mmAfter = await page.evaluate(() => { const t = document.querySelector('#mm-detail .mm-d-title'); return t ? t.textContent : ''; });
+    check('v0.8：关联双链跳转改变当前知识点', mmBefore !== mmAfter, mmBefore + ' -> ' + mmAfter);
+  } else {
+    check('v0.8：本样本未产生跨知识点关联（双链跳转跳过，非失败）', true);
+  }
+  await page.screenshot({ path: path.join(SHOTS, '27b-mindmap-detail.png') });
+
   // 16) 零外链硬约束：CSP + 本地 vendor，全程不得向外部域名发请求
   check('全程零外部域名请求', externalRequests.length === 0, externalRequests.slice(0, 3).join(' | '));
   check('顶层 CSP 存在且 connect-src 限同源', await page.evaluate(() => {

@@ -33,7 +33,7 @@
   };
 
   const VIEWS = ['shelf', 'settings', 'book', 'search-view', 'review-view', 'report-view'];
-  const PANES = ['materials', 'study', 'exam', 'weak', 'syllabus'];
+  const PANES = ['materials', 'study', 'exam', 'weak', 'syllabus', 'mindmap'];
 
   const App = {
     init() {
@@ -160,6 +160,7 @@
       if (name === 'exam') await ExamUI.enter(this.currentId);
       if (name === 'weak') await WeakUI.enter(this.currentId);
       if (name === 'syllabus') await SyllabusUI.enter(this.currentId);
+      if (name === 'mindmap') await MindmapUI.enter(this.currentId);
     },
 
     openCreate() { document.getElementById('create-modal').classList.remove('hidden'); document.getElementById('c-title').focus(); },

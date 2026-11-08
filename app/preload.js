@@ -53,7 +53,13 @@ contextBridge.exposeInMainWorld('api', {
     report: (b, d) => ipcRenderer.invoke('extra:report', b, d),
     cloze: (b) => ipcRenderer.invoke('extra:cloze', b),
     backupExport: (settings) => ipcRenderer.invoke('extra:backupExport', settings),
-    backupImport: (data, mode) => ipcRenderer.invoke('extra:backupImport', data, mode)
+      backupImport: (data, mode) => ipcRenderer.invoke('extra:backupImport', data, mode)
+  },
+  // v0.8 考纲思维导图（与 server.js 的 /api/mindmap/* 一一镜像）
+  mindmap: {
+    list: (b) => ipcRenderer.invoke('mindmap:list', b),
+    generate: (b, cfg, force) => ipcRenderer.invoke('mindmap:generate', b, cfg, force),
+    node: (b, mapId, nodeId) => ipcRenderer.invoke('mindmap:node', b, mapId, nodeId)
   },
   // v0.7：学完反馈落盘 / 跨书今日复习（与 server.js 的 HTTP 路由一一镜像）
   feedback: {

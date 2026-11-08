@@ -70,6 +70,12 @@
       backupExport: (settings) => POST('/api/backup/export', { settings: settings || {} }),
       backupImport: (data, mode) => POST('/api/backup/import', { data, mode: mode || 'replace' })
     },
+    // v0.8 考纲思维导图（与 app/main.js 的 ipc 一一镜像）
+    mindmap: {
+      list: (b) => J('/api/mindmap/' + encodeURIComponent(b)),
+      generate: (b, cfg, force) => POST('/api/mindmap/' + encodeURIComponent(b), { cfg, force: !!force }),
+      node: (b, mapId, nodeId) => J('/api/mindmap/' + encodeURIComponent(b) + '/' + encodeURIComponent(mapId) + '/' + encodeURIComponent(nodeId))
+    },
     // v0.7：反馈落盘 / 跨书今日复习（与 Electron preload 一一镜像）
     feedback: {
       save: (b, examId, answers) => POST('/api/feedback', { bookId: b, examId, answers }),

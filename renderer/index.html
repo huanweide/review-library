@@ -159,6 +159,7 @@
     <div class="book-tabs">
       <button class="book-tab on" data-pane="materials">资料</button>
       <button class="book-tab" data-pane="syllabus">考纲</button>
+      <button class="book-tab" data-pane="mindmap">思维导图</button>
       <button class="book-tab" data-pane="study">分析</button>
       <button class="book-tab" data-pane="exam">练习</button>
       <button class="book-tab" data-pane="weak">薄弱</button>
@@ -200,6 +201,34 @@
           <span id="syllabus-exam-status" class="study-run-status"></span>
         </div>
         <div id="syllabus-body" class="syllabus-body"></div>
+      </div>
+    </div>
+
+    <!-- 思维导图子页（v0.8 中心辐射 + 无限嵌套 + 题型分类 + 双链） -->
+    <div id="pane-mindmap" class="book-pane hidden">
+      <div class="mm-wrap">
+        <div class="mm-head">
+          <div id="mm-title" class="mm-title">思维导图</div>
+          <div class="mm-actions">
+            <select id="mm-map-select" class="mm-select"></select>
+            <button id="mm-gen-rule" class="btn ghost sm">规则版重建</button>
+            <button id="mm-gen-llm" class="btn primary sm">用我的 API 生成详解</button>
+            <span id="mm-gen-status" class="mm-status"></span>
+          </div>
+        </div>
+        <div class="mm-body">
+          <div class="mm-left">
+            <div id="mm-canvas" class="mm-canvas"></div>
+            <div id="mm-hint" class="mm-hint"></div>
+          </div>
+          <aside class="mm-side">
+            <div id="mm-detail" class="mm-detail"></div>
+          </aside>
+          <aside class="mm-qpanel">
+            <h4>题目分类（每类单题）</h4>
+            <div id="mm-questions" class="mm-questions"></div>
+          </aside>
+        </div>
       </div>
     </div>
 
@@ -360,6 +389,7 @@
   <script src="js/study-ui.js"></script>
   <script src="js/exam-ui.js"></script>
   <script src="js/syllabus-ui.js"></script>
+  <script src="js/mindmap-ui.js"></script>
   <script src="js/review-ui.js"></script>
   <script src="js/app.js"></script>
   <script src="js/weak-ui.js"></script>

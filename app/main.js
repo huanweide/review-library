@@ -15,6 +15,7 @@ const analyticsLib = require('../lib/analytics');
 const clozeLib = require('../lib/cloze');
 const backupLib = require('../lib/backup');
 const reviewLib = require('../lib/review');
+const mindmapLib = require('../lib/mindmap');
 
 // asar 是只读虚拟文件系统，数据目录绝不能落在 __dirname/..（打包后会直接崩）。
 // 优先级：环境变量 REVIEW_LIBRARY_ROOT
@@ -120,6 +121,9 @@ ipcMain.handle('extra:backupImport', (e, data, mode) => {
 // 学完反馈落盘（旧版只写 localStorage，恢复备份后全丢）
 ipcMain.handle('feedback:save', (e, bookId, payload) => store.saveFeedback(bookId, payload));
 ipcMain.handle('feedback:list', (e, bookId) => store.listFeedback(bookId));
+ipcMain.handle('mindmap:list', (e, bookId) => mindmapLib.getMaps(store, bookId));
+ipcMain.handle('mindmap:generate', async (e, bookId, cfg, force) => mindmapLib.generate(store, bookId, cfg, { force: !!force }));
+ipcMain.handle('mindmap:node', (e, bookId, mapId, nodeId) => mindmapLib.getNode(store, bookId, mapId, nodeId));
 // 跨书今日复习队列 + 独立闪卡四档自评
 ipcMain.handle('review:queue', (e, limit) => reviewLib.queueAcrossBooks(store, Date.now(), { limit: limit || 50 }));
 ipcMain.handle('review:rate', (e, bookId, pointId, rating) => reviewLib.rateCard(store, bookId, pointId, rating, Date.now()));

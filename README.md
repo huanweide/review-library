@@ -198,9 +198,9 @@ e2e 覆盖：收录书、分层加资料、组合检索六维 AND、图片/PDF/d
 
 ## 发布状态（v0.7）
 
-- **代码与 tag 已推送**：`huanweide/review-library` 的 `main` 已含 v0.7.0 提交，tag `v0.7.0` 已打。
-- **GitHub Release 待发布**：本机 `gh` 令牌失效、凭据管理器/常见文件无可用 PAT，且复用的 Edge GitHub 会话 Cookie 已过期（调试实测 GitHub 返回登录页），无法自动调 API 上传 79MB 安装器。这一步需你登录后一键完成，命令见 `PROCESS/research-v07-复习闭环/RELEASE_NOTES.md` 或 `明早汇报.md`。
-- **自动更新链路本身 OK**：v0.6.0 安装版已实测从「404」变「已是最新版本」；待 v0.7.0 Release 发好后，用 v0.6.0 安装版点「检查更新」即可验证 0.6.0 → 0.7.0 增量更新。
+- **自动发布流水线已就位**：`huanweide/review-library` 的 `main` 已含 `v0.7.0` 提交与 `.github/workflows/release.yml`；此后推送 `v*` 标签即由 GitHub Actions 云端（用内置 `GITHUB_TOKEN`）自动构建 Windows 安装器 + 免安装版，并发布 Release（含 4 个发布资产与 `latest.yml` 自动更新元数据）。
+- **本机不再需要任何 GitHub 令牌**：此前卡住是因为本地 `gh` 令牌失效、本机无 PAT、复用的 Edge 会话又过期；现在改走 CI 云端发布，彻底绕开这一约束。v0.7.0 的 Release 由云端 CI 自动构建发布，无需本地手动上传。
+- **自动更新链路本身 OK**：v0.6.0 安装版已实测从「404」变「已是最新版本」；v0.7.0 Release 发布后，用 v0.6.0 安装版点「检查更新」即可验证 0.6.0 → 0.7.0 增量更新。
 
 ## 已知限制（v0.7）
 

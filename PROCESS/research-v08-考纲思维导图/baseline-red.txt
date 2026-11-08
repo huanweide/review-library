@@ -1,0 +1,40 @@
+v0.8 判别测试（改动前必红，改动后必绿）
+
+== 一、模块与四层 API 镜像存在性 ==
+  ✗ V1 lib/mindmap.js 存在 :: Cannot find module '../lib/mindmap'
+Require stack:
+- C:\Users\Administrator\Desktop\agent program\复习资料图书馆\test\maxloop-v08.test.js
+  ✗ V2 server.js 挂 /api/mindmap 路由
+  ✗ V3 app/main.js 有 mindmap: ipc
+  ✗ V4 app/preload.js 有 mindmap 桥
+  ✗ V5 renderer/js/api-client.js 有 mindmap 客户端
+
+== 二、规则版：中心辐射 + 题型分类 ==
+  ✗ V6 规则版生成多中心图（每节一张） :: module missing
+  ✗ V7 每张图是中心辐射结构 :: module missing
+  ✗ V8 节点挂题型分组并含题库题 :: module missing
+  ✗ V9 单题题型标记为 single（进右侧题目分类） :: module missing
+
+== 三、LLM 版：summary / children / related + 双链 ==
+  ✗ V10 LLM 版产出 summary/children/related :: module missing
+  ✗ V11 related 双向（A.related 含 B ⇒ B 可反向定位） :: module missing
+
+== 四、沉淀 / 去重 / 增量合并 ==
+  ✗ V12 merge 按 title 去重且不覆盖既有 summary :: module missing
+
+----------------------------------------
+v0.8 判别测试：通过 0 / 失败 12
+失败项：
+ - V1 lib/mindmap.js 存在
+ - V2 server.js 挂 /api/mindmap 路由
+ - V3 app/main.js 有 mindmap: ipc
+ - V4 app/preload.js 有 mindmap 桥
+ - V5 renderer/js/api-client.js 有 mindmap 客户端
+ - V6 规则版生成多中心图（每节一张）
+ - V7 每张图是中心辐射结构
+ - V8 节点挂题型分组并含题库题
+ - V9 单题题型标记为 single（进右侧题目分类）
+ - V10 LLM 版产出 summary/children/related
+ - V11 related 双向（A.related 含 B ⇒ B 可反向定位）
+ - V12 merge 按 title 去重且不覆盖既有 summary
+----------------------------------------
