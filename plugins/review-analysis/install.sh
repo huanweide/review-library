@@ -69,7 +69,15 @@ if ! command -v git >/dev/null 2>&1; then
 fi
 
 echo "==> git sparse-clone 插件目录 (ref: $REF)"
-git clone --filter=blob:none --sparse "https://github.com/$REPO" "$WORK_DIR/repo" >/dev/null 2>&1
+REPO_SSH="git@github.com:${REPO}.git"
+git_clone() { git clone --filter=blob:none --sparse "$1" "$WORK_DIR/repo" >/dev/null 2>&1; }
+if ! git_clone "https://github.com/$REPO"; then
+  echo "==> HTTPS 克隆失败，回退到 SSH"
+  rm -rf "$WORK_DIR/repo"
+  if ! git_clone "$REPO_SSH"; then
+    echo "✗ HTTPS 与 SSH 克隆均失败，请检查网络"; exit 1
+  fi
+fi
 git -C "$WORK_DIR/repo" sparse-checkout set "plugins/review-analysis" >/dev/null 2>&1
 
 if [[ "$REF" == refs/tags/* ]]; then

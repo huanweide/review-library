@@ -55,7 +55,18 @@ try {
   }
 
   Write-Host "==> git sparse-clone plugin dir (ref: $Ref)"
-  git clone --filter=blob:none --sparse "https://github.com/$Repo" (Join-Path $Work "repo") | Out-Null
+  $RepoSSH = "git@github.com:$Repo.git"
+  try {
+    git clone --filter=blob:none --sparse "https://github.com/$Repo" (Join-Path $Work "repo") | Out-Null
+  } catch {
+    Write-Host "==> HTTPS clone failed, fallback to SSH"
+    Remove-Item (Join-Path $Work "repo") -Recurse -Force -ErrorAction SilentlyContinue
+    try {
+      git clone --filter=blob:none --sparse $RepoSSH (Join-Path $Work "repo") | Out-Null
+    } catch {
+      Write-Host "✗ clone failed via both HTTPS and SSH; check network"; exit 1
+    }
+  }
   git -C (Join-Path $Work "repo") sparse-checkout set "plugins/review-analysis" | Out-Null
   if ($Ref -ne "refs/heads/main") {
     git -C (Join-Path $Work "repo") fetch --depth 1 origin $Ref | Out-Null
