@@ -16,6 +16,7 @@ const analyticsLib = require('./lib/analytics');
 const clozeLib = require('./lib/cloze');
 const backupLib = require('./lib/backup');
 const reviewLib = require('./lib/review');
+const mindmapLib = require('./lib/mindmap');
 
 const ROOT = process.env.LIBRARY_ROOT || path.join(__dirname, 'library');
 const PORT = parseInt(process.env.PORT, 10) || 5178;
@@ -137,6 +138,21 @@ async function handleApi(req, res, u) {
       }
       if (parts[2] === 'syllabusExam' && method === 'POST') {
         return send(res, 200, await study.bankExam(store, m.bookId, m.opts || {}));
+      }
+    }
+    // /api/mindmap/* 思维导图（四层镜像：与 preload 的 mindmap:* 一一对应）
+    if (parts[1] === 'mindmap') {
+      const bookId = parts[2];
+      if (parts.length === 3 && method === 'GET') {
+        return send(res, 200, mindmapLib.getMaps(store, bookId));
+      }
+      if (parts.length === 3 && method === 'POST') {
+        const m = JSON.parse(await readBody(req) || '{}');
+        return send(res, 200, await mindmapLib.generate(store, bookId, m.cfg, { force: !!m.force }));
+      }
+      if (parts.length === 5 && method === 'GET') {
+        // /api/mindmap/:bookId/:mapId/:nodeId —— 取单张图内某个节点详情
+        return send(res, 200, mindmapLib.getNode(store, bookId, parts[3], parts[4]));
       }
     }
     // ===== v0.6：全局搜索 / 知识图谱 / 学习报告 / 挖空 / 整库备份 =====

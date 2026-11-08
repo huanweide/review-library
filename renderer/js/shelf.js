@@ -15,7 +15,7 @@
       // 收录卡（即收录入口）
       const add = document.createElement('div');
       add.className = 'book-card add-card';
-      add.innerHTML = '<div class="add-plus">＋</div><div class="add-label">收录一本书</div>';
+      add.innerHTML = '<div class="add-plus">＋</div><div class="add-label">收录一本书</div><div class="add-sub">或把资料文件直接拖进来</div>';
       add.onclick = () => App.openCreate();
       grid.appendChild(add);
 

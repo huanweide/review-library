@@ -30,12 +30,25 @@
     <div class="shelf-head">
       <div class="shelf-head-left">
         <h2>我的书架</h2>
-        <div class="shelf-hint">书架即收录：点「＋ 收录一本书」添加；点封面进入该书。</div>
+        <div class="shelf-hint">书架即收录：把文件拖进来即新建一本书，或点「＋ 收录一本书」；点封面进入该书。</div>
       </div>
-      <button id="open-trash" class="btn ghost">🗑 回收站 <span id="trash-count" class="badge-count">0</span></button>
+      <div class="shelf-head-right">
+        <button id="open-files" class="btn ghost">📂 打开文件</button>
+        <button id="open-trash" class="btn ghost">🗑 回收站 <span id="trash-count" class="badge-count">0</span></button>
+      </div>
     </div>
     <div id="book-grid" class="book-grid"></div>
   </main>
+
+  <!-- 全局拖入遮罩（纯视觉，不拦截事件；拖放落到真实元素由 JS 路由） -->
+  <div id="drop-overlay" class="drop-overlay">
+    <div class="drop-card">
+      <div class="drop-icon">📥</div>
+      <div class="drop-title">松手即可导入</div>
+      <div class="drop-text">书架视图：新建一本书并收录 · 书内视图：加入当前层</div>
+    </div>
+  </div>
+  <input id="global-open-files" type="file" multiple style="display:none">
 
   <!-- 设置视图（全局） -->
   <main id="settings" class="view hidden">
@@ -369,5 +382,6 @@
   <script src="js/app.js"></script>
   <script src="js/weak-ui.js"></script>
   <script src="js/extra-ui.js"></script>
+  <script src="js/import-drop.js"></script>
 </body>
 </html>

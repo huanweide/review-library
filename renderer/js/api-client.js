@@ -86,6 +86,12 @@
       queue: (limit) => J('/api/review/queue?limit=' + (limit || 50)),
       rate: (b, pointId, rating) => POST('/api/review/rate', { bookId: b, pointId, rating })
     },
+    // v0.8 思维导图（与 preload 的 mindmap:* 一一镜像；无后端时走 demo 只读）
+    mindmap: {
+      list: (b) => J('/api/mindmap/' + encodeURIComponent(b)),
+      generate: (b, cfg, force) => POST('/api/mindmap/' + encodeURIComponent(b), { cfg: cfg || null, force: !!force }),
+      node: (b, mapId, nodeId) => J('/api/mindmap/' + encodeURIComponent(b) + '/' + encodeURIComponent(mapId) + '/' + encodeURIComponent(nodeId))
+    },
     dialog: { openFiles: null }
   };
 
@@ -156,6 +162,10 @@
     }
     if (ns === 'review') {
       if (fn === 'queue') return ok([]);
+      return ok({ ok: false, demo: true, reason: DEMO_MSG });
+    }
+    if (ns === 'mindmap') {
+      if (fn === 'list') return ok({ maps: [] });
       return ok({ ok: false, demo: true, reason: DEMO_MSG });
     }
     if (ns === 'trash') {

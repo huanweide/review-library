@@ -87,6 +87,15 @@ const wait = (ms) => new Promise(r => setTimeout(r, ms));
 
   // 2) 书架用内置示例渲染出书
   check('书架首屏可见', await vis('#shelf'));
+
+  // 1.5) 1.0 拖入 / 打开文件 UI 骨架
+  check('「打开文件」按钮存在且可见', await vis('#open-files'));
+  check('全局拖入遮罩 DOM 存在', await page.evaluate(() => !!document.getElementById('drop-overlay')));
+  check('隐藏的全局文件选择器存在', await page.evaluate(() => !!document.getElementById('global-open-files')));
+  check('拖入提示文案存在', await page.evaluate(() => { const t = document.querySelector('#drop-overlay .drop-text'); return !!t && t.textContent.length > 0; }));
+  check('import-drop.js 已加载(ImportDrop 全局)', await page.evaluate(() => typeof window.ImportDrop === 'object'));
+  check('「打开文件」按钮已绑定点击', await page.evaluate(() => typeof (document.getElementById('open-files') || {}).onclick === 'function'));
+
   const covers = await page.evaluate(() => Array.from(document.querySelectorAll('.cover-title')).map(e => e.textContent));
   check('书架渲染出示例书封面(≥1)', covers.length >= 1, JSON.stringify(covers));
   await page.screenshot({ path: path.join(SHOTS, 'demo-01-shelf.png') });

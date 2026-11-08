@@ -1,6 +1,6 @@
 {
   "name": "review-library",
-  "version": "0.9.0",
+  "version": "1.0.0",
   "author": "retri",
   "repository": "https://github.com/huanweide/review-library",
   "private": true,
@@ -74,7 +74,7 @@
       }
     ],
     "asar": true,
-    "buildVersion": "0.9.0",
+    "buildVersion": "1.0.0",
     "extraMetadata": {
       "main": "app/main.js"
     }

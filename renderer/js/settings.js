@@ -124,6 +124,34 @@
     el.className = 'engine-badge ' + (c.engine === 'llm' ? 'cloud' : 'local');
   }
 
+  // 视觉能力一次性自检标记：避免每次启动都打网络探测。
+  const PROBE_KEY = 'rl-vision-probed';
+  function isVisionProbed() { try { return localStorage.getItem(PROBE_KEY) === '1'; } catch (e) { return false; } }
+  function markVisionProbed() { try { localStorage.setItem(PROBE_KEY, '1'); } catch (e) {} }
+  // 首次配置云端引擎且已填模型+密钥时，自动跑一次 probeVision（用户要求「检测-实验运行一次」），
+  // 按结果自动开/关「图片裁剪增强」并显状态条；已自检过则跳过。
+  async function maybeProbeVision() {
+    const c = loadCfg();
+    if (c.engine !== 'llm') return;
+    let key = getKey();
+    if (!key && !Settings._env && API && API.app && API.app.env) {
+      try { const e = await API.app.env(); if (e) Settings._env = e; } catch (_) {}
+    }
+    key = key || (Settings._env && Settings._env.apiKey) || '';
+    if (!c.model || !key) return;
+    if (isVisionProbed()) return;
+    try {
+      const r = await API.llm.probeVision({ baseURL: c.baseURL, model: c.model, apiKey: key });
+      if (r && r.ok) {
+        Settings.setVisionEnabled(!!r.supportsVision);
+        markVisionProbed();
+        if (window.ImportDrop) window.ImportDrop.toast(r.supportsVision ? '✅ 已自检：模型支持看图，已自动开启「图片裁剪增强」' : '⚠️ 已自检：模型不支持看图，保持关闭（纯文本分析）');
+      } else if (window.ImportDrop) {
+        window.ImportDrop.toast('看图能力自检未执行（无后端或网络问题），可在设置页手动点「测试我的模型能否看图」', true);
+      }
+    } catch (e) { /* 失败不标记，下次启动可重试；不弹错误打扰 */ }
+  }
+
   function readForm() {
     const engine = (document.querySelector('input[name="set-engine"]:checked') || {}).value || 'local';
     return {
@@ -159,6 +187,7 @@
 
   const Settings = {
     load: loadCfg, cfg, getKey, setKey, saveCfg, updateBadge, _env: null,
+    isVisionProbed, markVisionProbed, maybeProbeVision,
     onChange(f) { listeners.push(f); },
     // 备份/恢复用：只带非敏感设置。密钥在 sessionStorage，绝不写进备份文件。
     exportable() {

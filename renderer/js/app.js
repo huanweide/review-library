@@ -125,6 +125,8 @@
       document.getElementById('exam-feedback-save').onclick = () => ExamUI.saveFeedback();
       Settings.onChange(() => Settings.updateBadge());
       Shelf.render();
+      // 视觉一次性自检（用户要求「检测-实验运行一次」）：云端引擎且已填模型+密钥且未自检过，自动跑一次 probeVision
+      if (Settings.maybeProbeVision) Settings.maybeProbeVision();
     },
 
     showView(name) {

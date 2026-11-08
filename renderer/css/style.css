@@ -522,3 +522,42 @@ body[data-theme="dark"] .demo-banner { background: #3a2f12; border-color: #5a4a1
   filter: grayscale(.6);
 }
 
+
+/* ===== 1.0：拖入遮罩 + 打开文件 + 优雅化 ===== */
+.shelf-head-right { display: flex; gap: 8px; align-items: center; }
+.shelf-head .btn.ghost { margin: 0; }
+
+/* 全局拖入遮罩：纯视觉，pointer-events:none 让拖放事件穿透到真实元素 */
+.drop-overlay {
+  position: fixed; inset: 0; z-index: 50; display: none;
+  align-items: center; justify-content: center;
+  background: rgba(58,122,254,.08); backdrop-filter: blur(2px);
+  pointer-events: none;
+}
+.drop-overlay.show { display: flex; animation: dropIn .15s ease-out; }
+@keyframes dropIn { from { opacity: 0; } to { opacity: 1; } }
+.drop-card {
+  background: var(--panel); border: 2px dashed var(--accent); border-radius: 16px;
+  padding: 30px 46px; text-align: center; box-shadow: var(--shadow);
+}
+.drop-icon { font-size: 42px; }
+.drop-title { font-size: 18px; font-weight: 700; margin-top: 6px; }
+.drop-text { font-size: 13px; color: var(--muted); margin-top: 6px; }
+body.is-dragging .book-grid { outline: 2px dashed var(--accent); outline-offset: 8px; border-radius: 12px; }
+body.is-dragging .layers { outline: 2px dashed var(--accent); outline-offset: 6px; border-radius: 12px; }
+
+/* 导入提示 toast */
+.import-toast {
+  position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(20px);
+  background: #1f2430; color: #fff; padding: 10px 18px; border-radius: 10px;
+  font-size: 14px; opacity: 0; pointer-events: none; transition: all .2s; z-index: 60; box-shadow: var(--shadow);
+}
+.import-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.import-toast.err { background: var(--danger); }
+
+/* 收录卡引导（更优雅） */
+.add-card .add-sub { font-size: 12px; color: var(--muted); margin-top: 6px; max-width: 150px; text-align: center; line-height: 1.4; }
+.shelf-tip { border-style: dashed; background: #fafbfc; }
+
+/* 书内资料区空态 */
+.materials .empty { padding: 48px; font-size: 14px; }

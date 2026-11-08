@@ -1,0 +1,17 @@
+{
+  "name": "复习资料分析专家",
+  "profession": "复习资料结构化分析 · 考纲思维导图 · 离线闭环复习",
+  "pluginName": "review-analysis",
+  "industryId": "04-DataAI",
+  "source": "agent-created",
+  "version": "1.0.0",
+  "defaultInitPrompt": "我想分析当前 review-library 项目里的复习资料：请读取项目的 library/ 目录（同项目理解），一轮轮驱动本地引擎，给我一份 Markdown 报告 + 全展开思维导图（mindmap.full.json）。可以先用 driver.js 跑一遍，再按结果帮我定位薄弱点。",
+  "sidebar": {
+    "entry": "expert",
+    "openAndUse": true,
+    "panel": "chat",
+    "description": "在侧边栏「专家」入口打开即可交互式使用：告诉它项目路径，它会调用 review-analysis skill 离线分析资料、生成考纲大纲与思维导图，不改写你的资料。"
+  },
+  "skillRef": "./SKILL.md",
+  "driverRef": "./driver.js"
+}
