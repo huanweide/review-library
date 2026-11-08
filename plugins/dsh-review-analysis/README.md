@@ -31,16 +31,23 @@ dsh plugin add /绝对路径/rlbuild/plugins/dsh-review-analysis
 
 ### 方式二：从 GitHub 仓库安装
 
+本仓库根是 Electron 桌面应用（`package.json` 含 `main: app/main.js`），**不能在根加 dsh 字段**；
+插件放在子目录 `plugins/dsh-review-analysis/`。因此 GitHub 安装走「克隆后本地路径」：
+
 ```bash
-# 克隆到本地后走方式一（本仓库根目录是 Electron 桌面应用，不能在其中加 dsh 字段，
-# 因此插件放在子目录 plugins/dsh-review-analysis）
-git clone https://github.com/<你的用户名>/review-library.git
+git clone https://github.com/huanweide/review-library.git
+# 桌面版 profile（DeepSeek Harness 桌面应用使用的 profile）
 dsh plugin --profile desktop add ./review-library/plugins/dsh-review-analysis
+# 或：直接把子目录拷到本地插件目录（桌面应用自动扫描）
+cp -r review-library/plugins/dsh-review-analysis ~/.dsh/local-plugins/dsh-review-analysis
 ```
 
-> 若希望支持 `dsh plugin add github:owner/repo` 直装，需在 GitHub 仓库根 `package.json`
-> 声明有效的 dsh bundle 并为仓库打上 `dsh-plugin` topic。本仓库根是 Electron 应用，
-> 不适合直接加 dsh 字段，故默认走「子目录 + 本地路径」安装。
+> 关于 `dsh plugin add github:owner/repo` 直装：DSH 的 GitHub 源渠道只读**仓库根**
+> `package.json` 的 dsh bundle 声明，且需要仓库打上 `dsh-plugin` topic 才能被发现。
+> 由于本插件不在仓库根，故不支持 `github:` 直装，统一走上面的「克隆 + 本地路径」或
+> 「拷到 local-plugins」两种方式。（如未来想支持直装，需把插件拆成独立仓库。）
+>
+> 若仅为在 GitHub 上标记为 DSH 插件以便检索，可在仓库 Settings → Topics 添加 `dsh-plugin`。
 
 ### 卸载
 
