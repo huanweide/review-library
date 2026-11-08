@@ -1,6 +1,6 @@
 # 复习资料图书馆
 
-项目级**离线**复习资料管理与学习系统（v0.7）。一句话定位：
+项目级**离线**复习资料管理与学习系统（v0.8.0）。一句话定位：
 
 > 一本「书」= 一项考试 + 一项科目 + 其资料分析。可以有成百上千本书；书架即收录；每本书按层组织资料，层号越小越重要、参考价值越强。资料能分析、能出题、能批改、能针对薄弱点巩固；生成过程的质量对用户可见。
 
@@ -17,7 +17,7 @@
 | 方式 | 怎么启动 | 数据放哪 |
 |---|---|---|
 | **A. 本地服务（推荐先试）** | 双击 `启动.bat`，浏览器开 `http://localhost:5178` | 项目内 `library/` |
-| **B. 单文件 exe（最省事）** | 双击 `dist/ReviewLibrary-0.7.0-portable.exe` | exe 同级 `library/` |
+| **B. 单文件 exe（最省事）** | 双击 `dist/ReviewLibrary-0.8.0-portable.exe` | exe 同级 `library/` |
 | **C. 免安装桌面版** | 双击 `启动桌面版.bat`，或 `npm run build:dir` 后运行 `dist/win-unpacked/ReviewLibrary.exe` | exe 同级 `library/` |
 | **D. 开发模式** | `npm start`（需先 `npm install` 拉 electron） | 项目内 `library/` |
 
@@ -118,12 +118,14 @@ LIBRARY_ROOT=xxx node scripts/seed-library.js
   lib/insight.js      本地提示词驱动提纲（层权重 + 关键词）
   lib/study.js        统一引擎（边界/双引擎/来源双标/去重/校验/重试/降级/脱敏/批改/巩固卷）
   lib/llm.js          OpenAI-compatible 同源代理转发（密钥只在内存）
+  lib/mindmap.js      考纲思维导图数据层（规则版骨架 + LLM 增强 + 双链合并去重）
   server.js           本地服务：/api + 托管前端
   app/                Electron 主进程 + 安全桥
   renderer/           前端 SPA（书架 / 设置 / 资料 / 分析 / 练习）
     vendor/           三个本地解析库（零外链）
     js/settings.js    设置与密钥分层
     js/study-ui.js    分析工作台 + 生成质量报告
+    js/mindmap-ui.js  考纲思维导图视图（中心辐射 SVG + 侧栏无限嵌套 + 题型面板 + 双链跳转）
     js/exam-ui.js     试卷 / 答题卡 / 批改 / 巩固卷
   library/            数据目录（每本书一个文件夹 + study/ + .trash/）
   test/               后端单测（store 25 + insight 24 + study 54）
@@ -135,8 +137,8 @@ LIBRARY_ROOT=xxx node scripts/seed-library.js
 ## 测试
 
 ```bash
-npm test                              # 全量 9 个单测 / 判别套件（旧版只跑 store.test.js）
-npm run test:e2e                      # 真浏览器（本机 Edge）193 项，零 JS 报错
+npm test                              # 全量 10 个单测 / 判别套件（含 v0.8 思维导图判别 12/0）
+npm run test:e2e                      # 真浏览器（本机 Edge）207 项，零 JS 报错、零外部域名请求
 cd _e2e && node seed-check.js         # 真实资料验收 8 项
 cd _e2e && node electron-check.js     # 免安装桌面版 CDP 10 项
 cd _e2e && node portable-check.js     # 单文件 exe CDP 10 项（含数据落点）
@@ -196,11 +198,30 @@ e2e 覆盖：收录书、分层加资料、组合检索六维 AND、图片/PDF/d
 
 **诚实边界**：Anki 官方是「按牌组学习」，我们的「跨书今日复习」是针对多科目期末场景的自定义聚合，**不冒充 Anki 原生行为**；四档排程仍是可解释简版 SRS，不是官方 17 权重公式。
 
-## 发布状态（v0.7）
+## v0.8 考纲思维导图（中心辐射 + 无限嵌套 + 题型分类 + 双链）
 
-- **自动发布流水线已就位**：`huanweide/review-library` 的 `main` 已含 `v0.7.0` 提交与 `.github/workflows/release.yml`；此后推送 `v*` 标签即由 GitHub Actions 云端（用内置 `GITHUB_TOKEN`）自动构建 Windows 安装器 + 免安装版，并发布 Release（含 4 个发布资产与 `latest.yml` 自动更新元数据）。
-- **本机不再需要任何 GitHub 令牌**：此前卡住是因为本地 `gh` 令牌失效、本机无 PAT、复用的 Edge 会话又过期；现在改走 CI 云端发布，彻底绕开这一约束。v0.7.0 的 Release 由云端 CI 自动构建发布，无需本地手动上传。
-- **自动更新链路本身 OK**：v0.6.0 安装版已实测从「404」变「已是最新版本」；v0.7.0 Release 发布后，用 v0.6.0 安装版点「检查更新」即可验证 0.6.0 → 0.7.0 增量更新。
+把「死树」考纲升级成「可探索知识网络」。阶段零真实锚点（markmap 的 D3 radial-tree 中心辐射视觉 + Obsidian 双链的去重追加合并 + 既有 syllabus/graph 骨架）与 R/C/N 决策，见 `PROCESS/research-v08-考纲思维导图/best-practices.md`（同目录另有 `baseline-red.txt` / `candidate-green.txt` 真实判别输出）。
+
+| 能力 | 怎么用 | 以前缺什么 |
+|---|---|---|
+| **中心辐射思维导图** | 考纲 tab 旁「思维导图」→ 每节一张中心图（晶体一张、石墨一张），中间是中心知识点、四周辐射子知识点，SVG 节点+连线 | 只有线性 syllabus 树，没有中心辐射可视化 |
+| **点节点看详情（无限嵌套）** | 点任一节点 → 右侧栏出 summary；有子类型就出「子类型」按钮，点开继续往下钻（children 可层层展开），并列出该节点挂靠的例题 | 没有节点富详情 / 子类型数据位 |
+| **题型分类面板** | 某题型在某节点下只有 1 题时，自动进右侧「题目分类」面板（single 标记），点开看题+答案+解析；多题题型留在节点卡片内 | 没有按「是否单题」分流的题型面板 |
+| **跨知识点双链** | 同一道题考到的两个知识点互相 `related`；点关联按钮直接跳到另一张图对应节点 | 没有结构化双向链接索引（graph 只有扁平关系图） |
+| **LLM 自行生成详解** | 填了 API 就「用我的 API 生成详解」补 summary / 子类型 / 关联；没填走「规则版重建」，骨架来自考纲.md + 题库.json | 没有 LLM 增强路径 |
+| **沉淀 / 去重 / 增量合并** | 重新生成时按节点 title 归一去重，**只追加新子类型/例题/关联，绝不覆盖既有 summary**；已存在的关联不重复写 | 没有增量合并机制 |
+
+**四层 API 镜像**：`lib/mindmap.js`（数据层）→ `app/main.js`（ipcMain）→ `app/preload.js`（桥）→ `renderer/js/api-client.js`（HTTP）→ `server.js`（`/api/mindmap/:bookId` GET 列表 / POST 生成 / `:mapId/:nodeId` GET 节点），五处一一对应。
+
+**真问题怎么证的**：判别测试 `test/maxloop-v08.test.js` 在空实现上跑出 `0 通过 / 12 失败`，实现后 `12 通过 / 0 失败`；全量单测 10/10 套件；真浏览器 e2e **207/0**（含新思维导图入口真实点击、节点点击出详情、题型面板点开看答案、双链跳转、输入框可达性复核——顺带验证「app 文字输入不了」并非真实缺陷）；打包版构建通过（asar 含新文件）。
+
+**诚实边界**：规则版只从考纲.md + 题库.json 抽结构，不凭空造关系；LLM 版只在无结构处补 summary/子类型并标注来源，关联遵循「已存在不写、新类型追加」；每章多中心图 = 每节一张，支持只给第一、三章这类不连续输入。
+
+## 发布状态（v0.8.0）
+
+- **自动发布流水线已就位**：`huanweide/review-library` 的 `main` 已含 `v0.8.0` 提交与 `.github/workflows/release.yml`；此后推送 `v*` 标签即由 GitHub Actions 云端（用内置 `GITHUB_TOKEN`）自动构建 Windows 安装器 + 免安装版，并发布 Release（含 4 个发布资产与 `latest.yml` 自动更新元数据）。
+- **本机不再需要任何 GitHub 令牌**：此前卡住是因为本地 `gh` 令牌失效、本机无 PAT、复用的 Edge 会话又过期；现在改走 CI 云端发布，彻底绕开这一约束。v0.8.0 的 Release 由云端 CI 自动构建发布，无需本地手动上传。
+- **自动更新链路本身 OK**：v0.6.0 安装版已实测从「404」变「已是最新版本」；v0.8.0 Release 发布后，用 v0.7.0 安装版点「检查更新」即可验证 0.7.0 → 0.8.0 增量更新。
 
 ## 已知限制（v0.7）
 
