@@ -19,9 +19,17 @@ const ROOT = process.cwd();
 const HOME = process.env.USERPROFILE || process.env.HOME || '';
 
 const CORE_LIB = ['store', 'srs', 'insight', 'syllabus', 'mindmap', 'llm'];
-const SRC_LIB = path.join(ROOT, 'plugins', 'dsh-review-analysis', 'engine', 'lib');
-const SRC_ANALYZE = path.join(ROOT, 'plugins', 'dsh-review-analysis', 'engine', 'analyze.js');
+
+// 引擎真源：默认取本仓库镜像（plugins/dsh-review-analysis/engine）。
+// DSH 独立仓库上线后，设 DSH_ENGINE_SRC 指向它即可切换到上游真源，无需改代码。
+const DSH_ENGINE_SRC = process.env.DSH_ENGINE_SRC
+  ? path.resolve(process.env.DSH_ENGINE_SRC)
+  : path.join(ROOT, 'plugins', 'dsh-review-analysis', 'engine');
+const SRC_LIB = path.join(DSH_ENGINE_SRC, 'lib');
+const SRC_ANALYZE = path.join(DSH_ENGINE_SRC, 'analyze.js');
 const SRC_DRIVER = path.join(ROOT, 'plugins', 'review-analysis', 'bin', 'driver.js');
+
+console.log('[sync-engine] 引擎真源：' + DSH_ENGINE_SRC);
 
 // 各同步目标：files 描述「源相对路径 -> 目标相对路径」
 const targets = [

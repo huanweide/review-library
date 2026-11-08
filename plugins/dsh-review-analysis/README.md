@@ -1,5 +1,10 @@
 # dsh-review-analysis
 
+> ⚠️ **本目录是镜像副本（即将移除）**：规范的独立仓库已迁至
+> **[`huanweide/dsh-review-analysis`](https://github.com/huanweide/dsh-review-analysis)**（仓库根即 bundle，可被
+> dsh-plugin.org 广场收录、支持 `github:` 直装）。本目录仅作 review-library 内的引擎同步镜像与本地安装兜底，
+> 等独立仓库上线后会被删除。改引擎请去独立仓库，再跑 `scripts/sync-engine.mjs`。
+
 **DeepSeek Harness（Cordis 引擎）插件**：离线复习资料分析引擎。
 
 读取一个「复习资料库」目录，为其中的每一本书生成：
