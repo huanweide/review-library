@@ -491,40 +491,34 @@ body { margin: 0; font-family: -apple-system, "Segoe UI", "PingFang SC", "Micros
 .cloze-rate-tip { font-size: 11px; color: var(--muted); }
 .cloze-rate-status { font-size: 11px; color: var(--muted); }
 
-/* ===== 思维导图（v0.8）专用 class，不抢旧选择器 ===== */
-.mm-wrap { display: flex; flex-direction: column; height: 100%; }
-.mm-head { display: flex; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-.mm-title { font-size: 16px; font-weight: 600; }
-.mm-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; flex-wrap: wrap; }
-.mm-select { padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--ink); }
-.mm-status { font-size: 12px; color: var(--muted); }
-.btn.sm { padding: 5px 10px; font-size: 12px; }
-.mm-body { display: flex; gap: 14px; padding: 14px 4px; align-items: stretch; min-height: 0; }
-.mm-left { flex: 2 1 360px; min-width: 0; display: flex; flex-direction: column; }
-.mm-canvas { flex: 1; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px; display: flex; align-items: center; justify-content: center; min-height: 320px; }
-.mm-svg { width: 100%; height: auto; max-height: 460px; }
-.mm-link { stroke: var(--line); stroke-width: 1.5; }
-.mm-center { fill: var(--accent); }
-.mm-center-text { fill: #fff; font-size: 14px; font-weight: 600; pointer-events: none; }
-.mm-node { fill: var(--panel); stroke: var(--accent); stroke-width: 2; }
-.mm-node.mm-key { stroke: var(--core); }
-.mm-node-text { fill: var(--ink); font-size: 12px; pointer-events: none; }
-.mm-hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
-.mm-side { flex: 1 1 280px; min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; overflow: auto; max-height: 520px; }
-.mm-qpanel { flex: 1 1 240px; min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; overflow: auto; max-height: 520px; }
-.mm-qpanel h4 { margin: 0 0 8px; font-size: 13px; color: var(--muted); }
-.mm-d-title { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
-.mm-key-tag { font-size: 10px; background: var(--core); color: #fff; border-radius: 4px; padding: 1px 5px; margin-left: 6px; vertical-align: middle; }
-.mm-d-summary { font-size: 13px; line-height: 1.7; color: var(--ink); margin-bottom: 10px; }
-.mm-sub { font-size: 12px; color: var(--muted); margin: 10px 0 4px; border-top: 1px dashed var(--line); padding-top: 8px; }
-.mm-children { list-style: none; margin: 0; padding: 0; }
-.mm-child-btn, .mm-rel-btn, .mm-q-btn, .mm-sq-btn { display: block; width: 100%; text-align: left; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; margin: 4px 0; font-size: 12px; color: var(--ink); cursor: pointer; }
-.mm-child-btn:hover, .mm-rel-btn:hover, .mm-q-btn:hover, .mm-sq-btn:hover { border-color: var(--accent); }
-.mm-qt { font-size: 12px; margin: 6px 0 2px; }
-.mm-single { font-size: 10px; background: var(--accent); color: #fff; border-radius: 4px; padding: 0 5px; margin-left: 4px; }
-.mm-q-ans, .mm-sq-ans { font-size: 12px; line-height: 1.6; background: #eaf1ff; color: #1d4ed8; border-radius: 6px; padding: 6px 8px; margin: 4px 0; }
-.mm-related { list-style: none; margin: 0; padding: 0; }
-.mm-crumb { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
-.mm-muted { color: var(--muted); font-size: 12px; }
-.mm-questions .mm-muted { padding: 6px 0; }
-.empty { color: var(--muted); font-size: 13px; padding: 20px; line-height: 1.7; }
+/* ===== GitHub Pages 预览站：只读横幅 + 写操作置灰 ===== */
+.demo-banner { background: #fff7e6; border-bottom: 1px solid #ffe0a3; color: #7a5b00; padding: 8px 24px; font-size: 13px; text-align: center; line-height: 1.5; }
+body[data-theme="dark"] .demo-banner { background: #3a2f12; border-color: #5a4a1a; color: #ffd980; }
+/* 预览模式：凡是会改变数据的按钮一律置灰禁用（只读示例，请在桌面版操作）。 */
+.demo-mode #open-trash,
+.demo-mode #set-save,
+.demo-mode #set-check-update,
+.demo-mode #set-make-shortcut,
+.demo-mode #set-export,
+.demo-mode #set-import,
+.demo-mode #book-del,
+.demo-mode #gen-insight,
+.demo-mode #add-mat,
+.demo-mode #syllabus-exam,
+.demo-mode #study-run,
+.demo-mode #study-save,
+.demo-mode #study-exam,
+.demo-mode #exam-new,
+.demo-mode #exam-bank,
+.demo-mode #exam-review,
+.demo-mode #exam-submit,
+.demo-mode #exam-remedial,
+.demo-mode #exam-feedback-save,
+.demo-mode #add-ok,
+.demo-mode #c-ok,
+.demo-mode #confirm-ok {
+  opacity: .45 !important;
+  pointer-events: none !important;
+  filter: grayscale(.6);
+}
+

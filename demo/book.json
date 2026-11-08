@@ -1,0 +1,411 @@
+{
+  "book": {
+    "id": "demo-book",
+    "title": "材料科学基础（示例）",
+    "exam": "期末复习",
+    "subject": "材料科学",
+    "coverColor": "#3a7afe",
+    "materialCount": 2,
+    "layerCounts": {
+      "0": 1,
+      "1": 1
+    }
+  },
+  "materials": [
+    {
+      "id": "mat-syllabus",
+      "name": "考纲.md",
+      "layer": 0,
+      "role": "考纲",
+      "tags": [
+        "考纲"
+      ],
+      "ext": "md",
+      "kind": "text"
+    },
+    {
+      "id": "mat-bank",
+      "name": "题库.json",
+      "layer": 1,
+      "role": "题库",
+      "tags": [
+        "题库"
+      ],
+      "ext": "json",
+      "kind": "text"
+    }
+  ],
+  "syllabus": {
+    "title": "材料科学基础 考纲",
+    "kind": "syllabus",
+    "hasBank": true,
+    "bankName": "题库.json",
+    "questionCount": 4,
+    "pointCount": 5,
+    "selfMadeCount": 0,
+    "chapters": [
+      {
+        "title": "第一章 材料结构",
+        "sections": [
+          {
+            "title": "1.1 晶体结构",
+            "points": [
+              {
+                "id": "1.1.1",
+                "text": "晶体与非晶体的区别",
+                "key": true,
+                "types": [
+                  "single",
+                  "explain"
+                ],
+                "questionCount": 1
+              },
+              {
+                "id": "1.1.2",
+                "text": "晶面指数与晶向指数",
+                "key": false,
+                "types": [
+                  "calc"
+                ],
+                "questionCount": 1
+              }
+            ]
+          },
+          {
+            "title": "1.2 石墨与同素异形体",
+            "points": [
+              {
+                "id": "1.2.1",
+                "text": "石墨的层状结构",
+                "key": true,
+                "types": [
+                  "explain"
+                ],
+                "questionCount": 1
+              }
+            ]
+          },
+          {
+            "title": "1.3 缺陷与扩散",
+            "points": [
+              {
+                "id": "1.3.1",
+                "text": "点缺陷的类型",
+                "key": false,
+                "types": [
+                  "fill"
+                ],
+                "questionCount": 1
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "title": "第二章 相图与相变",
+        "sections": [
+          {
+            "title": "2.1 二元相图",
+            "points": [
+              {
+                "id": "2.1.1",
+                "text": "共晶点的含义",
+                "key": true,
+                "types": [
+                  "single"
+                ],
+                "questionCount": 1
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "analysis": {
+    "engine": "llm",
+    "boundary": {
+      "included": [
+        {
+          "name": "考纲.md"
+        },
+        {
+          "name": "题库.json"
+        }
+      ],
+      "excluded": []
+    },
+    "points": [
+      {
+        "id": "p1",
+        "title": "晶体与非晶体的区别",
+        "origin": "source",
+        "difficulty": "中",
+        "summary": "晶体具有长程有序的周期性原子排列，有明确熔点、各向异性；非晶体无长程序，软化温度区间宽、各向同性。",
+        "source": {
+          "file": "考纲.md",
+          "loc": "1.1.1",
+          "usage": "原文"
+        },
+        "category": "晶体结构",
+        "assetRefs": []
+      },
+      {
+        "id": "p2",
+        "title": "晶面指数与晶向指数",
+        "origin": "source",
+        "difficulty": "难",
+        "summary": "晶向指数 [uvw] 取过原点直线上某点的坐标并约简；晶面指数 (hkl) 取截距倒数约简，代表一族平行晶面。",
+        "source": {
+          "file": "考纲.md",
+          "loc": "1.1.2",
+          "usage": "原文"
+        },
+        "category": "晶体结构",
+        "assetRefs": []
+      },
+      {
+        "id": "p3",
+        "title": "石墨的层状结构",
+        "origin": "source",
+        "difficulty": "中",
+        "summary": "石墨为层状 sp² 杂化结构，层内强共价键、层间弱范德华力，故具良好润滑性与导电性。",
+        "source": {
+          "file": "考纲.md",
+          "loc": "1.2.1",
+          "usage": "原文"
+        },
+        "category": "同素异形体",
+        "assetRefs": []
+      },
+      {
+        "id": "p4",
+        "title": "点缺陷的类型",
+        "origin": "ai",
+        "difficulty": "中",
+        "summary": "点缺陷包括空位、间隙原子与置换原子；空位浓度随温度升高呈指数增长，是扩散的主要载体。",
+        "source": {
+          "file": "",
+          "loc": "",
+          "usage": "材料未直接覆盖，以下为 AI 补充解释"
+        },
+        "category": "缺陷与扩散",
+        "assetRefs": []
+      },
+      {
+        "id": "p5",
+        "title": "共晶点的含义",
+        "origin": "source",
+        "difficulty": "中",
+        "summary": "共晶点是二元相图中液相同时析出两种固相的特定成分/温度点，共晶组织由两相片层交替构成。",
+        "source": {
+          "file": "考纲.md",
+          "loc": "2.1.1",
+          "usage": "原文"
+        },
+        "category": "相图与相变",
+        "assetRefs": []
+      }
+    ],
+    "questions": [
+      {
+        "id": "q1",
+        "type": "single",
+        "pointIds": [
+          "p1"
+        ],
+        "stem": "下列哪项属于晶体材料的特征？",
+        "options": [
+          "长程有序",
+          "无固定熔点",
+          "各向同性",
+          "短程无序"
+        ],
+        "answer": "长程有序",
+        "explanation": "晶体原子呈周期性长程有序排列，有明确熔点、各向异性。",
+        "origin": "source",
+        "source": {
+          "file": "题库.json",
+          "loc": "",
+          "usage": "原文"
+        },
+        "assetRefs": []
+      },
+      {
+        "id": "q2",
+        "type": "explain",
+        "pointIds": [
+          "p3"
+        ],
+        "stem": "简述石墨导电性较好的结构原因。",
+        "answer": "石墨为层状 sp² 结构，层内碳原子形成大 π 键，离域电子可在层内自由移动；层间仅靠范德华力结合。",
+        "explanation": "层内离域电子是导电关键，层间弱结合使其易滑动（润滑性）。",
+        "origin": "source",
+        "source": {
+          "file": "题库.json",
+          "loc": "",
+          "usage": "原文"
+        },
+        "assetRefs": []
+      },
+      {
+        "id": "q3",
+        "type": "fill",
+        "pointIds": [
+          "p4"
+        ],
+        "stem": "温度升高时，金属中的______缺陷浓度按指数规律增大。",
+        "answer": "空位",
+        "explanation": "空位是热平衡缺陷，浓度随温度呈指数上升，主导扩散过程。",
+        "origin": "ai",
+        "source": {
+          "file": "",
+          "loc": "",
+          "usage": "材料未直接覆盖，以下为 AI 补充解释"
+        },
+        "assetRefs": []
+      },
+      {
+        "id": "q4",
+        "type": "single",
+        "pointIds": [
+          "p5"
+        ],
+        "stem": "二元相图的共晶点是指？",
+        "options": [
+          "单一固相析出点",
+          "液相同时析出两固相的点",
+          "熔点最高点",
+          "固相线交点"
+        ],
+        "answer": "液相同时析出两固相的点",
+        "explanation": "共晶点成分/温度下液相同时结晶出两种固相，形成共晶组织。",
+        "origin": "source",
+        "source": {
+          "file": "题库.json",
+          "loc": "",
+          "usage": "原文"
+        },
+        "assetRefs": []
+      }
+    ],
+    "note": "这是预览站内置的示例分析结果，仅用于演示界面；真实数据需桌面版分析生成。",
+    "quality": {
+      "degraded": false,
+      "dedupe": {
+        "threshold": 0.82,
+        "before": 5,
+        "after": 4,
+        "removedCount": 1,
+        "removed": [
+          {
+            "kind": "exact",
+            "stem": "晶体结构示例重复题"
+          }
+        ]
+      },
+      "validation": {
+        "ok": true,
+        "issueCount": 0,
+        "checked": 6,
+        "score": 1,
+        "history": []
+      },
+      "retry": {
+        "stopReason": "accepted_first_pass",
+        "attempts": 1,
+        "retried": false
+      },
+      "removed": []
+    },
+    "visionDegraded": false,
+    "assetIndex": {}
+  },
+  "graph": {
+    "nodes": [
+      {
+        "x": 120,
+        "y": 90,
+        "title": "晶体与非晶体的区别",
+        "category": "晶体结构",
+        "questionCount": 1
+      },
+      {
+        "x": 300,
+        "y": 90,
+        "title": "晶面指数与晶向指数",
+        "category": "晶体结构",
+        "questionCount": 1
+      },
+      {
+        "x": 210,
+        "y": 200,
+        "title": "石墨的层状结构",
+        "category": "同素异形体",
+        "questionCount": 1
+      },
+      {
+        "x": 420,
+        "y": 200,
+        "title": "点缺陷的类型",
+        "category": "缺陷与扩散",
+        "questionCount": 1
+      },
+      {
+        "x": 300,
+        "y": 310,
+        "title": "共晶点的含义",
+        "category": "相图与相变",
+        "questionCount": 1
+      }
+    ],
+    "edges": [
+      {
+        "a": {
+          "x": 120,
+          "y": 90
+        },
+        "b": {
+          "x": 300,
+          "y": 90
+        }
+      },
+      {
+        "a": {
+          "x": 300,
+          "y": 90
+        },
+        "b": {
+          "x": 210,
+          "y": 200
+        }
+      },
+      {
+        "a": {
+          "x": 210,
+          "y": 200
+        },
+        "b": {
+          "x": 420,
+          "y": 200
+        }
+      },
+      {
+        "a": {
+          "x": 300,
+          "y": 200
+        },
+        "b": {
+          "x": 300,
+          "y": 310
+        }
+      }
+    ],
+    "categories": [
+      "晶体结构",
+      "同素异形体",
+      "缺陷与扩散",
+      "相图与相变"
+    ]
+  }
+}

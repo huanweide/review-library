@@ -153,7 +153,7 @@
     },
 
     async showPane(name) {
-      PANES.forEach(p => document.getElementById('pane-' + p).classList.toggle('hidden', p !== name));
+      PANES.forEach(p => { const el = document.getElementById('pane-' + p); if (el) el.classList.toggle('hidden', p !== name); });
       document.querySelectorAll('.book-tab').forEach(b => b.classList.toggle('on', b.dataset.pane === name));
       Settings.updateBadge();
       if (name === 'study') await StudyUI.enter(this.currentId);

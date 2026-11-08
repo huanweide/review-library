@@ -16,7 +16,6 @@ const analyticsLib = require('./lib/analytics');
 const clozeLib = require('./lib/cloze');
 const backupLib = require('./lib/backup');
 const reviewLib = require('./lib/review');
-const mindmapLib = require('./lib/mindmap');
 
 const ROOT = process.env.LIBRARY_ROOT || path.join(__dirname, 'library');
 const PORT = parseInt(process.env.PORT, 10) || 5178;
@@ -61,6 +60,11 @@ async function handleApi(req, res, u) {
     if (parts[1] === 'llm' && parts[2] === 'test' && method === 'POST') {
       const m = JSON.parse(await readBody(req));
       return send(res, 200, await llm.testConnection(m.cfg || {}));
+    }
+    // /api/llm/probe-vision —— 探测用户填的模型是否支持图片输入（M3 看图）。cfg 只在本请求内存里。
+    if (parts[1] === 'llm' && parts[2] === 'probe-vision' && method === 'POST') {
+      const m = JSON.parse(await readBody(req));
+      return send(res, 200, await llm.probeVision(m.cfg || {}, llm.chat));
     }
     // /api/study/* —— 分析 / 出题 / 批改 / 巩固卷。答案只留在后端，前端只拿脱敏试卷。
     if (parts[1] === 'study') {
@@ -170,22 +174,6 @@ async function handleApi(req, res, u) {
       return send(res, 200, reviewLib.rateCard(store, m.bookId, m.pointId, m.rating, Date.now()));
     }
     // POST 带脱敏设置（引擎 / 模型 / 出题参数）；GET 保留给老调用方。
-    // /api/mindmap/* —— 考纲思维导图（v0.8）：中心辐射 + 题型分类 + 双链索引
-    if (parts[1] === 'mindmap') {
-      if (parts.length === 3 && method === 'GET') {
-        return send(res, 200, mindmapLib.getMaps(store, parts[2]));
-      }
-      if (parts.length === 3 && method === 'POST') {
-        const m = JSON.parse(await readBody(req) || '{}');
-        const r = await mindmapLib.generate(store, parts[2], m.cfg, { force: !!m.force });
-        return send(res, 200, r);
-      }
-      if (parts.length === 5 && parts[3] && parts[4] && method === 'GET') {
-        const node = mindmapLib.getNode(store, parts[2], parts[3], parts[4]);
-        return send(res, node ? 200 : 404, node || { error: '节点不存在' });
-      }
-    }
-
     if (parts[1] === 'backup' && parts[2] === 'export' && method === 'POST') {
       const m = JSON.parse(await readBody(req) || '{}');
       return send(res, 200, backupLib.buildBackup(store, { settings: m.settings }));

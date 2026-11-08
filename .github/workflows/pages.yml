@@ -1,0 +1,38 @@
+name: Deploy Pages 预览站
+# 只读展示站：把纯静态的 renderer/ 与示例数据 demo/book.json 打包成 GitHub Pages。
+# 前端 api-client 会自动探测后端：无后端时回退内置示例（只读），有后端时走真实 API。
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 组装静态站点
+        run: |
+          mkdir -p _site
+          cp -r renderer/* _site/
+          mkdir -p _site/demo
+          cp demo/book.json _site/demo/book.json
+      - name: 上传 Pages 产物
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

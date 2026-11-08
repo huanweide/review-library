@@ -8,7 +8,7 @@
 (function () {
   const CFG_KEY = 'rl-settings-v1';
   const KEY_KEY = 'rl-api-key';
-  const DEFAULTS = { engine: 'local', baseURL: '', model: '', pointCount: 5, questionCount: 8, prompt: '', dedupeThreshold: 0.82 };
+  const DEFAULTS = { engine: 'local', baseURL: '', model: '', pointCount: 5, questionCount: 8, prompt: '', dedupeThreshold: 0.82, visionEnabled: false };
 
   // 服务商预设：选了就自动填地址与一个默认模型，并提示哪些模型带视觉能力（M3 看图）。
   const PROVIDERS = {
@@ -87,6 +87,9 @@
     $('set-qcount').value = c.questionCount;
     $('set-dedupe').value = c.dedupeThreshold;
     $('set-prompt').value = c.prompt || '';
+    // 图片裁剪增强（M3 看图）：默认关闭；只有用户显式开启、或经 probeVision 自检确认模型能看图后才开。
+    const vchk = $('set-vision-enable');
+    if (vchk) vchk.checked = !!c.visionEnabled;
     // 密钥不回填到输入框（密码框）；若环境变量提供了密钥且界面为空，仅给占位提示，不显示明文。
     const envKey = (Settings._env && Settings._env.apiKey) || '';
     $('set-key').value = '';
@@ -130,7 +133,8 @@
       pointCount: Math.max(3, Math.min(12, Number($('set-points').value) || 5)),
       questionCount: Math.max(2, Math.min(30, Number($('set-qcount').value) || 8)),
       dedupeThreshold: Math.max(0.6, Math.min(0.99, Number($('set-dedupe').value) || 0.82)),
-      prompt: $('set-prompt').value.trim()
+      prompt: $('set-prompt').value.trim(),
+      visionEnabled: !!($('set-vision-enable') && $('set-vision-enable').checked)
     };
   }
 
@@ -160,7 +164,7 @@
     exportable() {
       const c = loadCfg();
       return { engine: c.engine, baseURL: c.baseURL, model: c.model, pointCount: c.pointCount,
-        questionCount: c.questionCount, prompt: c.prompt, dedupeThreshold: c.dedupeThreshold };
+        questionCount: c.questionCount, prompt: c.prompt, dedupeThreshold: c.dedupeThreshold, visionEnabled: c.visionEnabled };
     },
     applyImported(s) {
       if (!s || typeof s !== 'object') return false;
@@ -169,6 +173,14 @@
       saveCfg(c);
       try { syncFields(c); } catch (e) { /* 恢复时表单可能还没渲染 */ }
       return true;
+    },
+    // 程序（如 probeVision 自检、分析后回写）控制「图片裁剪增强」开关：存盘 + 同步界面 + 通知。
+    setVisionEnabled(v) {
+      const c = loadCfg();
+      c.visionEnabled = !!v;
+      saveCfg(c);
+      try { syncFields(c); } catch (e) {}
+      notify();
     },
     async init() {
       // 环境变量兜底：仅在 Electron 主进程侧读取，经 preload 桥接而来；HTTP/无主进程模式安全降级。
@@ -198,7 +210,26 @@
           const r = await API.llm.test(c2);
           out.textContent = r.ok ? ('连接成功' + (r.models && r.models.length ? '，可用模型 ' + r.models.length + ' 个' : '')) : ('失败：' + (r.error || '未知原因'));
           out.className = 'set-test-result ' + (r.ok ? 'ok' : 'err');
-        } catch (e) { out.textContent = '失败：' + e.message; out.className = 'set-test-result err'; }
+        }         catch (e) { out.textContent = '失败：' + e.message; out.className = 'set-test-result err'; }
+      };
+      // 测试我的模型能否看图（M3 自检）：发一张极小图探测，能回即开、明确不支持即关。
+      const tv = $('set-test-vision');
+      if (tv) tv.onclick = async () => {
+        const c = readForm(); const c2 = { baseURL: c.baseURL, model: c.model, apiKey: $('set-key').value.trim() || (Settings._env && Settings._env.apiKey) || '' };
+        const out = $('set-vision-test-result');
+        out.textContent = '正在探测看图能力…'; out.className = 'set-test-result';
+        try {
+          const r = await API.llm.probeVision(c2);
+          if (r.ok && r.supportsVision) {
+            Settings.setVisionEnabled(true);
+            out.textContent = '✅ 该模型支持看图，已自动开启「图片裁剪增强」'; out.className = 'set-test-result ok';
+          } else if (r.ok && !r.supportsVision) {
+            Settings.setVisionEnabled(false);
+            out.textContent = '⚠️ 该模型不支持看图，已保持关闭（按纯文本分析）' + (r.error ? '：' + r.error : ''); out.className = 'set-test-result warn';
+          } else {
+            out.textContent = '探测失败（网络/密钥问题，未改动开关）：' + (r.error || '未知原因'); out.className = 'set-test-result err';
+          }
+        } catch (e) { out.textContent = '探测失败：' + e.message; out.className = 'set-test-result err'; }
       };
       // 服务商预设：切换即填地址+默认模型（显式选预设＝明确要换服务商，直接覆盖），并给视觉能力提示。
       const sel = $('set-provider');

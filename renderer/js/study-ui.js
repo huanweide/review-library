@@ -108,7 +108,8 @@
       const opts = {
         engine: c.engine, selectedIds: this.selected.slice(),
         prompt: $('study-prompt').value.trim(), pointCount: c.pointCount, questionCount: c.questionCount,
-        dedupeThreshold: c.dedupeThreshold
+        dedupeThreshold: c.dedupeThreshold,
+        useVision: !!c.visionEnabled // M3 看图：默认 false（未开启），只有用户显式开才读图
       };
       // 本地引擎根本不把密钥发到后端，减少一次无谓暴露
       const cfg = c.engine === 'llm' ? Settings.cfg() : {};
@@ -126,6 +127,14 @@
       this.analysis = r;
       $('study-status').className = 'study-status ok';
       this.renderResult();
+      // M3 看图相关回写：模型不支持看图 → 自动关开关并提示；未开启 → 提示按纯文本分析。
+      if (r.visionUnsupported && Settings.load().visionEnabled) {
+        Settings.setVisionEnabled(false);
+        $('study-status').textContent += '（模型不支持看图，已自动关闭「图片裁剪增强」）';
+      }
+      if (r.visionOff) {
+        $('study-status').textContent += '（未开启图片裁剪增强，按纯文本分析）';
+      }
     },
 
     // 质量报告：把去重 / 校验 / 重试 / 降级全过程摊开给用户看，不做黑盒。
