@@ -12,6 +12,7 @@ library/
 
 # 截图 / 临时
 _e2e/shots/
+_verify-data/
 *.log
 nul
 

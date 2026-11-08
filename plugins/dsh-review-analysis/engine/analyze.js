@@ -38,16 +38,21 @@ function groupByLayer(materials) {
   return m;
 }
 
+function cleanText(s) {
+  // 抽出来的知识点可能是 markdown 标题行（### (1) ...）或正文（答：...），
+  // 统一去掉前导 # 号再当大纲标签用，保留可读内容。
+  return String(s == null ? '' : s).replace(/^#+\s*/, '').trim();
+}
+
 function outlineToMd(outline, L, depth) {
   depth = depth || 0;
-  const ind = '  '.repeat(depth) + '- ';
   (outline && outline.chapters || []).forEach((ch) => {
-    L.push(ind + (ch.title || '章节'));
+    L.push('  '.repeat(depth) + '- ' + cleanText(ch.title || '章节'));
     (ch.sections || []).forEach((sec) => {
-      L.push('  '.repeat(depth + 1) + '- ' + (sec.title || '节'));
+      L.push('  '.repeat(depth + 1) + '- ' + cleanText(sec.title || '节'));
       (sec.points || []).forEach((p) => {
-        L.push('  '.repeat(depth + 2) + '- ' + (p.title || p.name || '知识点'));
-        (p.children || []).forEach((c) => L.push('  '.repeat(depth + 3) + '- ' + (c.title || c.name || '')));
+        L.push('  '.repeat(depth + 2) + '- ' + cleanText(p.text || p.title || p.name || '知识点'));
+        (p.children || []).forEach((c) => L.push('  '.repeat(depth + 3) + '- ' + cleanText(c.text || c.title || c.name || '')));
       });
     });
   });

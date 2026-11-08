@@ -110,6 +110,14 @@ node --test engine/test/
 
 ---
 
+## 与其他形态的关系（版本索引）
+
+本插件与同级目录的 WorkBuddy/CodeBuddy 专家 `../review-analysis/` **共用同一套离线引擎**。
+引擎唯一真源在本目录的 `engine/`，由仓库根 `scripts/sync-engine.mjs` 同步到各形态。
+形态地图、安装方式、防漂移规则、版本索引见 **[`../README.md`](../README.md)**（插件与版本索引）。
+
+---
+
 ## 许可证
 
 MIT

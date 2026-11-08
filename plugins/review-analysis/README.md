@@ -2,6 +2,11 @@
 
 > DSH 侧边栏专家 / 离线复习资料分析引擎。把分层复习资料库，离线转成结构化大纲、全展开知识图谱与闭环复习报告。
 
+> ⚠️ **命名澄清 + 引擎共用**：本专家装在本机 `~/.workbuddy`（WorkBuddy/CodeBuddy 引擎的「专家」槽位），
+> 并非真 DeepSeek Harness（`~/.dsh`）。真 DeepSeek Harness 的插件是同级目录 `dsh-review-analysis/`，
+> 两者**共用同一套离线引擎**——引擎唯一真源在 `dsh-review-analysis/engine/`，由 `scripts/sync-engine.mjs` 同步。
+> 形态地图、版本索引、防漂移规则见 **[`plugins/README.md`](./README.md)**。
+
 ## 它是什么
 
 `review-analysis` 是一个 **DSH（DeepSeekharness）专家（agent 型）**，安装后在侧边栏「我的专家」可见可用。它的本体是一个**自包含的离线引擎**：
@@ -14,7 +19,7 @@
 
 - **完全离线 / 零云端**：所有分析走本地 `lib/*`，不联网、不调用模型、不外发资料。
 - **自包含**：引擎库随插件安装，用户无需先装 review-library 仓库即可使用本专家（数据仍来自用户自己的 review-library 项目）。
-- **一轮轮驱动 + 续做**：按轮转窗口逐批处理书，进度记盘 `REVIEW_ANALYSIS_STATE.json`，下次接着跑、结果累积进同一张全展开图。
+- **一轮轮驱动 + 续做**：按窗口逐批处理书；续做靠 `mindmap.full.json` / `book-reports.json` 按节点/边 id 去重累积，重跑同一 `--out` 即接着干、结果累积进同一张全展开图，不推翻重来。
 - **圆满格式（同源双形态）**：`report.md`（人读）+ `mindmap.full.json`（机读全展开），同一份真相两种形态。
 
 ## 安装
@@ -91,12 +96,12 @@ C:\Users\Administrator\.workbuddy\plugins\marketplaces\my-experts\plugins\review
 | `review-analysis-out/report.md` | 书目总览 + 逐书全展开大纲 + 思维导图摘要 |
 | `review-analysis-out/mindmap.full.json` | 全展开知识图谱（nodes/edges/fullExpanded） |
 | `review-analysis-out/book-reports.json` | 每书报告缓存（续做累积） |
-| `<project>/REVIEW_ANALYSIS_STATE.json` | 轮转进度（续做用） |
+| `review-analysis-out/mindmap.full.json` + `book-reports.json` | 续做进度真源（按 id 去重累积，重跑同一 `--out` 即续做） |
 
 ## 数据边界
 
 - **只读**：`<library>/`（即 review-library 的 `library/`）。
-- **只写**：`<project>/review-analysis-out/` 与 `<project>/REVIEW_ANALYSIS_STATE.json`。
+- **只写**：`<project>/review-analysis-out/`（`report.md` / `mindmap.full.json` / `book-reports.json`）。
 - 不触碰用户其他文件，不联网，不写任何凭据。
 
 ## 与 review-library 的关系
