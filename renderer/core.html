@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>复习资料库 · 统一核心</title>
+  <link rel="stylesheet" href="css/core.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">📚</span>
+      <div>
+        <div class="title">复习资料库</div>
+        <div class="subtitle">统一核心 · 导入资料 → 建书 → 大模型整体分析</div>
+      </div>
+    </div>
+    <button id="openSettings" class="ghost-btn" title="大模型接入设置">⚙ 模型设置</button>
+  </header>
+
+  <main class="layout">
+    <!-- 左侧：书架 -->
+    <aside class="sidebar">
+      <div class="sidebar-head">
+        <span>我的书</span>
+        <button id="newBookBtn" class="primary-btn small">＋ 新建书</button>
+      </div>
+      <ul id="bookList" class="book-list"></ul>
+      <div id="bookEmpty" class="empty-hint">还没有书。<br/>点击「新建书」开始。</div>
+    </aside>
+
+    <!-- 右侧：书详情 -->
+    <section class="content">
+      <div id="noSelection" class="placeholder">
+        <div class="placeholder-icon">🗂️</div>
+        <h2>选择或新建一本书</h2>
+        <p>先在左侧建一本书，再导入 PDF / PPT / Word / 图片，然后让大模型把整本书整体分析成<br/>可层层展开的「思维导图」与「题型索引」。</p>
+      </div>
+
+      <div id="bookDetail" class="hidden">
+        <div class="book-head">
+          <div>
+            <h1 id="bookTitle">书名</h1>
+            <div id="bookMeta" class="meta"></div>
+          </div>
+          <button id="deleteBookBtn" class="ghost-btn danger small">删除此书</button>
+        </div>
+
+        <!-- 文件导入区 -->
+        <div class="panel">
+          <div class="panel-title">资料文件</div>
+          <label class="dropzone" id="dropzone">
+            <input type="file" id="fileInput" multiple
+                   accept=".pdf,.ppt,.pptx,.doc,.docx,.txt,.md,.csv,.png,.jpg,.jpeg,.gif,.webp,.bmp,.tif,.tiff" hidden />
+            <div class="dz-inner">
+              <div class="dz-icon">⬆</div>
+              <div>点击或拖拽文件到此处导入</div>
+              <div class="dz-sub">支持 PDF / PPT / Word / Markdown / 文本 / 图片（图片交给多看图模型）</div>
+            </div>
+          </label>
+          <div id="importStatus" class="import-status" role="status"></div>
+          <ul id="fileList" class="file-list"></ul>
+        </div>
+
+        <!-- 分析 -->
+        <div class="panel">
+          <div class="panel-title row">
+            <span>整体分析</span>
+            <button id="analyzeBtn" class="primary-btn small">✨ 大模型整体分析</button>
+          </div>
+          <div id="analyzeStatus" class="status hidden"></div>
+        </div>
+
+        <!-- 结果 -->
+        <div id="resultArea" class="hidden">
+          <div class="tabs">
+            <button class="tab active" data-tab="mindmap">🧠 思维导图</button>
+            <button class="tab" data-tab="questions">📝 题型索引</button>
+            <button class="tab" data-tab="summary">📋 概览</button>
+          </div>
+
+          <div id="tab-mindmap" class="tab-pane active">
+            <div class="tree-toolbar">
+              <button id="expandAll" class="ghost-btn tiny">展开全部</button>
+              <button id="collapseAll" class="ghost-btn tiny">收起全部</button>
+              <span class="spacer"></span>
+              <button id="btnZoomOut" class="ghost-btn tiny" data-zoom="out" title="缩小">－</button>
+              <span id="zoomLabel" class="zoom-label">100%</span>
+              <button id="btnZoomIn" class="ghost-btn tiny" data-zoom="in" title="放大">＋</button>
+              <button id="btnFit" class="ghost-btn tiny" title="复位视图">复位</button>
+              <span class="spacer"></span>
+              <button id="btnExportJson" class="ghost-btn tiny" title="导出分析 JSON">导出 JSON</button>
+              <button id="btnExportSvg" class="ghost-btn tiny" title="导出矢量思维导图">导出 SVG</button>
+            </div>
+            <div id="mmViewport" class="mm-viewport">
+              <div id="tree" class="tree"></div>
+            </div>
+          </div>
+
+          <div id="tab-questions" class="tab-pane">
+            <div id="questionIndex" class="qindex"></div>
+          </div>
+
+          <div id="tab-summary" class="tab-pane">
+            <div id="summaryBox" class="summary-box"></div>
+            <div id="statsBox" class="stats-box"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- 设置弹窗 -->
+  <div id="settingsModal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head">大模型接入设置</div>
+      <label class="field">
+        <span>API 地址（OpenAI 兼容）</span>
+        <input id="cfgBase" type="text" placeholder="https://api.example.com/v1" />
+      </label>
+      <label class="field">
+        <span>模型名</span>
+        <input id="cfgModel" type="text" placeholder="例如 gpt-4o / deepseek-chat" />
+      </label>
+      <label class="field">
+        <span>API Key</span>
+        <input id="cfgKey" type="password" placeholder="sk-..." />
+      </label>
+      <div class="modal-actions">
+        <button id="testConn" class="ghost-btn small">测试连接</button>
+        <span id="connStatus" class="conn-status"></span>
+        <span class="spacer"></span>
+        <button id="saveSettings" class="primary-btn small">保存</button>
+        <button id="closeSettings" class="ghost-btn small">关闭</button>
+      </div>
+      <div class="modal-note">密钥只保存在本机浏览器 localStorage，仅在请求时发给后端转发，不会落盘到书库。</div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="js/core-ui.js"></script>
+</body>
+</html>

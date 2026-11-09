@@ -1,7 +1,7 @@
 {
   "name": "review-analysis",
-  "version": "1.0.2",
-  "description": "Offline study-material analysis expert that turns a layered review-library into structured outlines, fully-expanded knowledge maps and closed-loop review reports — 100% local, zero cloud.",
+  "version": "1.3.0",
+  "description": "统一复习项目的 WorkBuddy 专家入口：导入资料 → 建一本书 → 大模型整本整体分析 → 可层层展开的思维导图 + 题型分类索引。复用主项目 core/，不是独立离线引擎。",
   "author": {
     "name": "retri",
     "email": "retri@example.com"
@@ -14,32 +14,32 @@
   "agentName": "review-analysis",
 
   "displayName": {
-    "en": "Review Material Analysis Expert",
-    "zh": "复习资料分析专家"
+    "en": "Unified Review Analysis Expert",
+    "zh": "统一复习分析专家"
   },
   "profession": {
-    "en": "Study-Material Structuring Analyst",
-    "zh": "学习资料结构化分析专家"
+    "en": "Study Material Analysis Specialist",
+    "zh": "复习资料整体分析专家"
   },
   "displayDescription": {
-    "en": "Turns your layered review library into structured outlines, fully-expanded knowledge maps and closed-loop review reports — entirely offline, no cloud.",
-    "zh": "把分层复习资料离线转成结构化大纲、全展开知识图谱与闭环复习报告，纯本地零云端运行。"
+    "en": "Create books, import PDF/PPT/Word/images, and analyze the whole book with an LLM into an expandable mind map plus a question-type index. Shares core/ with the desktop app.",
+    "zh": "导入 PDF/PPT/Word/图片建书，用大模型整本整体分析，产出可层层展开的思维导图与题型分类索引；与桌面端共用同一套 core/。"
   },
   "avatar": "avatars/review-analysis.png",
   "categoryId": "04-DataAI",
   "defaultInitPrompt": {
-    "zh": "分析我的复习资料库，生成结构化大纲和全展开思维导图",
-    "en": "Analyze my review library and generate a structured outline plus a fully-expanded mind map."
+    "zh": "帮我建一本书并导入资料，然后用大模型整本整体分析，生成思维导图和题型索引",
+    "en": "Create a book, import my files, and analyze the whole book with an LLM into a mind map and question-type index."
   },
   "plugin": "review-analysis",
   "tags": [
-    { "en": "Knowledge Mapping", "zh": "知识图谱" },
-    { "en": "Study Outline", "zh": "结构化大纲" },
-    { "en": "Offline Analysis", "zh": "离线分析" }
+    { "en": "Unified Core", "zh": "统一核心" },
+    { "en": "Mind Map", "zh": "思维导图" },
+    { "en": "Question Index", "zh": "题型索引" }
   ],
   "quickPrompts": [
-    { "en": "Analyze my review library and generate a structured outline plus a fully-expanded mind map.", "zh": "分析我的复习资料库，生成结构化大纲和全展开思维导图" },
-    { "en": "Analyze just one book and give me its syllabus outline and knowledge-point map.", "zh": "只分析其中一本书，给我它的考纲大纲和知识点图谱" },
-    { "en": "Resume where we left off and finish analyzing the remaining books.", "zh": "接着上次的分析继续，把剩下没处理的书也跑完" }
+    { "en": "List all books and show which ones have been analyzed.", "zh": "列出我的书，看看哪些已经整体分析过" },
+    { "en": "Create a book, import these files, and run the whole-book analysis.", "zh": "建一本书，导入这些资料，然后整本整体分析" },
+    { "en": "Show the mind map and question-type index for a book.", "zh": "给我看某本书的思维导图和题型分类索引" }
   ]
 }

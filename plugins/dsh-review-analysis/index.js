@@ -1,117 +1,282 @@
-// dsh-review-analysis —— DeepSeek Harness（Cordis 引擎）插件入口。
+// dsh-review-analysis —— DeepSeek Harness（Cordis）插件 Host 半边。
 //
-// 注册一个离线工具 review_analysis：读取复习资料库，生成考纲大纲、规则版
-// 思维导图（全展开）与 Markdown 总报告。全程纯本地、零外部依赖、不联网。
+// 定位（2026-11-08 重做）：本插件**不是独立引擎**，只是「统一复习项目」的一个入口。
+// 唯一核心 = 主项目的 core/（Core 类：建书 → 加文件 → 大模型整本整体分析 → 思维导图 + 题型索引）。
+// 本文件只做两件事：
+//   1. 注册工具 review_analysis（action 分派 list/create/add/analyze/get），全部委托给 core；
+//   2. 为左侧栏面板提供同源只读 JSON：GET /review-analysis/api/state。
 //
-// 关于依赖：本插件刻意不 import '@deepseek-ai/dsh-tools'（在 local-plugins
-// 安装路径下该依赖无法解析），而是直接构造 Cordis 的 ToolDefinition 对象，
-// 通过 ctx.tools.register 注册——与官方示例 dsh-think-zh 一样保持自包含。
-// 引擎本体在 ./engine（CommonJS，零依赖），本文件用 createRequire 桥接，
-// 因为本包是 type:module（Cordis 插件入口要求 ESM export const apply）。
+// 与旧版的区别（旧版已被判定「完全不对」）：
+//   - 旧：自带 engine/ 副本，groupByLayer 分层、规则版导图、README 写「不联网、不调用模型」；
+//   - 新：不复制引擎，直接 require 主项目 core；整体分析必须走 LLM，无离线兜底。
+//
+// 安全契约：
+//   - projectRoot 只来自插件 config / 环境变量，不接受工具参数（防任意路径 require）；
+//   - apiKey 只来自工具参数 cfg 或环境变量 DSH_LLM_API_KEY，绝不写进 cordis.patch.yml / 文件 / 日志；
+//   - 文件内容只接受 base64，不提供任意路径读取（防模型被诱导读系统文件）。
+//
+// 依赖说明：不 import '@deepseek-ai/*'（local-plugins 路径下无法解析），
+// 只依赖 Node 内置模块 + 主项目 core（经 createRequire 绝对路径加载）。
 
-import path from 'path';
-import { createRequire } from 'module';
+import path from 'node:path';
+import fs from 'node:fs';
+import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { analyze } = require('./engine/analyze.js');
 
 export const name = 'dsh-review-analysis';
-// 只需 tools 服务即可注册工具。
-export const inject = ['tools'];
+export const inject = ['tools', 'webServer'];
 
-// 直接构造 ToolDefinition（ctx.tools.register 接受原始定义对象，无需 defineTool 包装）。
-const reviewAnalysisTool = {
-  name: 'review_analysis',
-  description:
-    '离线分析复习资料库：读取资料库目录，为每本书生成考纲大纲、规则版思维导图（全展开节点与边）与 Markdown 总报告。' +
-    '纯本地运行、零外部依赖、不联网、不调用模型。' +
-    '参数 library 为资料库根目录（含各书子目录，每本含 book.json 与 materials.json）；' +
-    'out 为输出目录（缺省为 <library>/../review-analysis-out），报告写入 report.md、思维导图写入 mindmap.full.json。',
-  parameters: {
-    type: 'object',
-    properties: {
-      library: {
-        type: 'string',
-        description: '复习资料库根目录的绝对路径（包含各本书子目录，每本含 book.json 与 materials.json）',
-      },
-      out: {
-        type: 'string',
-        description: '输出目录（报告与思维导图写入处）；缺省为 <library>/../review-analysis-out',
-      },
-      book: {
-        type: 'string',
-        description: '只分析指定书名或 book id；缺省分析全部书目',
-      },
-    },
-    required: ['library'],
+const API_STATE = '/review-analysis/api/state';
+const MAX_TREE_PREVIEW = 40;
+
+function sendJson(res, status, payload) {
+  const body = Buffer.from(JSON.stringify(payload), 'utf8');
+  res.statusCode = status;
+  res.setHeader('content-type', 'application/json; charset=utf-8');
+  res.setHeader('cache-control', 'no-store');
+  res.setHeader('content-length', String(body.length));
+  res.end(body);
+}
+function errorText(error) {
+  if (!error) return '未知错误';
+  return error && error.message ? String(error.message) : String(error);
+}
+// 同源校验：优先让 connection 服务裁决，退化时比对 Host/Origin（挡跨站简单请求）。
+function admitted(ctx, req) {
+  try {
+    const connection = typeof ctx.get === 'function' ? ctx.get('connection') : undefined;
+    if (connection && typeof connection.requestRejection === 'function') {
+      return connection.requestRejection(req) === undefined;
+    }
+  } catch { /* 退化为下面的同源比对 */ }
+  const origin = req.headers && req.headers.origin;
+  if (!origin) return true;
+  try { return new URL(origin).host === req.headers.host; } catch { return false; }
+}
+
+// 唯一核心：从 config.projectRoot（或环境变量）解析，惰性加载并缓存。
+function coreLoader(config) {
+  let cached = null;
+  return function getCore() {
+    if (cached) return cached;
+    const root = String((config && config.projectRoot) || process.env.DSH_REVIEW_PROJECT_ROOT || '').trim();
+    if (!root) throw new Error('未配置统一核心目录：请在插件 config.projectRoot（或环境变量 DSH_REVIEW_PROJECT_ROOT）填写主项目根目录（含 core/）。');
+    const entry = path.resolve(root, 'core', 'index.js');
+    if (!fs.existsSync(entry)) throw new Error('找不到统一核心入口：' + entry + '（确认 projectRoot 指向含 core/ 的主项目根）');
+    const mod = require(entry);
+    if (!mod || typeof mod.Core !== 'function') throw new Error('统一核心入口未导出 Core 类：' + entry);
+    const dataRoot = String((config && config.library) || '').trim() || path.resolve(root, 'library');
+    cached = { core: new mod.Core(path.resolve(dataRoot)), version: mod.CORE_VERSION || '', root, entry };
+    return cached;
+  };
+}
+
+// 密钥只走工具参数或环境变量；任何情况下不写盘。
+function cfgFrom(args) {
+  const c = (args && args.cfg) || {};
+  return {
+    baseURL: c.baseURL || process.env.DSH_LLM_BASE_URL || '',
+    model: c.model || process.env.DSH_LLM_MODEL || '',
+    apiKey: c.apiKey || process.env.DSH_LLM_API_KEY || '',
+  };
+}
+function requireCfg(cfg) {
+  const missing = ['baseURL', 'model', 'apiKey'].filter((k) => !cfg[k]);
+  if (missing.length) {
+    throw new Error('整体分析需要大模型配置，缺少：' + missing.join(' / ') +
+      '。请在工具参数 cfg 里提供，或设置环境变量 DSH_LLM_BASE_URL / DSH_LLM_MODEL / DSH_LLM_API_KEY（密钥不写进插件配置）。');
+  }
+}
+
+// 把书 + 分析产物整理成面板可渲染的视图（不再有 centers/points/related 旧结构）。
+function buildView(loaded) {
+  const { core, version, root } = loaded;
+  const books = core.listBooks() || [];
+  const items = books.map((b) => {
+    const full = core.getBook(b.id) || {};
+    const a = core.getAnalysis(b.id);
+    const stat = a && a.stats ? a.stats : null;
+    return {
+      id: b.id,
+      title: b.title,
+      description: b.description || '',
+      materialCount: (full.files || []).length,
+      hasAnalysis: !!(a && a.tree),
+      analyzedAt: stat && stat.analyzedAt ? stat.analyzedAt : null,
+      model: (a && a.model) || '',
+      summary: (a && a.summary) || '',
+      stats: stat,
+      tree: (a && a.tree) || null,
+      questionIndex: (a && Array.isArray(a.questionIndex)) ? a.questionIndex : [],
+    };
+  });
+  return {
+    ok: true,
+    projectRoot: root,
+    coreVersion: version,
+    bookCount: items.length,
+    analyzedCount: items.filter((x) => x.hasAnalysis).length,
+    questionTypeCount: items.reduce((n, x) => n + (x.stats && x.stats.questionTypes || 0), 0),
+    books: items,
+  };
+}
+
+function treePreview(node, depth, out) {
+  if (!node || out.length >= MAX_TREE_PREVIEW) return out;
+  out.push('  '.repeat(depth) + '- [' + (node.type || 'node') + '] ' + (node.title || ''));
+  (node.children || []).forEach((c) => treePreview(c, Math.min(depth + 1, 3), out));
+  return out;
+}
+
+function renderResult(v) {
+  const L = [];
+  L.push(v.ok ? '✅ 统一核心 · ' + v.action + ' 成功' : '❌ 统一核心 · ' + v.action + ' 失败：' + (v.error || ''));
+  if (v.bookId) L.push('书：' + (v.title || '') + ' (' + v.bookId + ')');
+  if (v.books) L.push('共 ' + v.books.length + ' 本书：' + v.books.map((b) => '《' + b.title + '》' + (b.analyzed ? '已分析' : '未分析')).join('；'));
+  if (v.materialCount != null) L.push('本次导入 ' + v.materialCount + ' 份资料。');
+  if (v.stats) L.push('统计：' + v.stats.chapters + ' 章 / ' + v.stats.sections + ' 节 / ' + v.stats.points + ' 知识点 / ' + v.stats.questionTypes + ' 类题型');
+  if (v.summary) L.push('概览：' + String(v.summary).slice(0, 300));
+  if (v.questionIndex && v.questionIndex.length) {
+    L.push('题型索引：' + v.questionIndex.map((g) => g.type + ' ' + (g.items || []).length + ' 项').join('，'));
+  }
+  if (v.tree) L.push('思维导图（前 ' + MAX_TREE_PREVIEW + ' 节点）：\n' + treePreview(v.tree, 0, []).join('\n'));
+  return [{ type: 'text', text: L.join('\n') }];
+}
+
+const OUTPUT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    ok: { type: 'boolean' },
+    action: { type: 'string' },
+    error: { type: 'string' },
+    bookId: { type: 'string' },
+    title: { type: 'string' },
+    books: { type: 'array', items: { type: 'object' } },
+    materialCount: { type: 'integer' },
+    stats: { type: 'object' },
+    tree: { type: 'object' },
+    questionIndex: { type: 'array', items: { type: 'object' } },
+    summary: { type: 'string' },
+    coreVersion: { type: 'string' },
   },
-  output: {
-    schema: {
+  required: ['ok', 'action'],
+};
+
+export function apply(ctx, config) {
+  const getCore = coreLoader(config);
+
+  const tool = {
+    name: 'review_analysis',
+    description:
+      '统一复习项目的入口（不是独立引擎）：先建一本书，导入 PDF/PPT/Word/图片等资料，' +
+      '再由大模型把整本书当作一个整体分析，产出可层层展开的思维导图、按题型分类的索引与全书概览。' +
+      'action 取 list（列书）/ create（建书）/ add（加资料）/ analyze（整体分析）/ get（取分析结果）。' +
+      '数据与主程序、专家形态共用同一套 core/，此处不复制引擎、不做离线规则分析。',
+    parameters: {
       type: 'object',
       additionalProperties: false,
       properties: {
-        ok: { type: 'boolean' },
-        out: { type: 'string' },
-        bookCount: { type: 'integer' },
-        nodeCount: { type: 'integer' },
-        edgeCount: { type: 'integer' },
-        report: { type: 'string' },
-        mindmap: { type: 'string' },
-        books: {
+        action: { type: 'string', enum: ['list', 'create', 'add', 'analyze', 'get'], description: '要执行的动作' },
+        bookId: { type: 'string', description: '书 id；add/analyze/get 必填' },
+        title: { type: 'string', description: 'create 时的书名' },
+        description: { type: 'string', description: 'create 时的备注（可选）' },
+        files: {
           type: 'array',
-          items: {
-            type: 'object',
-            additionalProperties: false,
-            properties: {
-              id: { type: 'string' },
-              title: { type: 'string' },
-              materials: { type: 'integer' },
-              maps: { type: 'integer' },
-            },
-            required: ['id', 'title', 'materials', 'maps'],
-          },
+          description: 'add 时的资料列表；每项 {name, data(base64)}。不接受文件路径（安全考虑）',
+          items: { type: 'object' },
         },
-        excerpt: { type: 'string' },
+        cfg: {
+          type: 'object',
+          description: 'analyze 时的大模型配置 {baseURL, model, apiKey}；也可用 DSH_LLM_* 环境变量，密钥不落盘',
+        },
+        maxTokens: { type: 'integer', description: 'analyze 的最大输出 token（可选）' },
+        timeoutMs: { type: 'integer', description: 'analyze 超时毫秒（可选）' },
       },
-      required: ['ok', 'out', 'bookCount', 'nodeCount', 'edgeCount'],
+      required: ['action'],
     },
-    render: (_args, value) => [{
-      type: 'text',
-      text:
-        `✅ 复习分析完成：分析 ${value.bookCount} 本，思维导图节点 ${value.nodeCount} / 边 ${value.edgeCount}（全展开）。\n` +
-        `报告：${value.report || ''}\n` +
-        `思维导图：${value.mindmap || ''}\n` +
-        `书目：${(value.books || []).map((b) => `《${b.title}》(${b.materials}份资料,${b.maps}张图)`).join('；')}\n\n` +
-        `--- 报告节选 ---\n${value.excerpt || ''}`,
-    }],
-  },
-  async execute(args) {
-    try {
-      const out = args.out
-        ? path.resolve(args.out)
-        : path.resolve(path.resolve(args.library), '..', 'review-analysis-out');
-      const result = analyze({
-        library: path.resolve(args.library),
-        out,
-        book: args.book || undefined,
-        rounds: 999,
-      });
-      result.report = path.join(out, 'report.md');
-      result.mindmap = path.join(out, 'mindmap.full.json');
-      return result;
-    } catch (e) {
-      return {
-        ok: false,
-        out: '',
-        bookCount: 0,
-        nodeCount: 0,
-        edgeCount: 0,
-        excerpt: '分析失败：' + (e && e.message ? e.message : String(e)),
-      };
-    }
-  },
-};
+    output: { schema: OUTPUT_SCHEMA, render: (_args, value) => renderResult(value) },
+    async execute(args) {
+      const action = String((args && args.action) || '').trim();
+      const base = { ok: true, action };
+      try {
+        const loaded = getCore();
+        const { core } = loaded;
+        if (action === 'list') {
+          return Object.assign(base, { books: core.listBooks() || [], coreVersion: loaded.version });
+        }
+        if (action === 'create') {
+          const b = core.createBook(String((args && args.title) || '未命名书'), { description: String((args && args.description) || '') });
+          return Object.assign(base, { bookId: b.id, title: b.title });
+        }
+        if (action === 'add') {
+          const id = String((args && args.bookId) || '');
+          if (!id) throw new Error('add 需要 bookId（先用 create 建书）');
+          const files = (args && Array.isArray(args.files)) ? args.files : [];
+          if (!files.length) throw new Error('add 需要 files：每项 {name, data(base64)}');
+          let n = 0;
+          for (const f of files) {
+            const name = String((f && f.name) || '').trim();
+            const data = String((f && f.data) || '');
+            if (!name) throw new Error('资料缺少 name');
+            if (!data) throw new Error('资料 ' + name + ' 缺少 data(base64)；本工具不读取任意文件路径');
+            await core.addFile(id, Buffer.from(data, 'base64'), { name, note: String((f && f.note) || '') });
+            n++;
+          }
+          return Object.assign(base, { bookId: id, materialCount: n });
+        }
+        if (action === 'analyze') {
+          const id = String((args && args.bookId) || '');
+          if (!id) throw new Error('analyze 需要 bookId');
+          const cfg = cfgFrom(args);
+          requireCfg(cfg);
+          const r = await core.analyze(id, {
+            cfg,
+            maxTokens: (args && args.maxTokens) || undefined,
+            timeoutMs: (args && args.timeoutMs) || undefined,
+          });
+          return Object.assign(base, {
+            bookId: id,
+            stats: r.stats || null,
+            tree: r.tree || null,
+            questionIndex: r.questionIndex || [],
+            summary: r.summary || '',
+            coreVersion: loaded.version,
+          });
+        }
+        if (action === 'get') {
+          const id = String((args && args.bookId) || '');
+          if (!id) throw new Error('get 需要 bookId');
+          const a = core.getAnalysis(id);
+          if (!a || !a.tree) return Object.assign(base, { ok: false, bookId: id, error: '该书尚无分析结果，请先 analyze' });
+          return Object.assign(base, {
+            bookId: id, stats: a.stats || null, tree: a.tree || null,
+            questionIndex: a.questionIndex || [], summary: a.summary || '',
+            coreVersion: loaded.version,
+          });
+        }
+        throw new Error('不支持的 action：' + action);
+      } catch (error) {
+        // 不回显 args（可能含 apiKey），也不回显上游原始错误体。
+        return { ok: false, action, error: errorText(error) };
+      }
+    },
+  };
 
-export function apply(ctx) {
-  ctx.effect(() => ctx.tools.register(reviewAnalysisTool), 'dsh-review-analysis: review_analysis tool');
+  ctx.effect(() => ctx.tools.register(tool), 'dsh-review-analysis: review_analysis tool (unified core)');
+
+  ctx.effect(
+    () => ctx.webServer.register({
+      kind: 'exact',
+      path: API_STATE,
+      handler: async (req, res) => {
+        if (!admitted(ctx, req)) return sendJson(res, 403, { ok: false, error: 'forbidden' });
+        if (req.method !== 'GET') return sendJson(res, 405, { ok: false, error: 'method not allowed' });
+        try { return sendJson(res, 200, buildView(getCore())); }
+        catch (error) { return sendJson(res, 200, { ok: false, books: [], error: errorText(error) }); }
+      },
+    }),
+    'dsh-review-analysis: GET ' + API_STATE,
+  );
 }

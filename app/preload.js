@@ -70,5 +70,7 @@ contextBridge.exposeInMainWorld('api', {
     queue: (limit) => ipcRenderer.invoke('review:queue', limit),
     rate: (b, pointId, rating) => ipcRenderer.invoke('review:rate', b, pointId, rating)
   },
+  // 统一核心：把 /api/core/* 风格的请求交主进程映射到 Core 类（与 server.js 共用 core/request.js）。
+  coreRequest: (pathArg, method, body) => ipcRenderer.invoke('core:request', pathArg, method, body),
   dialog: { openFiles: () => ipcRenderer.invoke('dialog:openFiles') }
 });

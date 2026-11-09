@@ -1,11 +1,13 @@
-# 复习资料分析专家（review-analysis）
+# 统一复习分析专家（review-analysis）
 
-> DSH 侧边栏专家 / 离线复习资料分析引擎。把分层复习资料库，离线转成结构化大纲、全展开知识图谱与闭环复习报告。
+> **统一复习项目的 WorkBuddy 专家入口**（不是独立引擎）：导入资料 → 建一本书 → 大模型整本整体分析 → 可层层展开的思维导图 + 题型分类索引。
 
-> ⚠️ **命名澄清 + 引擎共用**：本专家装在本机 `~/.workbuddy`（WorkBuddy/CodeBuddy 引擎的「专家」槽位），
-> 并非真 DeepSeek Harness（`~/.dsh`）。真 DeepSeek Harness 的插件是同级目录 `dsh-review-analysis/`，
-> 两者**共用同一套离线引擎**——引擎唯一真源在 `dsh-review-analysis/engine/`，由 `scripts/sync-engine.mjs` 同步。
-> 形态地图、版本索引、防漂移规则见 **[`plugins/README.md`](./README.md)**。
+> ⚠️ **2026-11-08 架构已切换**：本专家与桌面端 / HTTP server / 真 DSH 插件共用**同一套 `core/`**（主项目根 `core/index.js` 的 `Core` 类）。
+> 旧版「离线分层分析引擎 / `analyze.js` + `lib/` 副本 / 不调用模型」的话术**已作废**；本目录残留的 `analyze.js`、`lib/` 仅供回溯，不参与运行。
+> 唯一真源、形态地图、版本同步与漂移检测见仓库 **[`plugins/README.md`](../README.md)**。
+> 命名澄清：本专家装在本机 `~/.workbuddy`（WorkBuddy/CodeBuddy 的「专家」槽位），**不是**真 DeepSeek Harness（`~/.dsh`）；后者由 `dsh-review-analysis/` 提供。
+
+> 以下旧章节（离线引擎 / 全展开图谱 / 418 节点 941 边 / 续做累积）是分层架构时期的历史记录，保留作演进依据，**不再适用于统一核心**。
 
 ## 它是什么
 

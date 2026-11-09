@@ -1,16 +1,21 @@
 {
   "name": "review-library",
-  "version": "1.0.0",
+  "version": "1.3.0",
   "author": "retri",
   "repository": "https://github.com/huanweide/review-library",
   "private": true,
-  "description": "项目级离线复习资料管理系统：分层图书馆，一本书=一项考试+一项科目+其资料分析，支持成百上千本书与资料的真落盘增删改查。",
+  "description": "统一复习资料项目：导入 PDF/PPT/Word/图片 → 建一本书 → 大模型整本整体分析 → 可层层展开的思维导图 + 题型分类索引。桌面端 / HTTP / DSH 插件 / 专家形态共用同一 core/。",
   "main": "app/main.js",
   "scripts": {
     "start": "electron .",
     "dev": "node server.js",
+    "pretest": "node scripts/sync-versions.mjs && node scripts/check-versions.mjs && node scripts/check-forms.mjs",
     "test": "node scripts/run-tests.js",
     "test:e2e": "node _e2e/e2e.js",
+    "versions:sync": "node scripts/sync-versions.mjs",
+    "versions:check": "node scripts/check-versions.mjs",
+    "forms:sync": "node scripts/sync-engine.mjs",
+    "forms:check": "node scripts/check-forms.mjs",
     "build:dir": "electron-builder --dir",
     "dist": "electron-builder --win portable",
     "dist:installer": "electron-builder --win nsis",
@@ -24,6 +29,7 @@
     },
     "files": [
       "app/**/*",
+      "core/**/*",
       "lib/**/*",
       "renderer/**/*",
       "server.js",
@@ -36,7 +42,8 @@
       "node_modules/jszip/**/*",
       "node_modules/temp/**/*",
       "node_modules/tough-cookie/**/*",
-      "node_modules/immer/**/*"
+      "node_modules/immer/**/*",
+      "node_modules/pdf-parse/**/*"
     ],
     "win": {
       "target": [
@@ -74,13 +81,14 @@
       }
     ],
     "asar": true,
-    "buildVersion": "1.0.0",
+    "buildVersion": "1.3.0",
     "extraMetadata": {
       "main": "app/main.js"
     }
   },
   "dependencies": {
-    "electron-updater": "^6.8.11"
+    "electron-updater": "^6.8.11",
+    "pdf-parse": "1.1.1"
   },
   "devDependencies": {
     "electron": "^31.0.0",

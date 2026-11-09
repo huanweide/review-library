@@ -21,3 +21,7 @@ Thumbs.db
 
 # playwright-cli 快照/临时产物
 .playwright-cli/
+
+# 本机临时产物（playwright 快照、发布前备份），绝不入库
+init.yaml
+_backup/

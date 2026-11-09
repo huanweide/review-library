@@ -17,10 +17,14 @@ const clozeLib = require('./lib/cloze');
 const backupLib = require('./lib/backup');
 const reviewLib = require('./lib/review');
 const mindmapLib = require('./lib/mindmap');
+const { Core } = require('./core');
+const requestLib = require('./core/request');
 
 const ROOT = process.env.LIBRARY_ROOT || path.join(__dirname, 'library');
 const PORT = parseInt(process.env.PORT, 10) || 5178;
 const store = new Store(ROOT);
+// 统一核心（新架构）：建书→加文件→整体 LLM 分析。桌面端 / DSH 插件共用此引擎。
+const core = new Core(ROOT);
 // 与 lib/backup.js 的 180MB 单文件上限配套（base64 后约 240MB）。
 // 旧版 80MB 会让一份 65MB 扫描件连「显式跳过」都做不到，直接静默不进备份。
 const MAX_BODY = 260 * 1024 * 1024;
@@ -66,6 +70,20 @@ async function handleApi(req, res, u) {
     if (parts[1] === 'llm' && parts[2] === 'probe-vision' && method === 'POST') {
       const m = JSON.parse(await readBody(req));
       return send(res, 200, await llm.probeVision(m.cfg || {}, llm.chat));
+    }
+    // ===== 统一核心 API（新架构）：建书 / 加文件 / 整体分析 =====
+    // cfg（API 地址/密钥/模型）只在本次请求内存里，不落盘、不写日志。
+    if (parts[1] === 'core') {
+      // 路由语义只在 core/request.js 一份（与 Electron 主进程共用），此处只做 HTTP 适配。
+      // 单独包 JSON.parse：V8 的 SyntaxError 会回显请求体原文片段，而 analyze 的 body 含 cfg.apiKey。
+      // 畸形 JSON 只回固定文案，绝不把原文（可能含密钥）送进错误响应或日志。
+      let body = {};
+      if (method === 'POST') {
+        try { body = JSON.parse(await readBody(req) || '{}'); }
+        catch (e) { return send(res, 400, { error: '请求体不是合法 JSON' }); }
+      }
+      const r = await requestLib.dispatch(core, '/' + parts.slice(2).join('/'), method, body);
+      return send(res, r.status, r.data);
     }
     // /api/study/* —— 分析 / 出题 / 批改 / 巩固卷。答案只留在后端，前端只拿脱敏试卷。
     if (parts[1] === 'study') {
@@ -261,7 +279,13 @@ async function handleApi(req, res, u) {
     }
     return send(res, 404, { error: 'not found' });
   } catch (e) {
-    return send(res, 400, { error: String(e.message || e) });
+    // JSON.parse 的 V8 SyntaxError 会回显请求体原文（可能含 apiKey），一律固定文案；
+    // 其余错误经 scrub() 抹掉 sk- 前缀后再回显，绝不裸回显原文。
+    // 边界（不夸大）：此处拿不到 cfg，scrub 的「精确替换 apiKey」不生效，只剩 sk- 正则兜底；
+    // 但 /api/core 的畸形 JSON 已在上面单独拦截、llm/study/mindmap 的抛错在上游已 scrub(e.message, cfg)
+    // 或本来就是固定中文文案，故当前无可到达的泄漏路径。纵深缺口记录在验收台账 KNOWN-LIMITATION。
+    const msg = (e instanceof SyntaxError) ? '请求体不是合法 JSON' : llm.scrub(String(e.message || e));
+    return send(res, 400, { error: msg });
   }
 }
 

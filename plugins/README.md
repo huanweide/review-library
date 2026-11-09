@@ -1,136 +1,120 @@
-# 插件与版本索引（review-analysis 系列）
+# 形态地图与单一真源（review-analysis 系列）
 
-本目录下的所有东西，**共用同一套离线分析引擎**，只是打包成不同的宿主形态。
-本文是「版本与索引」的唯一权威说明，避免再出现多份各漂各的实现。
+本文是「这个项目有哪些形态、谁是唯一真源、怎么防漂移」的**唯一权威说明**。
 
 ---
 
 ## 一句话结论
 
-> **引擎唯一真源 = DSH 插件仓库的 `engine/`**（6 个零依赖核心模块 + `analyze.js` 编排器）。
-> DSH 插件是**独立仓库** `huanweide/dsh-review-analysis`；本仓库（review-library）只放
-> **WorkBuddy / CodeBuddy 专家形态**，并**索引** DSH 仓库。
-> 专家形态的引擎，由 `scripts/sync-engine.mjs` 从 DSH 仓库同步，**禁止手工改被同步的文件**。
+> **唯一核心 = 仓库根 `core/`**（`Core` 类：建书 → 加文件 → 大模型整本整体分析 → 思维导图 + 题型索引）。
+> 桌面端、HTTP server、GitHub Pages 演示、DSH 插件、WorkBuddy 专家**都只是这个统一项目的入口**，不是各自带一份引擎的独立实现。
+> 版本号唯一真源 = 根 `package.json`，由 `scripts/sync-versions.mjs` 机械同步。
+
+用户原话：「整体是统一的，只有一个唯一的项目」「大模型把整本书整体分析（不分层）」「DSH 插件只是统一项目的一个入口，必须能承载全部内容」。
 
 ---
 
 ## 形态地图
 
-| 形态 | 仓库 / 目录 | 宿主引擎 | 安装位置 | 入口 |
-| --- | --- | --- | --- | --- |
-| **DeepSeek Harness 插件（canonical）** | **独立仓库** `huanweide/dsh-review-analysis` | 真 DeepSeek Harness（Cordis，`~/.dsh`） | `~/.dsh/local-plugins/dsh-review-analysis/` | 工具 `review_analysis` |
-| **WorkBuddy / CodeBuddy 专家** | 本仓库 `plugins/review-analysis/` | WorkBuddy/CodeBuddy（`~/.workbuddy`） | `~/.workbuddy/plugins/marketplaces/my-experts/plugins/review-analysis/` | agent `review-analysis` + `bin/driver.js` |
+| 形态 | 位置 | 怎么接唯一核心 | 入口 |
+|---|---|---|---|
+| **canonical 核心** | `core/`（`index.js` / `bookStore.js` / `extract.js` / `analyze.js`） | 它自己 | `require('./core')` → `new Core()` |
+| 桌面端 Electron | `app/main.js` + `renderer/core.html` | 主进程 require `core/`，经 preload 暴露 `window.api.core` | 默认窗口 `core.html` |
+| HTTP server | `server.js` | `const { Core } = require('./core')`，`/api/core/*` 路由 | `npm run dev` → `/core.html` |
+| GitHub Pages 演示 | `demo/book.json` + `api-client.js` demo 分支 | 只读演示，不写核心 | 静态预览 |
+| **DeepSeek Harness 插件** | `plugins/dsh-review-analysis/` → `~/.dsh/local-plugins/dsh-review-analysis/` | `cordis.patch.yml` 的 `projectRoot` 指向主项目根，Host 用 `createRequire` 加载 `core/index.js` | 工具 `review_analysis` + 左侧栏面板 |
+| **WorkBuddy / CodeBuddy 专家** | `plugins/review-analysis/` → `~/.workbuddy/.../review-analysis/` | `bin/driver.js` 的 `--project` 指向主项目根，运行时 require `core/index.js` | agent `review-analysis` + CLI |
 
-> ⚠️ 命名澄清：WorkBuddy 专家 README 里写的「DSH 侧边栏专家」是指 WorkBuddy 的「专家」槽位，
-> **不是**真 DeepSeek Harness。真 DeepSeek Harness 读 `~/.dsh`；WorkBuddy/CodeBuddy 读 `~/.workbuddy`，两者不同引擎。
-
-两者产出完全一致：同一份资料库 → 同样 418 节点 / 941 边（示例库实测）、
-同样的 `report.md` / `mindmap.full.json` / `book-reports.json`。
-
----
-
-## 为什么 DSH 单独成仓（不放在 review-library 里）
-
-DSH 的社区插件广场（[dsh-plugin.org](https://dsh-plugin.org) / 内置 `dsh plugin market`）**自动收录**的规则是：
-
-1. 仓库**公开**；
-2. 仓库 GitHub Topics 含 **`dsh-plugin`**；
-3. **仓库根** `package.json` 声明 `dsh.bundle`（即 bundle 在仓库根，不是子目录）；
-4. README 含安装命令（`dsh plugin --profile web add ...`）；
-5. 插件导出 `apply(ctx)`。
-
-扫描器只读**仓库根** `package.json`。而 review-library 的根是 **Electron 桌面应用**
-（`package.json` 含 `main: app/main.js`），不能把 `dsh.bundle` 加在根上（会被当成插件去安装整个桌面程序）。
-所以 **DSH 必须独立成仓**，让 bundle 在仓库根——这也正是本系列能被广场发现、支持
-`dsh plugin --profile web add github:huanweide/dsh-review-analysis` 直装的前提。
-
-> `dsh-` 前缀是 DSH 生态的强约定（本机装的 dsh-file-mount / dsh-memory-evolve / dsh-think-zh 都带），
-> 本插件名 `dsh-review-analysis` 已符合；但光有前缀 + topic + README **不够**，必须有根 `package.json` 的 `dsh.bundle`。
+所有形态读写**同一份书与同一份分析产物**（`BookStore` 的 `books/<id>/analysis.json`）。在 DSH 里建的书，桌面端打开看得到；反之亦然。
 
 ---
 
-## 引擎单一真源规则
+## 为什么改（旧版错在哪）
 
-- **真源仓库**：`huanweide/dsh-review-analysis` → 其 `engine/`
-  - `lib/`：`store` / `srs` / `insight` / `syllabus` / `mindmap` / `llm`（零依赖，仅 Node 内置）
-  - `analyze.js`：权威编排器 + 报告渲染（DSH 与专家版共用，**同一份**）
-- **本仓库内的镜像**：`plugins/dsh-review-analysis/engine/`
-  - 这是 DSH 仓库引擎的一份**在库镜像**，作为 `sync-engine.mjs` 的默认同步源（离线可用），
-    同时是 DSH 仓库上线前的 GitHub 安全备份。**DSH 独立仓库上线后，此镜像会被删除**，
-    同步源改为 `DSH_ENGINE_SRC` 指向的独立仓库（见下）。
-- **被同步的文件**（改了真源后跑 `node scripts/sync-engine.mjs` 即全量同步）：
-  - `lib/` 6 个核心模块
-  - `analyze.js` 编排器
-  - `review-analysis/bin/driver.js`（薄 CLI 壳，只解析参数后调 `analyze.js`）
-- **不被同步**（各自维护，仍随形态分发）：
-  - DSH 专属 `index.js`（工具注册壳）—— 其它形态不需要
-  - 9 个辅助模块 `analytics` / `backup` / `cloze` / `env-config` / `graph` / `media` / `review` / `search` / `study`
-    —— 它们**不参与**离线分析（其中 `env-config` / `study` 含联网路径），只服务于 review-library 桌面主程序的其它功能
+旧版把「做一个插件」理解成「把引擎复制一份进插件目录」。逐字符证据：
 
-### 同步源切换（DSH 独立仓库上线后）
+- 旧 DSH `index.js:201-203`：「纯本地运行、零外部依赖、**不联网、不调用模型**」← 用户明确要「只做 LLM，不保留离线兜底」
+- 旧 DSH `engine/analyze.js:29-35`：`groupByLayer(materials)` ← 正是被推翻的**分层图书馆**
+- 旧专家 `agents/review-analysis.md` description：「Always offline — **never call a model or network**」
+- 旧 `plugins/README.md`：「引擎唯一真源 = **DSH 插件仓库的 `engine/`**」← 方向反了，真源应在主项目 `core/`
+- 旧 `scripts/sync-engine.mjs`：把 `engine/lib/*` 复制到各形态 → 形态越多副本越多，必然漂移
 
-`scripts/sync-engine.mjs` 默认从本仓库镜像 `plugins/dsh-review-analysis/engine/` 取真源；
-DSH 独立仓库上线后，设置环境变量指向它即可，无需改代码：
+根因：**没建立 canonical → wrapper 的依赖方向**，于是每加一个形态就多一份实现、多一个版本号。修法不是改文案，是把依赖方向翻过来。
+
+---
+
+## 单一真源规则（照抄 Dual-Distribution Pattern）
+
+1. **一个 canonical，绝不两份**：核心逻辑只在 `core/`。任何形态目录里不得出现第二份 `analyze.js` / `BookStore` 实现。
+2. **wrapper 只引用，不复制**：DSH 用 `config.projectRoot`，专家用 `--project`，都在运行时 require 主项目 `core/index.js`。
+3. **manifest 指向 canonical**：`cordis.patch.yml` 写 `projectRoot`，不内嵌逻辑；`package.json` 的 version 由同步脚本写入，禁止手改。
+4. **漂移检测跑在门禁里**：`npm test` 的 `pretest` 自动跑 `sync-versions` + `check-versions`；`npm run forms:check` 检查已安装副本与源码是否一致。
+5. **禁止手改被同步的文件**：改 wrapper 改源码目录，然后跑 `npm run forms:sync`。
+
+### 两条命令
 
 ```bash
-# 指向已克隆到本地的 DSH 独立仓库
-set DSH_ENGINE_SRC=C:/Users/Administrator/Desktop/dsh-review-analysis/engine
-# 或在 PowerShell：
-$env:DSH_ENGINE_SRC = "C:/Users/Administrator/Desktop/dsh-review-analysis/engine"
-node scripts/sync-engine.mjs
+npm run forms:sync     # 源码 wrapper → 本机已安装位置（不重启宿主应用）
+npm run forms:check    # 漂移检测；不一致 exit 1
+npm run versions:sync  # 根 package.json 版本 → 所有 manifest
+npm run versions:check # 版本漂移检测；不一致 exit 1
 ```
+
+`check-forms.mjs` 还会检查各形态**没有**回退成旧架构（不再 require `engine/`、不再 require 本地 `analyze`、形态地图不含旧话术）。
 
 ---
 
-## 安装方式
+## 版本号
 
-### A. 真 DeepSeek Harness 插件（`huanweide/dsh-review-analysis`，独立仓库）
+唯一真源 = 根 `package.json` 的 `version`（当前 `1.3.0`）。同步目标：
 
-```bash
-# 方式 1：从 GitHub 直装（广场收录后最方便）
-dsh plugin --profile web add github:huanweide/dsh-review-analysis
-dsh plugin --profile desktop add github:huanweide/dsh-review-analysis
+- `VERSION`、`package.json#build.buildVersion`、`core/index.js#CORE_VERSION`
+- `plugins/dsh-review-analysis/package.json`、`plugins/review-analysis/.codebuddy-plugin/plugin.json`
+- 两个已安装副本的 manifest
+- 根 `README.md` 顶部定位行
 
-# 方式 2：本地拷贝到自动扫描目录（离线）
-git clone https://github.com/huanweide/dsh-review-analysis.git
-cp -r dsh-review-analysis ~/.dsh/local-plugins/dsh-review-analysis
-```
-
-装好后**重启** DeepSeek Harness，工具列表出现 `review_analysis`。
-（详见该仓库 README；该仓库已满足 dsh-plugin.org 收录要求，加好 `dsh-plugin` topic + 设为公开即可被广场索引。）
-
-### B. WorkBuddy / CodeBuddy 专家（`review-analysis/`，本仓库）
-
-```bash
-# 源码拷到本机专家槽位
-cp -r review-analysis ~/.workbuddy/plugins/marketplaces/my-experts/plugins/review-analysis
-```
-
-重开 WorkBuddy 后，侧边栏「我的专家」出现「复习资料分析专家」。
-也可在对话里直接让专家跑；或手动：
-
-```bash
-node "<专家目录>/bin/driver.js" --project "<review-library 根>" --library "<library 目录>" --out "<输出>"
-```
+**Hard rule：Never hand-edit a version in a per-harness manifest.** 改版本只改根 `package.json`。
 
 ---
 
-## 改引擎后怎么做（防漂移）
+## 密钥（安全）
 
-1. 只改真源：DSH 仓库的 `engine/lib/*.js` 或 `engine/analyze.js`（在 `huanweide/dsh-review-analysis`）。
-2. 跑 `node scripts/sync-engine.mjs`（或设 `DSH_ENGINE_SRC` 指向独立仓库），把改动同步到专家版源码、本机专家实例、本机 DSH 实例。
-3. 若动了 DSH 专属的 `index.js`（工具注册/参数），手动把 DSH 仓库重新拷到 `~/.dsh/local-plugins/dsh-review-analysis/`。
-4. 提交时，真源（DSH 仓库）与被同步副本（本仓库专家源码）各自提交，保证版本一致。
+模型配置 `cfg = {baseURL, model, apiKey}` 只走：
+
+- DSH：工具参数 `cfg` 或环境变量 `DSH_LLM_BASE_URL` / `DSH_LLM_MODEL` / `DSH_LLM_API_KEY`
+- 专家：`REVIEW_LLM_BASE_URL` / `REVIEW_LLM_MODEL` / `REVIEW_LLM_API_KEY`
+- 桌面端 / HTTP：前端 `localStorage`（仅本机浏览器），请求时转发
+
+**绝不写进** `cordis.patch.yml`、`plugin.json`、任何仓库文件、日志或错误文本。`lib/llm.js` 的 `scrub()` 会抹掉回显里的密钥。
 
 ---
 
-## 版本索引
+## 安装
 
-- **DSH 插件版本**：以 `huanweide/dsh-review-analysis` 仓库的提交 / tag 为准（独立追踪）。
-- **本仓库专家版本**：以 `huanweide/review-library` 的提交为准；其引擎由同步脚本对齐到 DSH 仓库版本。
-- 想确认本机各形态是否落后：比对各自 `lib/` 与 DSH 仓库（或本仓库镜像）`engine/lib/` 的文件内容即可。
-- 发布：DSH 推 `huanweide/dsh-review-analysis`；专家推 `huanweide/review-library`（`ghssh`）。
+```bash
+# DSH（真 DeepSeek Harness，读 ~/.dsh）
+dsh plugin --profile web add <plugins/dsh-review-analysis 绝对路径>
+# WorkBuddy 专家（读 ~/.workbuddy）
+cp -r plugins/review-analysis ~/.workbuddy/plugins/marketplaces/my-experts/plugins/review-analysis
+```
 
-## 许可证
+装完**重启一次**宿主应用。`forms:sync` 只同步文件、不重启，不抢占用户正在做的事。
 
-MIT
+---
+
+## 废弃清单（保留源码供回溯，不参与运行）
+
+| 位置 | 说明 |
+|---|---|
+| `plugins/dsh-review-analysis/engine/` | 旧离线分层引擎 + 其测试；`package.json` 的 `files` 已不再打包 |
+| `plugins/review-analysis/analyze.js`、`lib/` | 旧离线引擎副本；新 `bin/driver.js` 不再 require 它们 |
+| 各 README 里 v0.5–v0.8 章节 | 分层架构时期的历史记录，保留作演进依据，不适用于统一核心 |
+
+> 命名澄清：专家 README 里旧写的「DSH 侧边栏专家」指 WorkBuddy「专家」槽位，**不是**真 DeepSeek Harness。真 DSH 读 `~/.dsh`，WorkBuddy 读 `~/.workbuddy`，两个宿主不同。
+
+---
+
+## 诚实边界
+
+- 本机 `electron.exe` 缺失（包安装损坏），真 Electron GUI 未跑；DSH 宿主也不由脚本重启。插件改动以 Node 侧加载 + 判别测试验证，GUI 实显待用户本机亲验。
+- `core/` 目前只在此发布仓库（`huanweide/review-library`）为 canonical。工作区另有一个开发副本 `agent program/复习资料图书馆/`，其 `core/` 是另一套实现（带 14/14 测试与两形态 e2e），**本轮未合并**，见交付小结的 KNOWN-LIMITATION。

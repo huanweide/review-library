@@ -1,6 +1,8 @@
 'use strict';
 // Electron 主进程：用 window.api 暴露 store（同一套落盘逻辑），前端无需知道走的是 Electron 还是 server。
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require('electron');
+const { Core } = require('../core');
+const requestLib = require('../core/request');
 const path = require('path');
 const { Store } = require('../lib/store');
 const insight = require('../lib/insight');
@@ -31,6 +33,21 @@ const DATA_DIR = process.env.REVIEW_LIBRARY_ROOT ||
       ? path.join(path.dirname(app.getPath('exe')), 'library')
       : path.join(__dirname, '..', 'library'));
 const store = new Store(DATA_DIR);
+// 统一核心：与 server.js / DSH 插件 / 专家形态共用同一份书与分析产物。
+// 路由语义只在 core/request.js 一份，Electron 侧只做 ipc 适配（不复制映射逻辑）。
+const core = new Core(DATA_DIR);
+// IPC 入口校验：渲染进程是低权限侧，路径/方法/请求体的形状必须先收窄再交给 dispatch。
+// 真正的 id 白名单在 core/request.js（入口）与 core/bookStore.js（落盘前）双层，此处只做形状把关。
+const CORE_METHODS = new Set(['GET', 'POST', 'PUT', 'DELETE', 'PATCH']);
+ipcMain.handle('core:request', (e, pathArg, method, body) => {
+  if (typeof pathArg !== 'string' || !pathArg.startsWith('/')) {
+    return { status: 400, data: { error: '非法请求路径' } };
+  }
+  const m = String(method || 'GET').toUpperCase();
+  if (!CORE_METHODS.has(m)) return { status: 405, data: { error: '不支持的请求方法：' + m } };
+  if (body != null && typeof body !== 'object') return { status: 400, data: { error: '非法请求体' } };
+  return requestLib.dispatch(core, pathArg, m, body);
+});
 
 // 让界面/验证脚本能查到「数据到底存在哪」，避免 portable 版落点成了黑盒。
 ipcMain.handle('app:dataDir', () => DATA_DIR);
@@ -186,14 +203,43 @@ function setupAutoUpdater() {
   autoUpdater.on('update-downloaded', () => send('update-status', { state: 'downloaded' }));
 }
 
-function createWindow() {
-  mainWin = new BrowserWindow({
+function openWindow(html) {
+  const w = new BrowserWindow({
     width: 1320, height: 880, minWidth: 960, minHeight: 640,
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false }
   });
-  mainWin.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
+  w.loadFile(path.join(__dirname, '..', 'renderer', html));
+  return w;
+}
+// 默认 = 统一导图视图（用户「只有一个唯一项目」）。旧版功能不删，菜单里仍可打开。
+function createWindow() { mainWin = openWindow('core.html'); }
+function openLegacyWindow() { return openWindow('index.html'); }
+
+// 应用菜单保留系统标准 role（Electron 官方 application-menu 模板）；
+// 自定义「视图」项追加在标准项之间，不整表替换——否则复制/粘贴/窗口/退出等原生能力会消失。
+function buildMenu() {
+  const isMac = process.platform === 'darwin';
+  const template = [
+    ...(isMac ? [{ role: 'appMenu' }] : []),
+    { role: 'fileMenu' },
+    { role: 'editMenu' },
+    {
+      label: '视图', submenu: [
+        { label: '🧠 统一导图视图', click: () => { mainWin = openWindow('core.html'); } },
+        { label: '旧版分层视图（练习/考试/备份）', click: () => openLegacyWindow() },
+        { type: 'separator' },
+        { role: 'reload' }, { role: 'forceReload' }, { role: 'toggleDevTools' },
+        { type: 'separator' },
+        { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' }
+      ]
+    },
+    { role: 'windowMenu' }
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-app.whenReady().then(() => { createWindow(); setupAutoUpdater(); });
+app.whenReady().then(() => { buildMenu(); createWindow(); setupAutoUpdater(); });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });

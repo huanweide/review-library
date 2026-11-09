@@ -1,0 +1,29 @@
+{
+  "meta": {
+    "title": "Unified Review Map",
+    "description": "DSH entry point for the unified review project: create a book, import files, analyze the whole book with an LLM, and browse an expandable mind map plus a question-type index. Shares core/ with the desktop app."
+  },
+  "panel": {
+    "label": "Review analysis",
+    "title": "Unified review map",
+    "subtitle": "Import files → create a book → analyze the whole book with an LLM",
+    "loading": "Loading unified core…",
+    "refresh": "Refresh",
+    "empty": "No books yet. Use the review_analysis tool in chat to create one and add files.",
+    "failed": "Could not read state",
+    "books": "books",
+    "analyzed": "analyzed",
+    "qtypes": "question types",
+    "tabs": {
+      "map": "Mind map",
+      "questions": "Question index",
+      "overview": "Overview"
+    },
+    "materials": "files",
+    "noAnalysis": "Not analyzed yet",
+    "expandAll": "Expand all",
+    "collapseAll": "Collapse all",
+    "related": "Related",
+    "summaryEmpty": "(no summary)"
+  }
+}

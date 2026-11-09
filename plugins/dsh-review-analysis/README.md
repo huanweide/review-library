@@ -1,128 +1,90 @@
 # dsh-review-analysis
 
-> ⚠️ **本目录是镜像副本（即将移除）**：规范的独立仓库已迁至
-> **[`huanweide/dsh-review-analysis`](https://github.com/huanweide/dsh-review-analysis)**（仓库根即 bundle，可被
-> dsh-plugin.org 广场收录、支持 `github:` 直装）。本目录仅作 review-library 内的引擎同步镜像与本地安装兜底，
-> 等独立仓库上线后会被删除。改引擎请去独立仓库，再跑 `scripts/sync-engine.mjs`。
+**DeepSeek Harness 插件 · 统一复习项目的 DSH 入口**（不是独立引擎）。
 
-**DeepSeek Harness（Cordis 引擎）插件**：离线复习资料分析引擎。
-
-读取一个「复习资料库」目录，为其中的每一本书生成：
-
-- **考纲大纲**（章节 → 节 → 知识点 的树状结构）
-- **规则版思维导图**（全展开：中心节点 + 知识点节点 + 关联节点，以及它们之间的 `contains` / `related` 边）
-- **Markdown 总报告**（`report.md`）
-
-全程 **纯本地运行、零外部依赖、不联网、不调用模型**。引擎本体随插件一起打包（`engine/`，CommonJS，仅依赖 Node 内置模块 `fs/path/crypto/zlib/http/https/url`），安装即用。
+用户要的是「只有一个唯一项目」：导入 PDF / PPT / Word / 图片 → 建一本书 → 大模型把**整本书整体分析** → 可层层展开的思维导图 + 题型分类索引。**DSH 只是这个项目的一个入口**，与桌面端、HTTP server、WorkBuddy 专家共用同一份 `core/` 与同一份书/分析产物。
 
 ---
 
-## 安装（DeepSeek Harness 桌面版 / CLI）
+## 与旧版的区别（旧版已判定「完全不对」）
 
-本插件遵循 DeepSeek Harness 官方插件规范：插件 = Cordis 插件打包成 npm bundle，
-通过 `dsh.bundle.patch`（`cordis.patch.yml`）插进 Loader entries。
+| | 旧版 | 本版 |
+|---|---|---|
+| 引擎 | 插件自带 `engine/` 副本（`groupByLayer` 分层、规则版导图、Markdown 报告） | **不复制引擎**，直接 require 主项目 `core/index.js` 的 `Core` 类 |
+| 分析 | 「纯本地、零依赖、**不联网、不调用模型**」 | **只用 LLM 做整本整体分析**，无离线兜底 |
+| 产物 | 考纲大纲 / 全展开节点边 / `report.md` | 层级思维导图树 `tree` + 题型分类索引 `questionIndex` + `summary` + `stats` |
+| 数据 | 读旧分层 `library/books/<id>` | 与桌面端共用 `BookStore`（`books/<id>/book.json` + `analysis.json`） |
+| 面板 | centers / points / related + Markdown 报告 | 三页：思维导图（可层层展开）/ 题型索引 / 概览 |
 
-### 方式一：本地路径安装（推荐，无需发版）
+> `engine/` 目录是旧版遗留源码，**不参与运行、不在 `files` 发布清单里**，仅保留供回溯。请勿再基于它开发。
+
+---
+
+## 安装
+
+标准 DSH bundle（`package.json` 的 `dsh.bundle.patch` 指向 `cordis.patch.yml`）：
 
 ```bash
-# 桌面版 profile（DeepSeek Harness 桌面应用使用的 profile）
-dsh plugin --profile desktop add /绝对路径/rlbuild/plugins/dsh-review-analysis
-
-# 通用默认 profile
-dsh plugin add /绝对路径/rlbuild/plugins/dsh-review-analysis
+# 把本目录放到 ~/.dsh/local-plugins/dsh-review-analysis/ 后
+dsh plugin --profile web add <本目录绝对路径>
+# 或 plugin_manager(install_bundle, target=<本目录绝对路径>)
 ```
 
-安装后重启（或重载）DeepSeek Harness，即可在工具列表看到 `review_analysis`。
+装好后**重启一次** DeepSeek Harness 桌面应用。仓库根 `npm run forms:sync` 会把本目录同步到已安装位置（不重启宿主）。
 
-### 方式二：从 GitHub 仓库安装
+---
 
-本仓库根是 Electron 桌面应用（`package.json` 含 `main: app/main.js`），**不能在根加 dsh 字段**；
-插件放在子目录 `plugins/dsh-review-analysis/`。因此 GitHub 安装走「克隆后本地路径」：
+## 配置
+
+`cordis.patch.yml`：
+
+| 字段 | 说明 |
+|---|---|
+| `projectRoot` | **必填**：主项目根目录，必须含 `core/index.js`。插件从这里 `require` 统一核心 |
+| `library` | 可选，数据目录；缺省 `<projectRoot>/library` |
+
+**密钥绝不写进 patch / 任何文件。** 模型配置走工具参数 `cfg`，或环境变量：
 
 ```bash
-git clone https://github.com/huanweide/review-library.git
-# 桌面版 profile（DeepSeek Harness 桌面应用使用的 profile）
-dsh plugin --profile desktop add ./review-library/plugins/dsh-review-analysis
-# 或：直接把子目录拷到本地插件目录（桌面应用自动扫描）
-cp -r review-library/plugins/dsh-review-analysis ~/.dsh/local-plugins/dsh-review-analysis
+DSH_LLM_BASE_URL=https://api.example.com/v1
+DSH_LLM_MODEL=your-model
+DSH_LLM_API_KEY=...        # 只在进程内存，不落盘
 ```
 
-> 关于 `dsh plugin add github:owner/repo` 直装：DSH 的 GitHub 源渠道只读**仓库根**
-> `package.json` 的 dsh bundle 声明，且需要仓库打上 `dsh-plugin` topic 才能被发现。
-> 由于本插件不在仓库根，故不支持 `github:` 直装，统一走上面的「克隆 + 本地路径」或
-> 「拷到 local-plugins」两种方式。（如未来想支持直装，需把插件拆成独立仓库。）
->
-> 若仅为在 GitHub 上标记为 DSH 插件以便检索，可在仓库 Settings → Topics 添加 `dsh-plugin`。
-
-### 卸载
-
-```bash
-dsh plugin --profile desktop remove dsh-review-analysis
-```
+版本号唯一真源是主项目根 `package.json`；本目录 `package.json` 的 version 由 `npm run versions:sync` 机械同步，**禁止手改**。
 
 ---
 
-## 工具用法（在 DeepSeek Harness 中调用）
+## 工具用法（模型侧）
 
-工具名：**`review_analysis`**
+工具名仍为 `review_analysis`，用 `action` 分派五个动作：
 
-| 参数 | 必填 | 说明 |
-| --- | --- | --- |
-| `library` | 是 | 复习资料库根目录（绝对路径），含各书子目录，每本含 `book.json` 与 `materials.json` |
-| `out` | 否 | 输出目录；缺省为 `<library>/../review-analysis-out` |
-| `book` | 否 | 只分析指定书名或 book id；缺省分析全部 |
+| action | 作用 | 主要参数 |
+|---|---|---|
+| `list` | 列出所有书 | — |
+| `create` | 建一本书 | `title`, `description?` |
+| `add` | 导入资料 | `bookId`, `files: [{name, data(base64)}]` |
+| `analyze` | **整本整体分析（LLM）** | `bookId`, `cfg:{baseURL,model,apiKey}`, `maxTokens?`, `timeoutMs?` |
+| `get` | 取分析结果 | `bookId` |
 
-产出文件（写入 `out` 目录）：
+`add` 只接受 base64，**不接受任意文件路径**（安全：防模型被诱导读系统文件）。`analyze` 缺 cfg 会明确报错，不静默降级、不编造结果。
 
-- `report.md` —— 人类可读总报告（书目总览 + 逐书全展开大纲 + 思维导图摘要）
-- `mindmap.full.json` —— 全展开思维导图（节点 + 边，按 id 去重，可续做累积）
-- `book-reports.json` —— 每书结构化缓存（供续做累积，不推翻重来）
-
-每次调用若 `out` 下已有上述文件，会按节点/边 id 去重合并，适合多轮增量分析。
+典型链路：`create` → `add`（多份资料）→ `analyze` → 拿到 `tree` / `questionIndex` / `summary` / `stats`。
 
 ---
 
-## 目录结构
+## 面板
 
-```
-plugins/dsh-review-analysis/
-├── package.json          # dsh.bundle.patch + type:module + peerDependencies + keywords: dsh-plugin
-├── cordis.patch.yml      # 把插件插进 Cordis Loader entries
-├── index.js              # ESM 入口：export const name / inject=['tools'] / apply(ctx)
-│                         #   用 ctx.effect(() => ctx.tools.register(defineTool({...})), id)
-├── engine/
-│   ├── package.json      # {"type":"commonjs"} —— 让引擎以 CommonJS 运行
-│   ├── analyze.js        # 编排层：读库→大纲→规则思维导图→聚合去重→落盘→返回摘要
-│   └── lib/              # 零依赖离线引擎（仅 Node 内置模块）
-│       ├── store.js      # 资料库读写
-│       ├── srs.js        # 间隔重复调度（引擎数据基础）
-│       ├── insight.js    # 解压/文本抽取（zlib）
-│       ├── syllabus.js   # 考纲大纲构建 + 题库抽取
-│       ├── mindmap.js    # 规则版思维导图构建（buildRuleMaps）
-│       └── llm.js        # OpenAI 兼容转发（内置 http/https；本插件离线流程不触发）
-├── LICENSE
-└── README.md
-```
+左侧栏「复习分析」→ 主面板。三页：
+
+- **思维导图**：按 root → 章 → 节 → 知识点 → 子点层层展开，可全部展开/收起。
+- **题型索引**：按题型分组，每项带知识点标题与面包屑路径。
+- **概览**：全书摘要 + 章/节/知识点/子点/题型统计 + 模型与资料数。
+
+面板是**只读视图**：`GET /review-analysis/api/state`（同源校验）。要重新分析，在对话里调用 `review_analysis` 工具；模型密钥不进面板、不落盘。
 
 ---
 
-## 校验
+## 版本与形态
 
-```bash
-# 引擎单元校验（纯本地，不依赖 DSH 运行时）
-node --test engine/test/
-```
-
----
-
-## 与其他形态的关系（版本索引）
-
-本插件与同级目录的 WorkBuddy/CodeBuddy 专家 `../review-analysis/` **共用同一套离线引擎**。
-引擎唯一真源在本目录的 `engine/`，由仓库根 `scripts/sync-engine.mjs` 同步到各形态。
-形态地图、安装方式、防漂移规则、版本索引见 **[`../README.md`](../README.md)**（插件与版本索引）。
-
----
-
-## 许可证
-
-MIT
+唯一核心、各形态只做入口的规则见仓库顶层 `plugins/README.md`。漂移检测：`npm run forms:check`、`npm run versions:check`。

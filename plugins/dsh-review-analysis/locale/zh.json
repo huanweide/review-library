@@ -1,0 +1,29 @@
+{
+  "meta": {
+    "title": "统一复习导图",
+    "description": "统一复习项目的 DSH 入口：建书、导入资料、用大模型整本整体分析，查看可层层展开的思维导图与题型分类索引。与主程序共用同一套 core/。"
+  },
+  "panel": {
+    "label": "复习分析",
+    "title": "统一复习导图",
+    "subtitle": "导入资料 → 建一本书 → 大模型整本整体分析",
+    "loading": "正在读取统一核心…",
+    "refresh": "刷新",
+    "empty": "还没有书。在对话里用 review_analysis 工具建书并导入资料。",
+    "failed": "读取失败",
+    "books": "本书",
+    "analyzed": "已分析",
+    "qtypes": "类题型",
+    "tabs": {
+      "map": "思维导图",
+      "questions": "题型索引",
+      "overview": "概览"
+    },
+    "materials": "份资料",
+    "noAnalysis": "该书尚未整体分析",
+    "expandAll": "全部展开",
+    "collapseAll": "全部收起",
+    "related": "关联",
+    "summaryEmpty": "（无概览）"
+  }
+}
