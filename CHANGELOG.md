@@ -5,6 +5,17 @@
 DSH 插件与 WorkBuddy 专家的 manifest，以及 README 顶部定位行；`scripts/check-versions.mjs`
 挂在 `pretest` 上做漂移检测。发版 tag 必须与 `package.json` 严格一致（`v1.3.0`）。
 
+## v1.3.1 — 2026-11-09
+
+**修复发布阻塞**：`package-lock.json` 未包含 `pdf-parse@1.1.1`（以及它间接依赖的
+`debug` / `node-ensure`），云端 `release.yml` 的 `npm ci` 报
+`EUSAGE ... Missing: pdf-parse@1.1.1 from lock file` 而在第 5 步失败，
+v1.3.0 未产出 Release。本地用 `npm install --package-lock-only` 重建 lock，
+`npm ci --dry-run` 由 `exit 1` 转 `exit 0`。按发版纪律不改已推送 tag，
+以 patch 版本 1.3.1 重新发版。
+
+代码功能与 v1.3.0 相同，无新增特性。
+
 ## v1.3.0 — 2026-11-09
 
 **融合双实现的能力**：把工作区开发副本里已验证的能力，逐项适配进发布正本的

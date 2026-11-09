@@ -66,7 +66,7 @@ npm run versions:check # 版本漂移检测；不一致 exit 1
 
 ## 版本号
 
-唯一真源 = 根 `package.json` 的 `version`（当前 `1.3.0`）。同步目标：
+唯一真源 = 根 `package.json` 的 `version`（当前 `1.3.1`）。同步目标：
 
 - `VERSION`、`package.json#build.buildVersion`、`core/index.js#CORE_VERSION`
 - `plugins/dsh-review-analysis/package.json`、`plugins/review-analysis/.codebuddy-plugin/plugin.json`

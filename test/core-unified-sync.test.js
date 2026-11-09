@@ -1,7 +1,9 @@
 'use strict';
 // 统一核心 · 桌面端 / 服务端同步判别测试（项目约定：普通 node 脚本，失败 exit 1）。
-// baseline 取自 git HEAD 的真实旧版 app/main.js（未接 core、默认 index.html），
+// baseline 取自固定提交 9fb96f1 的真实旧版 app/main.js（未接 core、默认 index.html），
 // candidate 为当前磁盘版本；两者用同一套「启动链路 + 路由契约」检查，旧红新绿。
+// 注意：不能锚 git HEAD —— HEAD 会随 commit 前移，一旦把新版提交上去，
+// 「旧版必红」就失去对照物而假失败（2026-11-09 发版时实测踩过）。
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -60,12 +62,18 @@ function startupIssues(st) {
 }
 
 console.log('--- 判别测试：桌面端接到统一核心（旧版必红 / 新版必绿）---');
+// 固定基线：9fb96f1 是「统一核心」提交之前的真实旧版（未接 core、默认 index.html）。
+// 锚定 commit 而非 HEAD，保证以后每次 commit 都不会让 baseline 漂移。
+const BASELINE_REV = '9fb96f1';
 let oldSrc;
-try { oldSrc = cp.execFileSync('git', ['show', 'HEAD:app/main.js'], { cwd: ROOT, encoding: 'utf8' }); }
-catch (e) { console.error('  ✗ 无法从 git HEAD 取旧版 main.js：' + e.message); process.exit(1); }
+try { oldSrc = cp.execFileSync('git', ['show', BASELINE_REV + ':app/main.js'], { cwd: ROOT, encoding: 'utf8' }); }
+catch (e) {
+  console.error('  ✗ 无法从固定基线 ' + BASELINE_REV + ' 取旧版 main.js：' + e.message);
+  process.exit(1);
+}
 const oldIssues = startupIssues(runMain(oldSrc));
 console.log('  旧版违约项：' + oldIssues.join(' | '));
-ok(oldIssues.length > 0, 'BASELINE 红：git HEAD 旧版未接 core / 默认旧界面');
+ok(oldIssues.length > 0, 'BASELINE 红：固定基线 ' + BASELINE_REV + ' 未接 core / 默认旧界面');
 
 const curSrc = fs.readFileSync(MAIN, 'utf8');
 const st = runMain(curSrc);
