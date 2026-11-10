@@ -196,7 +196,10 @@ function composeCorpus(fullText, maxChars) {
       coverage[gi].keptChars += take.length;
       coverage[gi].keptBlocks++;
     }
-    out.push('【文件：' + g.name + '】\n' + keptBlocks.map(b => b.anchor + b.text).join('\n'));
+    // 与未截断分支保持同一契约：没标注文件的老语料不凭空造一个「（未标注文件）」文件名，
+    // 否则语料里的文件名会和注入给模型的真实文件名清单对不上。
+    const head = g.name === '（未标注文件）' ? '' : '【文件：' + g.name + '】\n';
+    out.push(head + keptBlocks.map(b => b.anchor + b.text).join('\n'));
   });
   return { corpus: out.join('\n\n'), coverage, truncated: true, totalChars, keptChars: kept };
 }
@@ -479,23 +482,28 @@ function verifyQuotes(result, corpusText) {
     const src = (q && q.source) || {};
     const quote = String(src.quote || '').trim();
     const nq = norm(quote);
-    // 取前 40 字做包含判定：模型常补标点或省末尾几字，全串严格匹配会误伤；
-    // 但 40 字足以区分「真抄了原文」与「编造/改写」。
-    const probe = nq.slice(0, 40);
-    const found = probe.length >= 8 && nc.includes(probe);
+    // 只容忍「模型省了引文末尾几字」，不容忍「开头抄一段、后面自由发挥」。
+    // 旧实现取前 40 字做包含判定，实测会把「前 40 字真 + 后段编造」判为命中，
+    // 且 reason 写成 exact-span —— 等于把前缀命中冒充逐字核对（本轮独立复核发现）。
+    const TAIL_TOLERANCE = 6;
+    const probe = nq.length > 8 + TAIL_TOLERANCE ? nq.slice(0, nq.length - TAIL_TOLERANCE) : nq;
+    const fullHit = nq.length >= 8 && nc.includes(nq);
+    const found = nq.length >= 8 && nc.includes(probe);
     return {
       i,
       id: (q && q.id) || '',
       anchor: String(src.anchor || ''),
       quote: quote.slice(0, 80),
       found,
-      reason: !quote ? 'no-quote' : (found ? 'exact-span' : 'not-in-corpus')
+      fullHit,
+      reason: !quote ? 'no-quote' : (fullHit ? 'exact-span' : (found ? 'suffix-tolerance' : 'not-in-corpus'))
     };
   });
   const hit = details.filter(d => d.found).length;
   return {
     checked: qs.length,
     hit,
+    fullHit: details.filter(d => d.fullHit).length,
     missed: qs.length - hit,
     rate: qs.length ? hit / qs.length : 0,
     details

@@ -38,6 +38,7 @@ function runMain(src) {
     dialog: { showOpenDialog: async () => ({ canceled: true }) },
     shell: { writeShortcutLink: () => true, openExternal: () => {} },
     Menu: { buildFromTemplate: (t) => ({ template: t }), setApplicationMenu: (m) => { st.menus.push(m); } },
+    nativeTheme: { shouldUseDarkColors: false },
   };
   const m = new Module(MAIN, module);
   m.filename = MAIN;
@@ -53,6 +54,7 @@ function startupIssues(st) {
   const issues = [];
   if (!st.handlers['core:request']) issues.push('未注册 core:request（Electron 侧没接统一核心）');
   if (!(st.windows[0] && /core\.html$/.test(st.windows[0].loaded || ''))) issues.push('默认窗口不是 core.html');
+  if (!(st.windows[0] && st.windows[0].opts && st.windows[0].opts.backgroundColor)) issues.push('默认窗口未设 backgroundColor（深色用户启动白闪）');
   const tpl = (st.menus[0] && st.menus[0].template) || [];
   const roles = tpl.map((x) => x.role);
   ['fileMenu', 'editMenu', 'windowMenu'].forEach((r) => { if (!roles.includes(r)) issues.push('菜单缺 ' + r); });

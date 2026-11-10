@@ -11,90 +11,13 @@
         不新增任何 DOM id/class 契约，只重定义已有选择器 + 追加新组件。
    ============================================================ */
 
-:root {
-  color-scheme: light;
+@import url('tokens.css');
 
-  /* surface 色阶：Level 0 底 → Level 3 浮层，深色靠色阶而非阴影分层 */
-  --bg: #f6f7f9;
-  --surface-0: #f6f7f9;
-  --surface-1: #ffffff;
-  --surface-2: #f1f3f7;
-  --surface-3: #ffffff;
-  --panel: var(--surface-1);
+/* 组件样式见下方；所有设计 token 已抽至 tokens.css（core.css 与 style.css 共用单一真源）。
+   @import 必须位于其它规则之前，故置于文件头注释之后、组件样式之前。 */
 
-  --ink: #1c2330;
-  --ink-soft: #596274;
-  --ink-faint: #8992a3;
-  --line: #e2e6ed;
-  --line-strong: #cbd3df;
-
-  /* 单一强调色；绿/黄/红只给状态，不做装饰 */
-  --accent: #3b5bdb;
-  --accent-soft: #edf1ff;
-  --accent-ink: #2f49b0;
-  --ok: #167a3c;
-  --ok-soft: #eaf7ef;
-  --warn: #9a5b08;
-  --warn-soft: #fdf4e5;
-  --danger: #c22f37;
-  --danger-soft: #fdefef;
-  --locate: #d97706;
-  --locate-soft: #fff5e4;
-
-  /* 兼容旧变量名：全部派生自上面的 token，换主题只改一组值 */
-  --brand: var(--accent);
-  --brand-soft: var(--accent-soft);
-  --brand-ink: var(--accent-ink);
-  --chip: var(--accent-soft);
-
-  --shadow: 0 1px 2px rgba(20, 28, 45, .05);
-  --shadow-float: 0 12px 34px rgba(20, 28, 45, .14);
-  --overlay: rgba(18, 24, 36, .44);
-
-  --radius: 8px;
-  --radius-sm: 5px;
-  --radius-lg: 10px;
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 24px;
-  --ease: cubic-bezier(.16, 1, .3, 1);
-  --dur: .18s;
-}
-
-/* 深色模式：CSS 首帧即生效，不需要 JS，因此没有白闪。
-   颜色由 surface 色阶 + 1px 边框建立层级，不靠阴影。 */
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --bg: #10131a;
-    --surface-0: #10131a;
-    --surface-1: #171b24;
-    --surface-2: #1e2430;
-    --surface-3: #242c3a;
-    --panel: var(--surface-1);
-    --ink: #e9edf5;
-    --ink-soft: #a4aec0;
-    --ink-faint: #77839a;
-    --line: #2b3341;
-    --line-strong: #3b4658;
-    --accent: #7d97ff;
-    --accent-soft: #202a45;
-    --accent-ink: #adc0ff;
-    --ok: #5fc98b;
-    --ok-soft: #173026;
-    --warn: #e0a95f;
-    --warn-soft: #35281a;
-    --danger: #f08187;
-    --danger-soft: #3a2226;
-    --locate: #f0ad55;
-    --locate-soft: #3a2c19;
-    --shadow: 0 1px 2px rgba(0, 0, 0, .32);
-    --shadow-float: 0 16px 42px rgba(0, 0, 0, .52);
-    --overlay: rgba(0, 0, 0, .64);
-  }
-}
+/* 深色模式 token 已随 tokens.css 的 @media (prefers-color-scheme: dark) 一并引入，
+   故本文件不再重复定义；组件样式在深浅两套下均引用同一组 var()。 */
 
 * { box-sizing: border-box; }
 html, body { height: 100%; }
@@ -217,7 +140,7 @@ body {
 .skeleton { border-radius: var(--radius-sm); background: linear-gradient(100deg, var(--surface-2) 30%, var(--surface-1) 50%, var(--surface-2) 70%); background-size: 220% 100%; animation: shimmer 1.4s linear infinite; }
 
 /* 按钮 */
-.primary-btn { background: var(--accent); color: #fff; border: 1px solid var(--accent); border-radius: var(--radius-sm); padding: 8px 15px; font-weight: 600; cursor: pointer; transition: background var(--dur) var(--ease), transform var(--dur) var(--ease); }
+.primary-btn { background: var(--accent); color: var(--bg); border: 1px solid var(--accent); border-radius: var(--radius-sm); padding: 8px 15px; font-weight: 600; cursor: pointer; transition: background var(--dur) var(--ease), transform var(--dur) var(--ease); }
 .primary-btn:hover { background: var(--accent-ink); }
 .primary-btn:active { transform: translateY(1px); }
 .primary-btn:disabled { opacity: .5; cursor: not-allowed; }
@@ -319,7 +242,7 @@ body {
 .seg-btn { border: 0; background: var(--surface-1); color: var(--ink-soft); font-size: 12px; padding: 5px 10px; cursor: pointer; white-space: nowrap; }
 .seg-btn + .seg-btn { border-left: 1px solid var(--line); }
 .seg-btn:hover { background: var(--surface-2); }
-.seg-btn.active { background: var(--accent); color: #fff; font-weight: 600; }
+.seg-btn.active { background: var(--accent); color: var(--bg); font-weight: 600; }
 .search-input { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 5px 10px; font-size: 12px; width: 168px; outline: none; background: var(--surface-1); color: var(--ink); }
 .search-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 .search-count { font-size: 11px; color: var(--ink-soft); min-width: 52px; }
@@ -354,7 +277,7 @@ body {
 .sp-qlist-item { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 8px; cursor: pointer; background: var(--surface-1); transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease); }
 .sp-qlist-item:hover { border-color: var(--accent); background: var(--accent-soft); }
 .sp-qlist-top { display: flex; gap: var(--space-2); align-items: center; margin-bottom: 5px; }
-.sp-qlist-idx { font-size: 10px; color: #fff; background: var(--accent); border-radius: var(--radius-sm); padding: 2px 6px; flex-shrink: 0; }
+.sp-qlist-idx { font-size: 10px; color: var(--bg); background: var(--accent); border-radius: var(--radius-sm); padding: 2px 6px; flex-shrink: 0; }
 .sp-qlist-tag { font-size: 10px; color: var(--ink-soft); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 1px 6px; }
 .sp-qlist-stem { font-size: 13px; line-height: 1.6; }
 .sp-qlist-go { font-size: 11px; color: var(--accent-ink); margin-top: 6px; }

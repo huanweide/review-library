@@ -151,3 +151,69 @@ source: 用户 2026-11-10「结合竞品百家所长 开始maxloop优化改进�
 （`SendMessage` 返回 `Not in a team`），结论正文无法取回。本节判定维持不变：
 仍按 Chair 亲验放行，不宣称通过独立评审，也不把「评审已完成」写成「评审通过」。
 若日后从会话归档取回正文并发现 P0/P1，走单独 fix commit 回写本节。
+
+## 十、发布前第二次独立复核：正文仍未送达，Chair 增强复核抓到并修掉 2 处缺陷
+
+**评审通道**：另派窄范围 reviewer（最多 5 轮，只查 P0 / 一次 API 硬需求 / 证据边界 + 安全三段），
+6m37s 后框架只返回 `completed` 通知，`TaskOutput` 全快照为空；追问时团队上下文已释放
+（`SendMessage` → `Not in a team`）。**连续两轮评审正文未送达**，判定维持
+「Chair 亲验放行、不宣称通过独立评审」，不把「完成」写成「通过」。
+
+**Chair 增强复核（真命令，不靠读码印象）**：
+- `composeCorpus()` 未截断分支：两文件正文、三个锚点、两个文件头全在，`coverage` 与语料一致 → 无 P0。
+- `analyze()` 里 `await chatFn(` 实为 **1 处** → 一次 API 硬需求未破；无第二套 core、无数据格式迁移。
+- 老数据（无 `anchor`/`quoteVerified`）走 `verifyQuotes` 返回 `reason: no-quote`、`anchor: undefined`、
+  `quoteVerified: undefined`；前端 `core-ui.js:478-479` 仅 `=== true` / `=== false` 才渲染徽章 → **不谎称已核对**。
+- v6 台账 `metrics.thresholds` 与 `DEFAULT_THRESHOLDS` 逐字段一致（9 项全等），无 v4 那次阈值漂移。
+- CSS 层级：`.modal` 40 / `.side-panel` 45 / `#questionModal` 55 / `.toast` 60 / `.hidden` `display:none!important`
+  全在，e2e 已有 `elementFromPoint` 断言 → 旧弹窗遮挡 bug 未回归。
+
+**抓到并修掉 2 处真缺陷**：
+1. **引文判据夸大（证据级）**：旧 `verifyQuotes()` 取引文前 40 字做包含判定。真构造样例
+   「前 40 字抄原文 + 后段编造」实测 `found=true` 且 `reason=exact-span`，但整段根本不在语料里
+   —— 前缀命中被标成逐字核对。改为「全串逐字 / 末尾 ≤6 字容错」两级，新增 `fullHit` 单独计数，
+   `reason` 细分为 `exact-span` / `suffix-tolerance` / `no-quote` / `not-in-corpus`；
+   只容忍模型省末尾几字，不接受开头抄一段后面自由发挥。
+2. **虚构文件名（一致性）**：`composeCorpus()` 截断分支无条件写 `【文件：（未标注文件）】`，
+   与未截断分支不一致，且该名字不在注入模型的真实文件名清单里，会误导 `source.file`。
+   改为与未截断分支同一契约：无文件名就不写文件头。
+
+**回归防线**：`test/core-anchor-v3.test.js` 新增 I 组 4 条（攻击样例不得命中 / 真逐字判
+`exact-span` / 省末尾仍容忍 / 无文件名截断不造头），判别 `32/0 → 36/0`，v2 判别 100/0、
+双形态 e2e 121/0 无回归。
+
+**证据链闭环**：判据变了，v6 的「引文 15/15」属旧判据结果，不能冒充当前代码证据
+（v4→v5 的教训）。用当前代码重跑真模型 v7，结果见 `PROCESS/research-mindmap-v2/real-llm-v7.json`。
+
+## 十一、全端美化扩展（maxloop 续轮 · 2026-11-10）
+
+**触发**：用户「继续 maxloop 优化全端美化」。上一轮美化只动了默认窗口 `core.html/core.css`，
+而 HTTP 端与「视图 → 旧版分层视图」入口用的是另一套 `index.html/style.css`
+（旧样式、无深色），桌面深色用户启动还有白闪。目标是把同一套设计系统覆盖到**全部端**。
+
+**根因 A→B → 改动（R/C/N 全过）**
+
+| # | A 缺口 | B 根因 | 改动 | R / C / N |
+|---|---|---|---|---|
+| 1 | `style.css` 旧样式硬编码散色、无深色 | 缺少单一 token 真源，两套样式各写一套 | 抽 `tokens.css` 单一真源（surface 0–3 / 语义强调色 / 状态色 / 圆角 / 缓动 / 深浅双主题），`core.css` 与 `style.css` 共 `@import` | R 双端一致 ✅ / C e2e 双形态 token 翻转实测 ✅ / N 不抽则改一处漏一处 ✅ |
+| 2 | `style.css` 白字落会翻转的 token 背景、状态色装饰边框深色不翻转 | 浅色白字假设在深色 token 背景上失效；边框色不随主题翻转 | 9 处状态色装饰边框改用 `--locate/--ok/--warn/--line` 等 token；白字落 token 背景改 `var(--bg)` | R 深色可读 ✅ / C e2e 深色 computed 真翻转 ✅ / N 否则深色一坨白字 / 边框刺眼 ✅ |
+| 3 | 桌面深色用户启动先白闪 | `openWindow` 未设 `backgroundColor`，窗口 chrome 在 CSS 首帧前是白 | `app/main.js` 引 `nativeTheme`，`backgroundColor` 按 `shouldUseDarkColors` 设 `#10131a`/`#f6f7f9` | R 无白闪 ✅ / C 判别测试新增强背景色断言 ✅ / N 否则深色体验断裂 ✅ |
+
+**Oracle Gate（续轮五项）**
+
+| 项 | 证据 |
+|---|---|
+| (a) 目标命令真跑 | `npm test` 19/19；双形态真 Chromium e2e **139/0**（新增 `index.html` 浅/深 × HTTP/file:// 四态验收）；`node --check app/main.js` OK |
+| (b) 改动文件语法 | `node --check app/main.js` 通过；`test/core-unified-sync.test.js` 增补 `nativeTheme` 桩 + 默认窗口 `backgroundColor` 断言，19/19 不回归 |
+| (c) 真实入口可达 | `index.html` 在 HTTP 与 `file://` 下 stylesheet 挂载、`.hidden` 全 `none`（@import 链生效）、body 背景 `#f6f7f9 ↔ #10131a` 真翻转、顶栏 `#fff ↔ #171b24` 真翻转；4 张浅/深真截图目视无白块 |
+| (d) 修复前失败输出 | `style.css` 原 13 处残余硬编码（含白字落 token 背景对比度塌陷、状态色边框深色不翻转）；`core-unified-sync.test.js` 因缺 `nativeTheme` 桩 `exit 1`（`TypeError: ...shouldUseDarkColors`） |
+| (e) 逐字符证据锚点 | `tokens.css` 数值与旧 `core.css` 逐字一致（保 e2e 不漂移）；`main.js:openWindow` diff；e2e `legacy-*` 四张真截图 |
+
+**残余硬编码审计（如实，非缺陷）**：`style.css` 仅剩 `.cover{color:#fff}`（彩色封面白字，正确）与
+`.demo-mode{background:#1f2430;color:#fff}`（固定暗色演示提示条，正确）。`core.css` 残余 0。
+
+**证据边界**：e2e 用 mock LLM + `file://` 等价桥替身，证「CSS / 主题双形态真生效」，不证真模型质量；
+真 Electron GUI 仍未跑（本机 electron.exe 缺失），但 `nativeTheme` 行为已在判别测试桩中锁住。
+
+**效率指数（续轮）**：产出级别 100（双端设计系统一致 + 深色无断裂 + 白闪消除，零遗留红项）；
+产出时间 1 个主循环；效率指数 100。

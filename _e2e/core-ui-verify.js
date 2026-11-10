@@ -429,6 +429,68 @@ async function runForm({ label, url, tmpRoot, initScript }) {
   }
 }
 
+// 全端美化验收：旧版分层视图 index.html 在 HTTP 与 file:// 两种形态下，
+// 设计系统（tokens.css @import 链）与深色模式首帧都必须生效——
+// 这正是 core.html 之前踩过的「file:// 下绝对路径 CSS 全丢」坑的同源验证。
+async function runLegacyForm({ label, url, initScript }) {
+  console.log('\n--- 旧版视图（index.html）：' + label + ' ---');
+  const browser = await chromium.launch();
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
+  page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
+  if (initScript) await initScript(page);
+  try {
+    await page.goto(url, { waitUntil: 'load' });
+    await page.waitForSelector('.topbar', { timeout: 5000 });
+    await sleep(300);
+
+    // 1) CSS 真加载（含 @import tokens.css 链）：.hidden 必须 display:none
+    const sheet = await page.evaluate(() => ({
+      count: document.styleSheets.length,
+      href: document.querySelector('link[rel=stylesheet]') && document.querySelector('link[rel=stylesheet]').href,
+    }));
+    ok(sheet.count >= 1, 'index.html stylesheet 已挂载（实为 ' + sheet.count + ' 张，' + sheet.href + '）');
+    const hiddenStates = await page.$$eval('.hidden', (els) => els.map((e) => getComputedStyle(e).display));
+    const notHidden = hiddenStates.filter((d) => d !== 'none');
+    ok(hiddenStates.length >= 4, 'index.html 有 ≥4 个初始 .hidden 元素（实为 ' + hiddenStates.length + '）');
+    ok(notHidden.length === 0, 'index.html 所有 .hidden 元素 display:none（CSS 含 import 链已加载），异常：' + JSON.stringify(notHidden));
+
+    // 2) 浅色：body 背景 = --bg(#f6f7f9)；顶栏 = --panel(#fff)
+    const light = await page.evaluate(() => ({
+      bg: getComputedStyle(document.body).backgroundColor,
+      panel: getComputedStyle(document.querySelector('.topbar')).backgroundColor,
+    }));
+    ok(light.bg === 'rgb(246, 247, 249)', 'index.html 浅色 body 背景 = --bg(#f6f7f9)，实为 ' + light.bg);
+    ok(light.panel === 'rgb(255, 255, 255)', 'index.html 浅色顶栏 = --panel(#fff)，实为 ' + light.panel);
+    await page.screenshot({ path: path.join(SHOTS, 'legacy-' + label.replace(/[^a-zA-Z0-9]/g, '-') + '-light.png'), fullPage: true });
+
+    // 3) 深色：emulateMedia 后 body 切到 #10131a，--bg token 翻转，顶栏切 #171b24
+    await page.emulateMedia({ colorScheme: 'dark' }); await sleep(350);
+    const dark = await page.evaluate(() => ({
+      bg: getComputedStyle(document.body).backgroundColor,
+      panel: getComputedStyle(document.querySelector('.topbar')).backgroundColor,
+      tokenBg: (getComputedStyle(document.documentElement).getPropertyValue('--bg') || '').trim(),
+    }));
+    ok(dark.bg === 'rgb(16, 19, 26)', 'index.html 深色 body 背景 = --bg(#10131a)，实为 ' + dark.bg);
+    ok(dark.panel === 'rgb(23, 27, 36)', 'index.html 深色顶栏 = --panel(#171b24)，实为 ' + dark.panel);
+    ok(dark.tokenBg === '#10131a', 'index.html 深色 --bg token 真翻转（实为 ' + dark.tokenBg + '）');
+    await page.screenshot({ path: path.join(SHOTS, 'legacy-' + label.replace(/[^a-zA-Z0-9]/g, '-') + '-dark.png'), fullPage: true });
+    await page.emulateMedia({ colorScheme: 'light' }); await sleep(150);
+
+    // 4) 错误容忍：file:// 下 API 不可达、以及 ES module 脚本被 CORS 拦截（origin 'null'）都属传输层预期，
+    //    与 CSS/主题无关（core.html 的入口脚本非 module，故不触发；index.html 含 pdf-extract.js module）。
+    const realErrors = errors.filter((e) => !/favicon|net::ERR_FAILED|api|fetch|Failed to fetch|NetworkError|ERR_|CORS|pdf-extract|origin 'null'|Cross origin|scheme/.test(e));
+    ok(realErrors.length === 0, 'index.html 无 CSS/主题相关真实报错' + (realErrors.length ? '：' + realErrors.join(' | ') : ''));
+  } catch (e) {
+    failed++;
+    process.stderr.write('  ✗ FATAL: ' + (e && e.stack || e) + '\n');
+  } finally {
+    await browser.close();
+  }
+}
+
 (async () => {
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'core-ui-verify-'));
   // 本地 OpenAI 兼容 mock LLM：让「整体分析」真的发出 HTTP 请求并解析返回，不依赖真实 key。
@@ -486,6 +548,25 @@ async function runForm({ label, url, tmpRoot, initScript }) {
             llm: { test: async () => { window.__llmTestCalls++; return { ok: true, models: [{ id: 'mock-model' }] }; } },
             coreRequest: (p, m, b) => window.__coreBridge(p, m, b),
           };
+        });
+      },
+    });
+    // 全端美化：旧版视图 index.html 双形态验收（HTTP 真后端 + file:// 注入 fetch/api 桩避免无后端报错）
+    await runLegacyForm({ label: 'HTTP', url: BASE + '/index.html' });
+    const legacyFileUrl = 'file:///' + path.join(ROOT, 'renderer', 'index.html').replace(/\\/g, '/');
+    await runLegacyForm({
+      label: 'Electron-file-protocol', url: legacyFileUrl,
+      initScript: async (page) => {
+        await page.addInitScript(() => {
+          const realFetch = window.fetch ? window.fetch.bind(window) : null;
+          window.fetch = (...args) => {
+            const u = args[0] && (typeof args[0] === 'string' ? args[0] : (args[0] && args[0].url)) || '';
+            if (String(u).indexOf('/api/') >= 0) {
+              return Promise.resolve({ ok: true, json: () => Promise.resolve({ data: [], ok: true, books: [], status: 'ok' }) });
+            }
+            return realFetch ? realFetch(...args) : Promise.reject(new Error('no fetch'));
+          };
+          window.api = { llm: { test: async () => ({ ok: true, models: [] }) }, coreRequest: async () => ({ ok: true, data: {} }) };
         });
       },
     });

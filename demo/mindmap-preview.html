@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>思维导图预览 · 当前 v0.8 vs 提案详细版</title>
+<style>
+  :root{
+    --bg:#f4f6fb; --panel:#ffffff; --ink:#222; --muted:#8a93a6;
+    --line:#c9d2e3; --node:#378ADD; --node-sel:#185FA5; --center:#534AB7;
+    --qtype:#0F6E56; --fig:#F0997B; --ok:#3B6D11;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.6 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--ink)}
+  header{padding:14px 20px;background:var(--panel);border-bottom:1px solid var(--line)}
+  h1{font-size:16px;margin:0 0 4px}
+  .sub{color:var(--muted);font-size:12px}
+  .tabs{display:flex;gap:8px;margin-top:10px}
+  .tab{padding:6px 14px;border:1px solid var(--line);border-radius:8px;background:#fff;cursor:pointer;font-size:13px}
+  .tab.on{background:var(--center);color:#fff;border-color:var(--center)}
+  .wrap{display:flex;gap:16px;padding:16px 20px;align-items:flex-start}
+  .stage{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px;flex:0 0 640px}
+  .banner{font-size:12px;color:var(--muted);margin:0 0 8px;min-height:18px}
+  .banner.b{color:var(--ok)}
+  svg{display:block;width:620px;height:440px}
+  .mm-link{stroke:var(--line);stroke-width:1}
+  .mm-node{fill:var(--node);stroke:#fff;stroke-width:2;cursor:pointer}
+  .mm-node.qt{fill:var(--qtype)}
+  .mm-node.sel{stroke:var(--node-sel);stroke-width:3.5}
+  .mm-node-text{fill:#fff;font-size:12px;font-weight:500;pointer-events:none}
+  .mm-center{fill:var(--center);stroke:#fff;stroke-width:2;cursor:pointer}
+  .mm-center-text{fill:#fff;font-size:13px;font-weight:600;pointer-events:none}
+  .side{flex:1;background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px;min-height:440px}
+  .d-title{font-size:16px;font-weight:600;margin-bottom:6px}
+  .tag{font-size:11px;padding:1px 7px;border-radius:6px;background:#eef2fb;color:var(--node-sel);margin-left:6px}
+  .tag.q{background:#e1f5ee;color:var(--qtype)}
+  .sec{font-size:12px;color:var(--muted);margin:14px 0 6px;text-transform:none;font-weight:600}
+  .summary{background:#f7f9fd;border:1px solid var(--line);border-radius:8px;padding:10px;font-size:13px}
+  .muted{color:var(--muted);font-style:normal}
+  .chain span{color:var(--node-sel)}
+  .children button,.qbtn{display:block;width:100%;text-align:left;margin:4px 0;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;cursor:pointer;font-size:13px}
+  .children button:hover,.qbtn:hover{border-color:var(--node)}
+  .qlist{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px}
+  .qcard{border:1px solid var(--line);border-radius:10px;padding:10px;width:240px;background:#fcfdff}
+  .qcard .stem{font-size:13px;margin-bottom:6px}
+  .qcard .ans{font-size:12px;color:var(--ok);display:none}
+  .qcard .ans.show{display:block}
+  .qcard .figbox{margin-top:8px;border:1px dashed var(--fig);border-radius:8px;height:64px;display:flex;align-items:center;justify-content:center;color:var(--fig);font-size:12px;cursor:pointer;background:#fff6f2}
+  .lightbox{position:fixed;inset:0;background:rgba(20,24,33,.6);display:none;align-items:center;justify-content:center;z-index:50}
+  .lightbox.show{display:flex}
+  .lightbox .box{background:#fff;border-radius:12px;padding:18px;max-width:440px;text-align:center}
+  .lightbox .figph{height:180px;border:2px dashed var(--fig);border-radius:10px;display:flex;align-items:center;justify-content:center;color:var(--fig);margin-bottom:10px}
+  .lightbox button{margin-top:8px;padding:6px 16px;border:1px solid var(--line);border-radius:8px;background:#fff;cursor:pointer}
+</style>
+</head>
+<body>
+<header>
+  <h1>思维导图预览 · 当前 v0.8  vs  提案详细版</h1>
+  <div class="sub">样例：你给的「电流 → 电动势 → 感生/动生 → S变化/B变化」结构。点任意节点看右侧面板差异。</div>
+  <div class="tabs">
+    <div class="tab" id="tab-cur" onclick="setTab('cur')">当前 v0.8（中心辐射）</div>
+    <div class="tab on" id="tab-new" onclick="setTab('new')">提案详细版（点开有详解+上下游+全部题型+题图）</div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="stage">
+    <div class="banner" id="banner"></div>
+    <div id="svgHost"></div>
+  </div>
+  <div class="side" id="panel"></div>
+</div>
+
+<div class="lightbox" id="lb"><div class="box">
+  <div class="figph">题图（示例占位）</div>
+  <div id="lbcap" style="font-size:12px;color:#8a93a6"></div>
+  <button onclick="closeLb()">关闭</button>
+</div></div>
+
+<script>
+// ---- 样例数据（按你的描述建模：概念/题型混排，B变化 直挂题型） ----
+const SAMPLE = {
+  center:"电流",
+  nodes:[
+    {title:"电流的变化", kind:"concept", summary:"电流随时间变化的规律，含恒定电流与变化电流；变化电流是电磁感应与交流电的基础。",
+     questions:[{stem:"恒定电流与变化电流的根本区别是什么？",ans:"电荷定向移动是否随时间变化。",fig:false}]},
+    {title:"电流产生磁场", kind:"concept", summary:"运动电荷产生磁场；毕奥-萨伐尔定律描述电流元产生的磁场分布。",
+     questions:[{stem:"直线电流周围的磁感线分布有何特征？",ans:"以导线为轴的同心圆，方向由右手螺旋定则判定。",fig:true}]},
+    {title:"电动势", kind:"concept", summary:"电源把其他形式能转化为电能的本领，定义式 E = W非/q，单位伏特。",
+     children:["感生电动势","动生电动势"], parent:null,
+     questions:[{stem:"电动势与端电压的区别？",ans:"电动势是非静电力做功本领；端电压是外电路电势差，内阻压降使其小于 E。",fig:false}]},
+    {title:"感生电动势", kind:"concept", summary:"变化的磁场在回路中产生感应电动势，与磁通量变化率相关。",
+     children:["S变化","B变化"], parent:"电动势",
+     questions:[{stem:"感生电动势的方向如何判定？",ans:"楞次定律：阻碍磁通量变化的方向。",fig:false}]},
+    {title:"动生电动势", kind:"concept", summary:"导体切割磁感线产生的感应电动势，常见形式 E = BLv。",
+     parent:"电动势",
+     questions:[{stem:"动生电动势的非静电力是什么？",ans:"洛伦兹力的一个分力，对电荷做正功。",fig:false}]},
+    {title:"S变化", kind:"qtype", summary:"感生电动势中，磁通量因面积 S 变化而引起（如导体框伸缩、进入磁场）。",
+     parent:"感生电动势",
+     questions:[{stem:"导轨上滑杆以速度 v 匀速运动，感应电动势多大？",ans:"E = BLv，L 为有效切割长度。",fig:true}]},
+    {title:"B变化", kind:"qtype", summary:"感生电动势中，磁通量因磁感应强度 B 变化而引起；该节点下可直接挂题型。",
+     parent:"感生电动势",
+     questions:[
+       {stem:"匀强磁场 B 以速率 dB/dt 增大，回路感应电动势？",ans:"E = S·dB/dt（S 为回路面积）。",fig:true},
+       {stem:"B 变化且回路面积也变化时如何列式？",ans:"E = |d(BS)/dt|，用全导数。",fig:false}
+     ]}
+  ]
+};
+const byTitle = t => SAMPLE.nodes.find(n=>n.title===t);
+const childrenOf = t => SAMPLE.nodes.filter(n=>n.parent===t).map(n=>n.title);
+
+let tab='new', sel='电动势';
+
+function radial(){
+  const W=620,H=440,cx=W/2,cy=H/2,R=165,ns=SAMPLE.nodes,n=ns.length;
+  let s='<svg viewBox="0 0 '+W+' '+H+'">';
+  ns.forEach((nd,i)=>{
+    const a=-Math.PI/2+i*2*Math.PI/n, x=cx+R*Math.cos(a), y=cy+R*Math.sin(a);
+    s+='<line x1="'+cx+'" y1="'+cy+'" x2="'+x.toFixed(1)+'" y2="'+y.toFixed(1)+'" class="mm-link"/>';
+    const cls='mm-node'+(nd.kind==='qtype'?' qt':'')+(nd.title===sel?' sel':'');
+    s+='<circle cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="34" class="'+cls+'" data-t="'+nd.title+'"><title>'+nd.title+'</title></circle>';
+    s+='<text x="'+x.toFixed(1)+'" y="'+(y+5).toFixed(1)+'" class="mm-node-text" text-anchor="middle">'+nd.title.slice(0,8)+'</text>';
+  });
+  s+='<circle cx="'+cx+'" cy="'+cy+'" r="52" class="mm-center" data-t="电流"><title>电流</title></circle>';
+  s+='<text x="'+cx+'" y="'+(cy+6)+'" class="mm-center-text" text-anchor="middle">电流</text></svg>';
+  return s;
+}
+
+function setTab(t){ tab=t; document.getElementById('tab-cur').classList.toggle('on',t==='cur'); document.getElementById('tab-new').classList.toggle('on',t==='new'); render(); }
+
+function render(){
+  document.getElementById('svgHost').innerHTML = radial();
+  document.querySelectorAll('.mm-node,.mm-center').forEach(c=>c.onclick=()=>{ sel=c.getAttribute('data-t'); render(); });
+  renderPanel();
+}
+
+function renderPanel(){
+  const nd = byTitle(sel); if(!nd){document.getElementById('panel').innerHTML='';return;}
+  const kindTag = nd.kind==='qtype' ? '<span class="tag q">题型</span>' : '<span class="tag">概念</span>';
+  const banner = document.getElementById('banner');
+  let h='<div class="d-title">'+nd.title+kindTag+'</div>';
+
+  if(tab==='cur'){
+    banner.className='banner';
+    banner.textContent='当前 v0.8：规则版 summary 常为空（仅显示“暂无详解”），题型竖排、不带题图——这就是「只见其表」的痛点。';
+    // 模拟规则版：summary 显示“暂无详解”
+    h+='<div class="sec">详解</div><div class="summary"><span class="muted">（规则版暂无详解，用你的 API 生成可得详细解释）</span></div>';
+    const kids = childrenOf(nd.title);
+    if(kids.length){ h+='<div class="sec">子类型（点开继续展开）</div><div class="children">'+kids.map(k=>'<button onclick="sel=\''+k+'\';render()">'+k+'</button>').join('')+'</div>'; }
+    if(nd.questions&&nd.questions.length){
+      h+='<div class="sec">题型（点击看答案）</div><div class="children">';
+      nd.questions.forEach((q,i)=>{ const id=sel+i; h+='<button class="qbtn" onclick="toggleAns(\''+id+'\')">'+q.stem+'</button><div class="summary" id="'+id+'" style="display:none;margin:2px 0 6px">答：'+q.ans+'</div>'; });
+      h+='</div>';
+    }
+  } else {
+    banner.className='banner b';
+    banner.textContent='提案详细版：点节点出详解 + 上游链路 + 下游分类 + 该节点下全部题型（横向卡片，题图贴右边可放大）。';
+    h+='<div class="sec">详解</div><div class="summary">'+nd.summary+'</div>';
+    // 上游
+    h+='<div class="sec">上游（从哪来）</div><div class="chain">';
+    const up = nd.parent ? ('电流 › '+nd.parent+' › <b>'+nd.title+'</b>') : ('<b>电流</b> › '+nd.title);
+    h+= up +'</div>';
+    // 下游
+    const kids = childrenOf(nd.title);
+    if(kids.length){ h+='<div class="sec">下游分类（点开继续）</div><div class="children">'+kids.map(k=>'<button onclick="sel=\''+k+'\';render()">'+k+'</button>').join('')+'</div>'; }
+    // 全部题型 横向列举 + 题图
+    if(nd.questions&&nd.questions.length){
+      h+='<div class="sec">该节点下全部题型（'+nd.questions.length+'）</div><div class="qlist">';
+      nd.questions.forEach((q,i)=>{
+        const id=sel+i;
+        h+='<div class="qcard"><div class="stem">'+q.stem+'</div>'+
+           '<button class="qbtn" style="border:none;padding:4px 0;color:var(--ok)" onclick="toggleAns(\''+id+'\')">看答案/解析</button>'+
+           '<div class="ans" id="'+id+'">答：'+q.ans+'</div>'+
+           (q.fig?'<div class="figbox" onclick="openLb(\''+nd.title+'\',\''+q.stem.replace(/'/g,"")+'\')">题图（点击放大）</div>':'')+
+           '</div>';
+      });
+      h+='</div>';
+    }
+  }
+  document.getElementById('panel').innerHTML=h;
+}
+
+function toggleAns(id){ const e=document.getElementById(id); if(e) e.classList.toggle('show'); }
+function openLb(node,stem){ document.getElementById('lbcap').textContent='出处：'+node+' — '+stem; document.getElementById('lb').classList.add('show'); }
+function closeLb(){ document.getElementById('lb').classList.remove('show'); }
+
+render();
+</script>
+</body>
+</html>

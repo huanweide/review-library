@@ -149,9 +149,10 @@ function pct(x) { return (Number(x) * 100).toFixed(1) + '%'; }
   const qs = (result.questionIndex || []).reduce((arr, g) =>
     arr.concat((g.items || []).reduce((b, i) => b.concat(i.questions || []), [])), []);
   const anchorCount = qs.filter(qq => qq.source && qq.source.anchor).length;
-  console.log('\n  --- v3 引用锚定（程序从送进模型的语料逐字校验）---');
+  console.log('\n  --- v3 引用锚定（程序从送进模型的语料校验引文）---');
   console.log('  source.anchor 填写率：                          ' + pct(qs.length ? anchorCount / qs.length : 0) + '  (' + anchorCount + '/' + qs.length + ')');
   console.log('  引文命中原文：                                  ' + audit.hit + '/' + audit.checked + '  ' + pct(audit.rate));
+  console.log('  其中逐字全串命中：                              ' + (audit.fullHit || 0) + '/' + audit.checked + '  （其余为末尾 ≤6 字容错命中）');
 
   // 抽 2 道题的真实内容做人工可核的样例（不写 key）。
   const samples = [];

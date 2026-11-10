@@ -1,6 +1,6 @@
 'use strict';
 // Electron 主进程：用 window.api 暴露 store（同一套落盘逻辑），前端无需知道走的是 Electron 还是 server。
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, nativeTheme } = require('electron');
 const { Core } = require('../core');
 const requestLib = require('../core/request');
 const path = require('path');
@@ -204,8 +204,12 @@ function setupAutoUpdater() {
 }
 
 function openWindow(html) {
+  // 用 nativeTheme 预判系统深浅，给窗口一个与首帧 CSS 一致的背景色，
+  // 否则深色用户启动桌面端会先白闪再切深色（CSS 首帧已靠 prefers-color-scheme 处理内容，
+  // 这里处理的是窗口 chrome/底布在 CSS 加载前的那一帧）。
   const w = new BrowserWindow({
     width: 1320, height: 880, minWidth: 960, minHeight: 640,
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#10131a' : '#f6f7f9',
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false }
   });
   w.loadFile(path.join(__dirname, '..', 'renderer', html));

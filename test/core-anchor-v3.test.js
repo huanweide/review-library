@@ -184,6 +184,31 @@ function auditResult() {
     const pages = Array.from(new Set(pdfSegs.map(s => s.page)));
     ok(pages.length === 5 && pages[0] === 1 && pages[4] === 5, 'H4 页序 1→5 完整且递增');
     ok(pdfSegs.some(s => s.text.trim().length > 20), 'H5 页块里有真实正文（不是空壳标记）');
+
+    // ---------- I 组：发布前独立复核发现的两处缺陷（防回归） ----------
+    section('I 组：引文判据收紧 + 无文件名语料一致性');
+    const norm = s => String(s || '').replace(/\s+/g, '')
+      .replace(/[，。、；：“”‘’（）()【】\[\],.;:!?\-—_]/g, '');
+    const rich = A.composeCorpus(
+      CORPUS + '\n【块3】栈是后进先出，队列是先进先出，树是层次结构，图由顶点与边构成。', 50000
+    ).corpus;
+    const mkQ = quote => ({ questionIndex: [{ type: '选择题', items: [{ title: 't', questions: [
+      { id: 'q', stem: 's', source: { file: 'chap1.txt', quote } }
+    ] }] }] });
+    // 旧实现取前 40 字判命中，实测会把「开头抄原文、后面自由发挥」判为 exact-span。
+    const forged = norm(rich).slice(20, 60) + '并且本章还证明了PNP与黎曼猜想成立';
+    const attack = A.verifyQuotes(mkQ(forged), rich);
+    ok(attack.details[0].found === false, 'I1 前 40 字真 + 后段编造的引文不得判命中');
+    const realQuote = '顺序表用一段地址连续的存储单元依次存放元素，支持随机访问，按下标查找 O(1)。';
+    const exact = A.verifyQuotes(mkQ(realQuote), rich);
+    ok(exact.details[0].found === true && exact.details[0].fullHit === true &&
+      exact.details[0].reason === 'exact-span', 'I2 真·逐字引文判为 exact-span（不是前缀冒充）');
+    ok(A.verifyQuotes(mkQ(realQuote.slice(0, -3)), rich).details[0].found === true,
+      'I3 模型省末尾几字仍容忍命中（不误伤合法引文）');
+    const noName = '【块1】没有文件名标注的正文内容。'.repeat(60);
+    const cNoName = A.composeCorpus(noName, 300);
+    ok(cNoName.truncated === true && !cNoName.corpus.includes('【文件：（未标注文件）】'),
+      'I4 无文件名语料被截断时不凭空造文件名头');
   } catch (e) {
     failed++;
     console.error('  ✗ 测试执行异常：' + (e && e.stack || e));

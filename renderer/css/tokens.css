@@ -1,0 +1,114 @@
+/* ============================================================
+   复习资料图书馆 · 设计系统单一真源（maxloop v4.3 全端美化 抽离）
+   2026-11-10
+
+   这是全端唯一的设计 token：core.css 与 style.css 都 @import 本文件，
+   任何换肤/换主题只改这一处。数值与上一轮 core.css 逐字一致，
+   因此已有 e2e（--bg #f6f7f9 → #10131a 等）不受影响。
+
+   基准共识见 PROCESS/research-competitor-e2e/visual-benchmark.md：
+   语义 token 唯一真源 / 浅深双主题且首帧无白闪 / 单一强调色 /
+   颜色只留给状态 / 1px 边框替重阴影 / 圆角克制 / 密度有意 / 动效克制。
+   ============================================================ */
+
+:root {
+  color-scheme: light;
+
+  /* surface 色阶：Level 0 底 → Level 3 浮层，深色靠色阶而非阴影分层 */
+  --bg: #f6f7f9;
+  --surface-0: #f6f7f9;
+  --surface-1: #ffffff;
+  --surface-2: #f1f3f7;
+  --surface-3: #ffffff;
+  --panel: var(--surface-1);
+
+  --ink: #1c2330;
+  --ink-soft: #596274;
+  --ink-faint: #8992a3;
+  --line: #e2e6ed;
+  --line-strong: #cbd3df;
+
+  /* 单一强调色；绿/黄/红只给状态，不做装饰 */
+  --accent: #3b5bdb;
+  --accent-soft: #edf1ff;
+  --accent-ink: #2f49b0;
+  --ok: #167a3c;
+  --ok-soft: #eaf7ef;
+  --warn: #9a5b08;
+  --warn-soft: #fdf4e5;
+  --danger: #c22f37;
+  --danger-soft: #fdefef;
+  --locate: #d97706;
+  --locate-soft: #fff5e4;
+
+  /* 信息蓝 / 自造紫：状态色同族，深浅翻转 */
+  --info: #2856b8;
+  --info-soft: #eaf1ff;
+  --selfmade: #6b4b9c;
+  --selfmade-soft: #f1ebfb;
+
+  /* 核心层标记色（概念/题型树里的「核心」节点），深浅翻转 */
+  --core: #e0533d;
+  --core-soft: #fdeeea;
+
+  /* 兼容旧变量名：全部派生自上面的 token，换主题只改一组值 */
+  --brand: var(--accent);
+  --brand-soft: var(--accent-soft);
+  --brand-ink: var(--accent-ink);
+  --chip: var(--accent-soft);
+  --muted: var(--ink-soft);
+
+  --shadow: 0 1px 2px rgba(20, 28, 45, .05);
+  --shadow-float: 0 12px 34px rgba(20, 28, 45, .14);
+  --overlay: rgba(18, 24, 36, .44);
+
+  --radius: 8px;
+  --radius-sm: 5px;
+  --radius-lg: 10px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --ease: cubic-bezier(.16, 1, .3, 1);
+  --dur: .18s;
+}
+
+/* 深色模式：CSS 首帧即生效，不需要 JS，因此没有白闪。
+   颜色由 surface 色阶 + 1px 边框建立层级，不靠阴影。 */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --bg: #10131a;
+    --surface-0: #10131a;
+    --surface-1: #171b24;
+    --surface-2: #1e2430;
+    --surface-3: #242c3a;
+    --panel: var(--surface-1);
+    --ink: #e9edf5;
+    --ink-soft: #a4aec0;
+    --ink-faint: #77839a;
+    --line: #2b3341;
+    --line-strong: #3b4658;
+    --accent: #7d97ff;
+    --accent-soft: #202a45;
+    --accent-ink: #adc0ff;
+    --ok: #5fc98b;
+    --ok-soft: #173026;
+    --warn: #e0a95f;
+    --warn-soft: #35281a;
+    --danger: #f08187;
+    --danger-soft: #3a2226;
+    --locate: #f0ad55;
+    --locate-soft: #3a2c19;
+    --info: #adc0ff;
+    --info-soft: #202a45;
+    --selfmade: #c4b5fd;
+    --selfmade-soft: #2a2440;
+    --core: #f08187;
+    --core-soft: #3a2226;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .32);
+    --shadow-float: 0 16px 42px rgba(0, 0, 0, .52);
+    --overlay: rgba(0, 0, 0, .64);
+  }
+}
