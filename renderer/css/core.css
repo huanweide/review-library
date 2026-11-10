@@ -216,3 +216,72 @@ body {
 .import-status:empty { display: none; }
 .ov-warn { margin-top: 12px; padding: 9px 12px; border-radius: 10px; background: #fff7e6; color: #92400e; font-size: 12px; }
 .stat.typecount { background: #eef2ff; }
+
+/* ===== 2026-11-09 v2：SVG 导图画布 / 多布局 / 搜索 / 题型下钻 / 题目详情 ===== */
+.toolbar-main { gap: 10px; }
+.toolbar-sub { gap: 6px; margin-top: 4px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; background: #fff; flex-shrink: 0; }
+.seg-btn { border: 0; background: #fff; color: var(--ink-soft); font-size: 12px; padding: 6px 10px; cursor: pointer; white-space: nowrap; }
+.seg-btn + .seg-btn { border-left: 1px solid var(--line); }
+.seg-btn:hover { background: var(--brand-soft); }
+.seg-btn.active { background: var(--brand); color: #fff; font-weight: 600; }
+.search-input { border: 1px solid var(--line); border-radius: 9px; padding: 6px 10px; font-size: 12px; width: 168px; outline: none; }
+.search-input:focus { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(58,122,254,.12); }
+.search-count { font-size: 12px; color: var(--ink-soft); min-width: 52px; }
+.mm-hint { font-size: 11px; color: var(--ink-soft); margin: 2px 0 8px; }
+.mm-canvas { transform-origin: 0 0; will-change: transform; display: inline-block; min-width: 100%; }
+.mm-canvas svg { display: block; }
+.mm-node { cursor: pointer; }
+.mm-node rect { transition: stroke-width .15s, filter .15s; }
+.mm-node:hover rect { stroke-width: 2.4; filter: drop-shadow(0 2px 4px rgba(31,39,51,.14)); }
+.mm-node.hit rect { stroke: #f59e0b !important; stroke-width: 3 !important; }
+.mm-node.locate rect { stroke: #f59e0b !important; stroke-width: 3.4 !important; filter: drop-shadow(0 0 6px rgba(245,158,11,.7)); }
+.mm-node.dim { opacity: .28; }
+.mm-node text { pointer-events: none; user-select: none; }
+.mm-outline-hidden { display: none; }
+.qindex-note { font-size: 12px; color: var(--ink-soft); background: var(--brand-soft); border-radius: 9px; padding: 8px 12px; margin-bottom: 12px; }
+
+/* 子题型 → 所有题目（右侧滑出面板） */
+.side-panel { position: fixed; right: 0; top: 0; bottom: 0; width: 400px; max-width: 92vw; background: #fff; border-left: 1px solid var(--line); box-shadow: -8px 0 32px rgba(20,24,40,.14); z-index: 45; display: flex; flex-direction: column; animation: slideIn .18s ease-out; }
+@keyframes slideIn { from { transform: translateX(24px); opacity: .4; } to { transform: translateX(0); opacity: 1; } }
+.sp-head { display: flex; align-items: flex-start; gap: 10px; padding: 18px 20px 10px; border-bottom: 1px solid var(--line); }
+.sp-head .spacer { flex: 1; }
+.sp-kicker { font-size: 11px; color: var(--ink-soft); letter-spacing: .08em; }
+.sp-title { font-size: 17px; font-weight: 700; margin-top: 3px; }
+.sp-path { font-size: 12px; color: var(--ink-soft); padding: 10px 20px; background: #fbfcff; border-bottom: 1px solid var(--line); }
+.sp-list { flex: 1; overflow: auto; padding: 12px 16px 24px; }
+.sp-qlist-item { border: 1px solid var(--line); border-radius: 11px; padding: 12px 14px; margin-bottom: 10px; cursor: pointer; background: #fff; transition: border-color .15s, background .15s; }
+.sp-qlist-item:hover { border-color: var(--brand); background: var(--brand-soft); }
+.sp-qlist-top { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+.sp-qlist-idx { font-size: 11px; color: #fff; background: var(--brand); border-radius: 6px; padding: 2px 7px; flex-shrink: 0; }
+.sp-qlist-tag { font-size: 11px; color: var(--ink-soft); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; }
+.sp-qlist-stem { font-size: 13px; line-height: 1.6; }
+.sp-qlist-go { font-size: 11px; color: var(--brand-ink); margin-top: 7px; }
+.sp-empty { font-size: 13px; color: var(--ink-soft); padding: 20px; text-align: center; }
+
+/* 题目详情弹窗 */
+/* 题目详情必须盖在子题型面板（z-index 45）之上，否则右下「在导图中定位」按钮被遮住。
+   真浏览器截图 2026-11-09 实证，DOM 存在不等于可见可点。 */
+#questionModal { z-index: 55; }
+.qd-card { width: 720px; max-height: 88vh; display: flex; flex-direction: column; padding: 0; }
+.qd-card .modal-head { padding: 16px 22px 12px; margin: 0; border-bottom: 1px solid var(--line); display: flex; align-items: center; }
+.qd-card .modal-actions { padding: 12px 22px; margin: 0; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.qd-body { flex: 1; overflow: auto; padding: 16px 22px; }
+.qd-block { margin-bottom: 18px; }
+.qd-label { font-size: 11px; font-weight: 700; color: var(--brand-ink); letter-spacing: .06em; margin-bottom: 7px; text-transform: uppercase; }
+.qd-stem { font-size: 15px; line-height: 1.75; font-weight: 500; }
+.qd-options { margin-top: 10px; display: grid; gap: 6px; }
+.qd-option { font-size: 13px; padding: 7px 11px; border: 1px solid var(--line); border-radius: 8px; background: #fbfcff; line-height: 1.5; }
+.qd-image { border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: #fbfcff; text-align: center; margin-bottom: 9px; }
+.qd-image img { max-width: 100%; max-height: 280px; border-radius: 6px; }
+.qd-image .qd-imgcap { font-size: 11px; color: var(--ink-soft); margin-top: 7px; }
+.qd-source { font-size: 12px; color: var(--ink-soft); line-height: 1.7; }
+.qd-source b { color: var(--brand-ink); }
+.qd-source .qd-quote { display: block; margin-top: 6px; padding: 8px 11px; background: #f6f8fc; border-left: 3px solid var(--brand); border-radius: 0 7px 7px 0; font-style: normal; color: #475569; }
+.qd-answer { font-size: 14px; font-weight: 600; color: #15803d; line-height: 1.7; }
+.qd-solution { margin: 0; padding-left: 22px; }
+.qd-solution li { font-size: 13px; line-height: 1.8; margin-bottom: 7px; }
+.qd-rationale, .qd-pitfalls { font-size: 13px; line-height: 1.8; color: #334155; }
+.qd-pitfalls { color: #b45309; }
+.qd-tag { font-size: 11px; border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; color: var(--ink-soft); }
+.qd-point { font-size: 11px; color: var(--ink-soft); }

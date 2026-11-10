@@ -66,12 +66,17 @@ npm run versions:check # 版本漂移检测；不一致 exit 1
 
 ## 版本号
 
-唯一真源 = 根 `package.json` 的 `version`（当前 `1.3.1`）。同步目标：
+唯一真源 = 根 `package.json` 的 `version`（当前版本直接读该文件，此处不写死，避免再次漂移）。同步目标：
 
 - `VERSION`、`package.json#build.buildVersion`、`core/index.js#CORE_VERSION`
+- `package-lock.json` 顶层 `version` 与 `packages[""].version`（依赖包版本不动）
 - `plugins/dsh-review-analysis/package.json`、`plugins/review-analysis/.codebuddy-plugin/plugin.json`
 - 两个已安装副本的 manifest
 - 根 `README.md` 顶部定位行
+
+`sync-versions.mjs` 机械传播上述全部目标；`check-versions.mjs` 校验 8 处 manifest / 常量 / 定位行。
+lock 由 sync 写入时用 `JSON.parse` 复核顶层与根包版本，不进 check——npm ci 不校验根 version
+（本机 `npm ci --dry-run` 实测通过），留旧号只是版本号不一致的假象与无关 diff。
 
 **Hard rule：Never hand-edit a version in a per-harness manifest.** 改版本只改根 `package.json`。
 

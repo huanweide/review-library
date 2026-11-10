@@ -1,14 +1,34 @@
 'use strict';
-/* 统一核心前端：建书 → 加文件 → 整体分析 → 可层层展开的思维导图 + 题型索引。 */
+/* 统一核心前端：建书 → 加文件 → 整体分析 → 交互式思维导图 + 题型下钻 + 题目详情。
+ *
+ * v2（2026-11-09）：
+ *   - 渲染层换成交互式 SVG 画布（js/mindmap-layout.js 单一真源），DOM 树降级为「大纲模式」；
+ *   - 题型分类作为第二视角长进同一张导图，子题型 → 所有题目 → 题目详情（原图/分步解答/思路）；
+ *   - 3 布局 / 分支配色 / 全文搜索 / 双击聚焦 / 键盘导航 / JSON·SVG·PNG·MD·OPML 五种导出。
+ * 兼容契约：#tree .node、#tree.style.transform、.highlight、qcard 联动、__lastBlob 等既有验收点全部保留。
+ */
 (function () {
   const $ = (s, r) => (r || document).querySelector(s);
   const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
 
   const state = { books: [], current: null, analysis: null };
-  // 融合 F1/F2：节点 id → DOM 行映射，供题型索引点击定位高亮。
+  // 节点 id → DOM 行映射，供题型索引点击定位高亮（既有 e2e 契约）。
   let nodeEls = {};
-  // 融合 F3：导图画布视图状态。
+  // 导图画布视图状态。
   let mmScale = 1, mmX = 0, mmY = 0;
+  // v2 视图状态。
+  const view = {
+    perspective: 'knowledge',   // knowledge | question
+    layout: 'right',            // right | both | org
+    mode: 'canvas',             // canvas | outline
+    focusId: null,              // 聚焦下钻的子树根 id
+    collapsed: {},              // 折叠的节点 id
+    hits: [], hitIndex: -1,
+    layoutData: null, treeData: null,
+    questionById: {}, qitemById: {}
+  };
+
+  const ML = window.MindmapLayout || null;
 
   // ---------- API ----------
   async function api(path, opts) {
@@ -73,6 +93,7 @@
     const b = await api('/books/' + id);
     state.current = b;
     state.analysis = null;
+    view.focusId = null; view.collapsed = {}; view.hits = []; view.hitIndex = -1;
     renderBookList();
     $('#noSelection').classList.add('hidden');
     $('#bookDetail').classList.remove('hidden');
@@ -80,6 +101,7 @@
     $('#bookMeta').textContent = (b.description ? b.description + ' · ' : '') + b.files.length + ' 个文件 · 创建于 ' + fmtDate(b.createdAt);
     renderFiles(b.files);
     $('#resultArea').classList.add('hidden');
+    $('#qitemPanel').classList.add('hidden');
     if (b.analysisMeta) {
       try { state.analysis = await api('/books/' + id + '/analysis'); renderResult(); }
       catch (e) { /* 无分析结果 */ }
@@ -129,7 +151,6 @@
         await api('/books/' + state.current.id + '/files', { method: 'POST', body: JSON.stringify({ name: file.name, data }) });
         added++;
       } catch (e) {
-        // 融合 F7：失败逐文件累积并持久显示在界面，不再只靠 2.2 秒就消失的 toast
         failedNames.push(file.name + '（' + (e.message || '失败') + '）');
       }
     }
@@ -157,10 +178,10 @@
       const r = await api('/books/' + state.current.id + '/analyze', { method: 'POST', body: JSON.stringify({ cfg }) });
       state.analysis = r;
       renderResult();
-      // 成功分支也要更新状态条：原来只弹 toast，界面会一直停在「正在分析…」与「分析完成」自相矛盾。
       const s = (r && r.stats) || {};
       st.classList.remove('err');
-      st.textContent = '分析完成：' + (s.chapters || 0) + ' 章 / ' + (s.points || 0) + ' 知识点 / ' + (s.questionTypes || 0) + ' 类题型' +
+      st.textContent = '分析完成：' + (s.chapters || 0) + ' 章 / ' + (s.points || 0) + ' 知识点 / ' +
+        (s.questionTypes || 0) + ' 类题型 / ' + (s.questionCount || 0) + ' 道题' +
         (r && r.truncated ? '（语料已截断，见概览）' : '');
       toast('分析完成');
     } catch (e) {
@@ -174,11 +195,26 @@
   function renderResult() {
     if (!state.analysis) return;
     $('#resultArea').classList.remove('hidden');
-    renderTree(state.analysis.tree);
+    indexQuestions();
+    renderTree(state.analysis.tree);          // 大纲模式（DOM 树，保留既有验收契约）
+    renderCanvas();                           // 导图模式（SVG 画布）
     renderQuestionIndex(state.analysis.questionIndex);
     renderSummary(state.analysis);
   }
 
+  // 题目/子题型按 id 建索引，供画布节点点击下钻。
+  function indexQuestions() {
+    view.questionById = {}; view.qitemById = {};
+    (state.analysis.questionIndex || []).forEach((g, gi) => {
+      (g.items || []).forEach((it, ii) => {
+        const qid = 'qi_' + gi + '_' + ii;
+        view.qitemById[qid] = Object.assign({}, it, { type: g.type });
+        (it.questions || []).forEach(q => { view.questionById[q.id] = q; });
+      });
+    });
+  }
+
+  // ---------- 大纲模式（DOM 树，Xmind 大纲模式） ----------
   function renderTree(root) {
     const box = $('#tree'); box.innerHTML = '';
     nodeEls = {};
@@ -205,7 +241,6 @@
     }
     row.innerHTML = inner;
     li.appendChild(row);
-
     if (hasChildren) {
       const ul = document.createElement('ul');
       node.children.forEach(c => ul.appendChild(buildNode(c)));
@@ -218,37 +253,142 @@
     return li;
   }
 
+  // ---------- v2：SVG 导图画布 ----------
+  function activeTree() {
+    if (!state.analysis) return null;
+    if (view.perspective === 'question') {
+      return ML ? ML.buildQuestionTree(state.analysis.questionIndex || []) : state.analysis.tree;
+    }
+    return state.analysis.tree;
+  }
+  function findNode(root, id) {
+    if (!root || !id) return null;
+    if (root.id === id) return root;
+    for (const c of (root.children || [])) { const r = findNode(c, id); if (r) return r; }
+    return null;
+  }
+  // 折叠：把被折叠节点的 children 摘掉（只影响画布，不改原始数据）。
+  function pruned(node) {
+    if (!node) return null;
+    const out = Object.assign({}, node);
+    out.children = view.collapsed[node.id] ? [] : (node.children || []).map(pruned).filter(Boolean);
+    return out;
+  }
+
+  function renderCanvas() {
+    const box = $('#mmCanvas');
+    if (!box) return;
+    if (!ML || !state.analysis) { box.innerHTML = ''; return; }
+    let root = activeTree();
+    if (view.focusId) root = findNode(root, view.focusId) || root;
+    root = pruned(root);
+    const layout = ML.layoutTree(root, view.layout);
+    view.layoutData = layout;
+    view.treeData = root;
+    box.innerHTML = ML.toSvg(layout);
+    box.style.width = layout.width + 'px';
+    box.style.height = layout.height + 'px';
+    applyView();
+    bindCanvasNodes(layout);
+    applySearchHighlight();
+    $('#btnFocusBack').classList.toggle('hidden', !view.focusId);
+  }
+
+  let clickTimer = null;
+  function bindCanvasNodes(layout) {
+    $$('#mmCanvas .mm-node').forEach(g => {
+      g.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const id = g.dataset.id, kind = g.dataset.kind;
+        $$('#mmCanvas .mm-node.selected').forEach(x => x.classList.remove('selected'));
+        g.classList.add('selected');
+        if (kind === 'question') { const q = view.questionById[id] || (layout.nodes.find(n => n.id === id) || {}).question; if (q) openQuestion(q); return; }
+        if (kind === 'qitem') { const it = view.qitemById[id]; if (it) openQitem(it); return; }
+        const node = layout.nodes.find(n => n.id === id);
+        if (node && (node.childrenCount || hasRenderedChildren(id))) {
+          // 单击折叠会重建 DOM；若立即执行会打断 dblclick 事件（真浏览器实测）。
+          // 延迟到双击窗口之后，双击时取消即可让单击/双击共存。
+          clearTimeout(clickTimer);
+          clickTimer = setTimeout(() => {
+            view.collapsed[id] = !view.collapsed[id];
+            renderCanvas();
+          }, 220);
+        }
+      });
+      g.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        clearTimeout(clickTimer);
+        const id = g.dataset.id, kind = g.dataset.kind;
+        if (kind === 'question') return;
+        view.focusId = (view.focusId === id) ? null : id;
+        view.collapsed = {};
+        renderCanvas();
+        toast(view.focusId ? '已聚焦该分支，双击根节点或点「返回全图」退出' : '已返回全图');
+      });
+    });
+  }
+  function hasRenderedChildren(id) {
+    return (view.layoutData.nodes || []).some(n => n.parentId === id);
+  }
+
+  function switchPerspective(p) {
+    view.perspective = p; view.focusId = null; view.collapsed = {};
+    $$('[data-perspective]').forEach(b => b.classList.toggle('active', b.dataset.perspective === p));
+    renderCanvas();
+  }
+  function switchLayout(m) {
+    view.layout = m;
+    $$('[data-layout]').forEach(b => b.classList.toggle('active', b.dataset.layout === m));
+    renderCanvas();
+  }
+  function switchMode(m) {
+    view.mode = m;
+    $$('[data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === m));
+    const outline = m === 'outline';
+    $('#tree').classList.toggle('hidden', !outline);
+    $('#mmCanvas').classList.toggle('hidden', outline);
+    $$('#expandAll, #collapseAll').forEach(b => b.disabled = !outline);
+  }
+
+  // ---------- 题型索引（速查 tab） ----------
   function renderQuestionIndex(qIndex) {
     const box = $('#questionIndex'); box.innerHTML = '';
     if (!qIndex || !qIndex.length) { box.innerHTML = '<div class="empty-hint">暂无题型索引</div>'; return; }
-    qIndex.forEach(q => {
+    qIndex.forEach((q, gi) => {
       const g = document.createElement('div'); g.className = 'qgroup';
-      g.innerHTML = '<div class="qhead">' + esc(q.type) + ' <span class="qcount">' + q.items.length + ' 项</span></div>';
-      (q.items || []).forEach(it => {
+      const total = (q.items || []).reduce((s, it) => s + ((it.questions || []).length), 0);
+      g.innerHTML = '<div class="qhead">' + esc(q.type) + ' <span class="qcount">' + (q.items || []).length + ' 个子题型 · ' + total + ' 道题</span></div>';
+      (q.items || []).forEach((it, ii) => {
         const c = document.createElement('div'); c.className = 'qcard';
-        c.innerHTML = '<div class="qt-title">' + esc(it.title) + '</div>' +
+        const cnt = (it.questions || []).length;
+        c.innerHTML = '<div class="qt-title">' + esc(it.title) + (cnt ? ' <span class="qcount">· ' + cnt + ' 道题</span>' : '') + '</div>' +
           (it.path && it.path.length ? '<div class="qpath">位置：<b>' + it.path.map(esc).join('</b> › <b>') + '</b></div>' : '');
-        // 融合 F2：点题型项 → 跳回导图并高亮对应节点
-        c.onclick = () => locateNode(it.pointId, it.title);
+        // 既有契约：点题型项 → 切回导图并高亮对应知识点（e2e 断言恰好 1 个 .highlight）
+        c.onclick = () => {
+          locateNode(it.pointId, it.title);
+          const wrapped = Object.assign({}, it, { id: 'qi_' + gi + '_' + ii, type: q.type });
+          // 老分析数据没有 questions 时也要开面板：openQitem 内有「该子题型下暂无题目」文案，
+          // 点开后能提示用户重新分析，比「点了没反应」强。
+          openQitem(wrapped);
+        };
         g.appendChild(c);
       });
       box.appendChild(g);
     });
   }
 
-  // ---------- 融合 F2：题型索引 → 导图节点定位高亮 ----------
   function switchTab(name) {
     $$('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
     $$('.tab-pane').forEach(p => p.classList.toggle('active', p.id === 'tab-' + name));
   }
   function locateNode(pointId, title) {
     switchTab('mindmap');
+    if (view.perspective !== 'knowledge') switchPerspective('knowledge');
     let row = pointId && nodeEls[pointId];
     if (!row) {
       const key = String(title || '').toLowerCase();
       row = Object.values(nodeEls).find(r => (r.dataset.title || '').toLowerCase() === key) || null;
     }
-    // 展开所有祖先，确保被定位节点真的可见
     $$('#tree ul.hidden').forEach(u => u.classList.remove('hidden'));
     $$('#tree .node.collapsed').forEach(n => n.classList.remove('collapsed'));
     if (row) {
@@ -259,14 +399,85 @@
     } else {
       toast('未找到对应节点：' + (title || ''));
     }
+    $$('#mmCanvas .mm-node.locate').forEach(n => n.classList.remove('locate'));
+    if (pointId) {
+      const g = $('#mmCanvas .mm-node[data-id="' + cssEsc(pointId) + '"]');
+      if (g) { g.classList.add('locate'); g.scrollIntoView && g.scrollIntoView({ block: 'center', inline: 'center' }); }
+    }
   }
 
-  // ---------- 融合 F3：缩放 / 平移 / 复位 ----------
+  // ---------- 子题型 → 所有题目 ----------
+  function openQitem(it) {
+    const panel = $('#qitemPanel');
+    $('#qitemTitle').textContent = (it.type ? it.type + ' · ' : '') + (it.title || '子题型');
+    $('#qitemPath').textContent = (it.path || []).length ? '知识点路径：' + it.path.join(' › ') : '未标注知识点路径';
+    const list = $('#qitemList'); list.innerHTML = '';
+    const qs = it.questions || [];
+    if (!qs.length) { list.innerHTML = '<div class="sp-empty">该子题型下暂无题目。</div>'; }
+    qs.forEach((q, i) => {
+      const d = document.createElement('div'); d.className = 'sp-qlist-item';
+      d.innerHTML = '<div class="sp-qlist-top"><span class="sp-qlist-idx">' + (i + 1) + '</span>' +
+        '<span class="sp-qlist-tag">' + esc(q.difficulty || '基础') + '</span>' +
+        (q.source && q.source.file ? '<span class="sp-qlist-tag">📄 ' + esc(q.source.file) + '</span>' : '') + '</div>' +
+        '<div class="sp-qlist-stem">' + esc(q.stem || '（无题干）') + '</div>' +
+        '<div class="sp-qlist-go">点击查看图书原图 / 详细解答 / 解题思路 →</div>';
+      d.onclick = () => openQuestion(q);
+      list.appendChild(d);
+    });
+    panel.classList.remove('hidden');
+  }
+
+  // ---------- 题目详情：原图 + 分步解答 + 思路 ----------
+  let currentQuestion = null;
+  function openQuestion(q) {
+    currentQuestion = q;
+    $('#qdTitle').textContent = '题目详情';
+    $('#qdStem').textContent = q.stem || '（无题干）';
+    $('#qdOptions').innerHTML = (q.options || []).length
+      ? q.options.map(o => '<div class="qd-option">' + esc(o) + '</div>').join('') : '';
+    $('#qdAnswer').textContent = q.answer || '（模型未给出答案）';
+    $('#qdSolution').innerHTML = (q.solution || []).length
+      ? q.solution.map(s => '<li>' + esc(s) + '</li>').join('') : '<li>（模型未给出分步解答）</li>';
+    $('#qdRationale').textContent = q.rationale || '（模型未给出解题思路）';
+    $('#qdPitfalls').textContent = q.pitfalls || '';
+    $('#qdPitfallBlock').classList.toggle('hidden', !q.pitfalls);
+    $('#qdDifficulty').textContent = '难度：' + (q.difficulty || '基础');
+    $('#qdPoint').textContent = (q.pointPath || []).length ? '知识点：' + q.pointPath.join(' › ') : '';
+    $('#questionModal').classList.remove('hidden');
+    renderQuestionSource(q);
+  }
+
+  async function renderQuestionSource(q) {
+    const imgBox = $('#qdImage'), srcBox = $('#qdSource');
+    imgBox.classList.add('hidden'); imgBox.innerHTML = '';
+    const s = q.source || {};
+    const file = (state.current && (state.current.files || []).find(f => f.name === s.file)) || null;
+    let txt = s.file ? '来源：<b>' + esc(s.file) + '</b>' + (s.page ? ' · 第 <b>' + s.page + '</b> 页' : '') : '来源：未标注';
+    if (s.quote) txt += '<span class="qd-quote">' + esc(s.quote) + '</span>';
+    // 诚实边界：图片型资料可显示真原图；PDF/Office 在 file:// 下无法渲染页图，只做文本定位。
+    if (file && file.isImage && state.current) {
+      try {
+        const raw = await api('/books/' + state.current.id + '/files/' + file.id + '/raw');
+        if (raw && raw.data) {
+          imgBox.innerHTML = '<img alt="图书原图" src="data:' + esc(raw.mime || 'image/png') + ';base64,' + raw.data + '" />' +
+            '<div class="qd-imgcap">图书原图 · ' + esc(raw.name || s.file) + '</div>';
+          imgBox.classList.remove('hidden');
+        }
+      } catch (e) { txt += '<div class="qd-quote">原图读取失败：' + esc(e.message) + '</div>'; }
+    } else if (file && !file.isImage) {
+      txt += '<div class="qd-quote">该资料为 ' + esc(file.ext || '文档') + '，当前视图按「文件名 + 页码 + 引文」定位原文；页图渲染需视觉/预览能力，未声称可用。</div>';
+    } else if (s.file) {
+      txt += '<div class="qd-quote">未在本书资料中找到同名文件，已按模型标注的来源文本定位。</div>';
+    }
+    srcBox.innerHTML = txt;
+  }
+
+  // ---------- 缩放 / 平移 / 复位 ----------
   function applyView() {
-    const tree = $('#tree');
-    if (tree) tree.style.transform = 'translate(' + mmX + 'px,' + mmY + 'px) scale(' + mmScale + ')';
-    const label = $('#zoomLabel');
-    if (label) label.textContent = Math.round(mmScale * 100) + '%';
+    const t = 'translate(' + mmX + 'px,' + mmY + 'px) scale(' + mmScale + ')';
+    const tree = $('#tree'); if (tree) tree.style.transform = t;      // 既有 e2e 契约
+    const canvas = $('#mmCanvas'); if (canvas) canvas.style.transform = t;
+    const label = $('#zoomLabel'); if (label) label.textContent = Math.round(mmScale * 100) + '%';
   }
   function zoomBy(f) {
     mmScale = Math.max(0.3, Math.min(2.5, mmScale * f));
@@ -277,7 +488,32 @@
     applyView();
   }
 
-  // ---------- 融合 F4：导出 JSON / SVG（矢量，非像素截图） ----------
+  // ---------- 搜索 ----------
+  function applySearchHighlight() {
+    $$('#mmCanvas .mm-node').forEach(g => g.classList.remove('hit', 'dim'));
+    if (!view.hits.length) return;
+    const set = new Set(view.hits);
+    $$('#mmCanvas .mm-node').forEach(g => {
+      if (set.has(g.dataset.id)) g.classList.add('hit');
+      else g.classList.add('dim');
+    });
+  }
+  function doSearch(kw) {
+    view.hitIndex = -1;
+    view.hits = (ML && view.layoutData) ? ML.searchNodes(view.layoutData.nodes, kw) : [];
+    $('#searchCount').textContent = kw ? (view.hits.length + ' 个命中') : '';
+    applySearchHighlight();
+  }
+  function nextHit(step) {
+    if (!view.hits.length) return;
+    view.hitIndex = (view.hitIndex + step + view.hits.length) % view.hits.length;
+    const id = view.hits[view.hitIndex];
+    $$('#mmCanvas .mm-node.locate').forEach(g => g.classList.remove('locate'));
+    const g = $('#mmCanvas .mm-node[data-id="' + cssEsc(id) + '"]');
+    if (g) { g.classList.add('locate'); g.scrollIntoView && g.scrollIntoView({ block: 'center', inline: 'center' }); }
+  }
+
+  // ---------- 导出（5 种，画布与导出同一份坐标） ----------
   function downloadBlob(blob, name) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -289,12 +525,21 @@
     if (!state.analysis) { toast('还没有分析结果'); return; }
     downloadBlob(new Blob([JSON.stringify(state.analysis, null, 2)], { type: 'application/json' }), bookName() + '.json');
   }
+  function currentSvg() {
+    if (!ML || !view.layoutData) return '';
+    return ML.toSvg(view.layoutData);
+  }
   function exportSvg() {
     if (!state.analysis || !state.analysis.tree) { toast('还没有分析结果'); return; }
-    downloadBlob(new Blob([buildTreeSvg(state.analysis.tree)], { type: 'image/svg+xml' }), bookName() + '.svg');
+    // 优先用画布同一份坐标（单一真源）；无画布数据时回退到自包含的矢量导出。
+    downloadBlob(new Blob([currentSvg() || buildTreeSvg(state.analysis.tree)], { type: 'image/svg+xml' }), bookName() + '.svg');
   }
-  // 左→右树布局，每个节点一个圆角矩形 + 贝塞尔连线。
+
+  // 自包含矢量导出（左→右树）。浏览器里优先复用 js/mindmap-layout.js 的坐标，
+  // 保证「导出与屏幕一致」；无 window 的纯脚本/沙箱环境退化为内置布局，可独立跑。
   function buildTreeSvg(root) {
+    const MLib = (typeof window !== 'undefined' && window.MindmapLayout) || null;
+    if (MLib && root) return MLib.toSvg(MLib.layoutTree(root, 'right'));
     const W = 180, H = 36, padX = 16, padY = 16;
     let row = 0; const pos = {};
     (function assign(n, depth) {
@@ -327,14 +572,39 @@
     const Wtot = padX * 2 + maxX * W, Htot = padY * 2 + (maxY + 1) * H;
     return '<svg xmlns="http://www.w3.org/2000/svg" width="' + Wtot + '" height="' + Htot + '" viewBox="0 0 ' + Wtot + ' ' + Htot + '">' + body + '</svg>';
   }
+  function exportPng() {
+    const svg = currentSvg();
+    if (!svg) { toast('还没有分析结果'); return; }
+    const d = view.layoutData;
+    const img = new Image();
+    const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+    img.onload = () => {
+      try {
+        const c = document.createElement('canvas');
+        c.width = d.width * 2; c.height = d.height * 2;
+        const ctx = c.getContext('2d'); ctx.scale(2, 2); ctx.drawImage(img, 0, 0);
+        c.toBlob(b => { if (b) downloadBlob(b, bookName() + '.png'); else toast('PNG 生成失败'); }, 'image/png');
+      } catch (e) { toast('PNG 生成失败：' + e.message); }
+      URL.revokeObjectURL(url);
+    };
+    img.onerror = () => { toast('PNG 生成失败（SVG 无法光栅化）'); URL.revokeObjectURL(url); };
+    img.src = url;
+  }
+  function exportMd() {
+    if (!ML || !view.treeData) { toast('还没有分析结果'); return; }
+    downloadBlob(new Blob([ML.toMarkdown(view.treeData)], { type: 'text/markdown' }), bookName() + '.md');
+  }
+  function exportOpml() {
+    if (!ML || !view.treeData) { toast('还没有分析结果'); return; }
+    downloadBlob(new Blob([ML.toOpml(view.treeData)], { type: 'text/x-opml' }), bookName() + '.opml');
+  }
 
   function renderSummary(a) {
     $('#summaryBox').textContent = a.summary || '（无概览）';
     const s = a.stats || {};
     const base = [
-      ['章', s.chapters], ['节', s.sections], ['知识点', s.points], ['细分', s.subtypes], ['题型', s.questionTypes]
+      ['章', s.chapters], ['节', s.sections], ['知识点', s.points], ['细分', s.subtypes], ['题型', s.questionTypes], ['题目', s.questionCount]
     ].map(([l, n]) => '<div class="stat"><div class="num">' + (n || 0) + '</div><div class="lbl">' + l + '</div></div>');
-    // 融合 F8：分题型统计卡；F6：语料截断与来源信息显式可见
     const typeCards = Object.keys(s.questionTypeCounts || {}).map(k =>
       '<div class="stat typecount"><div class="num">' + s.questionTypeCounts[k] + '</div><div class="lbl">' + esc(k) + '</div></div>');
     const meta = '<div class="ov-meta" style="width:100%;font-size:12px;color:var(--ink-soft);margin-top:10px">模型：' + esc(a.model || '—') +
@@ -348,6 +618,7 @@
 
   // ---------- 工具 ----------
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+  function cssEsc(s) { return String(s || '').replace(/["\\]/g, '\\$&'); }
   function fmtDate(iso) { if (!iso) return ''; try { const d = new Date(iso); return d.toLocaleString('zh-CN', { hour12: false }); } catch (e) { return iso; } }
   function base64FromUint8(u8) { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); }
 
@@ -363,32 +634,42 @@
     ['dragleave', 'drop'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove('drag'); }));
     dz.addEventListener('drop', e => { if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files); });
 
-    $$('.tab').forEach(t => t.onclick = () => {
-      $$('.tab').forEach(x => x.classList.remove('active'));
-      $$('.tab-pane').forEach(x => x.classList.remove('active'));
-      t.classList.add('active');
-      $('#tab-' + t.dataset.tab).classList.add('active');
-    });
+    $$('.tab').forEach(t => t.onclick = () => switchTab(t.dataset.tab));
 
     $('#expandAll').onclick = () => {
       $$('#tree ul ul').forEach(u => u.classList.remove('hidden'));
       $$('#tree .node').forEach(n => n.classList.remove('collapsed'));
+      if (view.perspective !== 'knowledge') { view.collapsed = {}; renderCanvas(); }
     };
     $('#collapseAll').onclick = () => {
       $$('#tree ul ul').forEach(u => u.classList.add('hidden'));
       $$('#tree .node').forEach(n => { if (n.querySelector('.twist') && n.querySelector('.twist').textContent) n.classList.add('collapsed'); });
     };
 
-    // 融合 F3/F4：缩放、复位、导出，以及鼠标拖拽平移与滚轮缩放
+    // v2：视角 / 布局 / 视图切换
+    $$('[data-perspective]').forEach(b => b.onclick = () => switchPerspective(b.dataset.perspective));
+    $$('[data-layout]').forEach(b => b.onclick = () => switchLayout(b.dataset.layout));
+    $$('[data-view]').forEach(b => b.onclick = () => switchMode(b.dataset.view));
+    $('#btnFocusBack').onclick = () => { view.focusId = null; view.collapsed = {}; renderCanvas(); };
+
+    $('#mmSearch').addEventListener('input', (e) => doSearch(e.target.value.trim()));
+    $('#mmSearch').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); nextHit(1); }
+    });
+
     $$('[data-zoom]').forEach(b => b.onclick = () => zoomBy(b.dataset.zoom === 'in' ? 1.15 : 1 / 1.15));
     $('#btnFit').onclick = resetView;
     $('#btnExportJson').onclick = exportJson;
     $('#btnExportSvg').onclick = exportSvg;
+    $('#btnExportPng').onclick = exportPng;
+    $('#btnExportMd').onclick = exportMd;
+    $('#btnExportOpml').onclick = exportOpml;
+
     const vp = $('#mmViewport');
     if (vp) {
       let dragging = false, sx = 0, sy = 0, ox = 0, oy = 0;
       vp.addEventListener('mousedown', e => {
-        if (e.target.closest && e.target.closest('.node')) return; // 点节点是折叠，不触发拖拽
+        if (e.target.closest && (e.target.closest('.node') || e.target.closest('.mm-node'))) return;
         dragging = true; sx = e.clientX; sy = e.clientY; ox = mmX; oy = mmY; vp.classList.add('grabbing');
       });
       window.addEventListener('mouseup', () => { dragging = false; vp.classList.remove('grabbing'); });
@@ -398,6 +679,36 @@
       });
       vp.addEventListener('wheel', e => { e.preventDefault(); zoomBy(e.deltaY < 0 ? 1.1 : 1 / 1.1); }, { passive: false });
     }
+
+    // 子题型面板 / 题目详情
+    $('#closeQitem').onclick = () => $('#qitemPanel').classList.add('hidden');
+    $('#closeQuestion').onclick = () => $('#questionModal').classList.add('hidden');
+    $('#questionModal').addEventListener('click', e => { if (e.target === $('#questionModal')) $('#questionModal').classList.add('hidden'); });
+    $('#qdLocate').onclick = () => {
+      if (!currentQuestion) return;
+      $('#questionModal').classList.add('hidden');
+      locateNode(currentQuestion.pointId, (currentQuestion.pointPath || []).slice(-1)[0]);
+    };
+
+    // 键盘导航（Xmind / mind-elixir 的键盘优先画布）
+    document.addEventListener('keydown', (e) => {
+      const tag = (e.target && e.target.tagName) || '';
+      if (/INPUT|TEXTAREA/.test(tag)) {
+        if (e.key === 'Escape') { e.target.blur(); doSearch(''); $('#mmSearch').value = ''; }
+        return;
+      }
+      if (e.key === '/') { e.preventDefault(); $('#mmSearch').focus(); return; }
+      if (e.key === '+' || e.key === '=') { e.preventDefault(); zoomBy(1.15); return; }
+      if (e.key === '-') { e.preventDefault(); zoomBy(1 / 1.15); return; }
+      if (e.key === '0') { e.preventDefault(); resetView(); return; }
+      if (e.key === 'ArrowDown') { e.preventDefault(); nextHit(1); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); nextHit(-1); return; }
+      if (e.key === 'Escape') {
+        $('#questionModal').classList.add('hidden');
+        $('#qitemPanel').classList.add('hidden');
+        if (view.focusId) { view.focusId = null; view.collapsed = {}; renderCanvas(); }
+      }
+    });
 
     // 设置弹窗
     const modal = $('#settingsModal');
@@ -421,7 +732,6 @@
       const cfg = readSettings();
       let d;
       // Electron：preload 暴露 llm.test（走主进程 ipc），file:// 下没有 HTTP server，不能裸 fetch。
-      // llm.test 直接返回 { ok, models, error }，不是 Response，无需 r.json()。
       if (window.api && window.api.llm && typeof window.api.llm.test === 'function') {
         d = await window.api.llm.test(cfg);
       } else {

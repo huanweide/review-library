@@ -13,7 +13,7 @@ const extract = require('./extract');
 const analyzeLib = require('./analyze');
 
 // 版本号唯一真源 = 根 package.json 的 version；本常量由 scripts/sync-versions.mjs 机械同步，禁止手改。
-const CORE_VERSION = '1.3.0';
+const CORE_VERSION = '1.4.0';
 
 class Core {
   constructor(root) {
@@ -59,7 +59,9 @@ class Core {
     const files = book.files || [];
     const withStats = Object.assign({}, opts, {
       imageCount: files.filter(f => f.isImage).length,
-      materialCount: files.length
+      materialCount: files.length,
+      // v2：真实文件名清单注入提示词，题目的 source.file 才能回溯到导入的资料。
+      files: files.map(f => ({ name: f.name, isImage: !!f.isImage }))
     });
     const result = await analyzeLib.analyze(book.title, text, withStats);
     this.store.saveAnalysis(id, result);

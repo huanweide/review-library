@@ -80,24 +80,49 @@
           </div>
 
           <div id="tab-mindmap" class="tab-pane active">
-            <div class="tree-toolbar">
+            <div class="tree-toolbar toolbar-main">
+              <div class="seg" role="group" aria-label="视角">
+                <button class="seg-btn active" data-perspective="knowledge" title="按知识结构展开">📚 知识树</button>
+                <button class="seg-btn" data-perspective="question" title="题型分类也长在同一张导图里">📝 题型树</button>
+              </div>
+              <div class="seg" role="group" aria-label="布局">
+                <button class="seg-btn active" data-layout="right" id="btnLayoutRight" title="右向逻辑树">右向</button>
+                <button class="seg-btn" data-layout="both" title="双侧思维导图">双侧</button>
+                <button class="seg-btn" data-layout="org" title="组织结构图">组织图</button>
+              </div>
+              <div class="seg" role="group" aria-label="视图">
+                <button class="seg-btn active" data-view="canvas" title="交互式 SVG 画布">🧩 导图</button>
+                <button class="seg-btn" data-view="outline" id="btnOutline" title="文本大纲模式">☰ 大纲</button>
+              </div>
+              <span class="spacer"></span>
+              <input id="mmSearch" class="search-input" type="search" placeholder="搜索节点（/ 聚焦）" autocomplete="off" />
+              <span id="searchCount" class="search-count"></span>
+            </div>
+            <div class="tree-toolbar toolbar-sub">
               <button id="expandAll" class="ghost-btn tiny">展开全部</button>
               <button id="collapseAll" class="ghost-btn tiny">收起全部</button>
+              <button id="btnFocusBack" class="ghost-btn tiny hidden" title="退出聚焦下钻">← 返回全图</button>
               <span class="spacer"></span>
-              <button id="btnZoomOut" class="ghost-btn tiny" data-zoom="out" title="缩小">－</button>
+              <button id="btnZoomOut" class="ghost-btn tiny" data-zoom="out" title="缩小 (-)">－</button>
               <span id="zoomLabel" class="zoom-label">100%</span>
-              <button id="btnZoomIn" class="ghost-btn tiny" data-zoom="in" title="放大">＋</button>
-              <button id="btnFit" class="ghost-btn tiny" title="复位视图">复位</button>
+              <button id="btnZoomIn" class="ghost-btn tiny" data-zoom="in" title="放大 (+)">＋</button>
+              <button id="btnFit" class="ghost-btn tiny" title="复位视图 (0)">复位</button>
               <span class="spacer"></span>
-              <button id="btnExportJson" class="ghost-btn tiny" title="导出分析 JSON">导出 JSON</button>
-              <button id="btnExportSvg" class="ghost-btn tiny" title="导出矢量思维导图">导出 SVG</button>
+              <button id="btnExportJson" class="ghost-btn tiny" title="导出分析 JSON">JSON</button>
+              <button id="btnExportSvg" class="ghost-btn tiny" title="导出矢量思维导图">SVG</button>
+              <button id="btnExportPng" class="ghost-btn tiny" title="导出位图">PNG</button>
+              <button id="btnExportMd" class="ghost-btn tiny" title="导出 Markdown 大纲">MD</button>
+              <button id="btnExportOpml" class="ghost-btn tiny" title="导出 OPML（可导入 Xmind 等）">OPML</button>
             </div>
+            <div id="mmHint" class="mm-hint">双击节点聚焦下钻 · 单击折叠 · 点题目看原图与详解</div>
             <div id="mmViewport" class="mm-viewport">
-              <div id="tree" class="tree"></div>
+              <div id="mmCanvas" class="mm-canvas"></div>
+              <div id="tree" class="tree hidden"></div>
             </div>
           </div>
 
           <div id="tab-questions" class="tab-pane">
+            <div class="qindex-note">题型分类已并入导图：切到「📝 题型树」可点子题型看全部题目。此处为速查索引。</div>
             <div id="questionIndex" class="qindex"></div>
           </div>
 
@@ -109,6 +134,61 @@
       </div>
     </section>
   </main>
+
+  <!-- 子题型 → 所有题目（点题型树/题型索引的子题型节点后打开） -->
+  <div id="qitemPanel" class="side-panel hidden">
+    <div class="sp-head">
+      <div><div class="sp-kicker">子题型</div><div id="qitemTitle" class="sp-title"></div></div>
+      <button id="closeQitem" class="ghost-btn tiny" title="关闭">✕</button>
+    </div>
+    <div id="qitemPath" class="sp-path"></div>
+    <div id="qitemList" class="sp-list"></div>
+  </div>
+
+  <!-- 题目详情：图书原图 + 分步解答 + 解题思路 -->
+  <div id="questionModal" class="modal hidden">
+    <div class="modal-card qd-card">
+      <div class="modal-head row">
+        <span id="qdTitle">题目详情</span>
+        <span class="spacer"></span>
+        <button id="closeQuestion" class="ghost-btn tiny" title="关闭 (Esc)">✕</button>
+      </div>
+      <div class="qd-body">
+        <div class="qd-block">
+          <div class="qd-label">题干</div>
+          <div id="qdStem" class="qd-stem"></div>
+          <div id="qdOptions" class="qd-options"></div>
+        </div>
+        <div class="qd-block">
+          <div class="qd-label">图书原图 / 来源</div>
+          <div id="qdImage" class="qd-image hidden"></div>
+          <div id="qdSource" class="qd-source"></div>
+        </div>
+        <div class="qd-block">
+          <div class="qd-label">答案</div>
+          <div id="qdAnswer" class="qd-answer"></div>
+        </div>
+        <div class="qd-block">
+          <div class="qd-label">详细解答（分步）</div>
+          <ol id="qdSolution" class="qd-solution"></ol>
+        </div>
+        <div class="qd-block">
+          <div class="qd-label">解题思路</div>
+          <div id="qdRationale" class="qd-rationale"></div>
+        </div>
+        <div class="qd-block" id="qdPitfallBlock">
+          <div class="qd-label">易错点</div>
+          <div id="qdPitfalls" class="qd-pitfalls"></div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <span id="qdDifficulty" class="qd-tag"></span>
+        <span id="qdPoint" class="qd-point"></span>
+        <span class="spacer"></span>
+        <button id="qdLocate" class="ghost-btn small">在导图中定位知识点</button>
+      </div>
+    </div>
+  </div>
 
   <!-- 设置弹窗 -->
   <div id="settingsModal" class="modal hidden">
@@ -139,6 +219,7 @@
 
   <div id="toast" class="toast hidden"></div>
 
+  <script src="js/mindmap-layout.js"></script>
   <script src="js/core-ui.js"></script>
 </body>
 </html>

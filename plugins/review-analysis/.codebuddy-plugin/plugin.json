@@ -1,6 +1,6 @@
 {
   "name": "review-analysis",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "统一复习项目的 WorkBuddy 专家入口：导入资料 → 建一本书 → 大模型整本整体分析 → 可层层展开的思维导图 + 题型分类索引。复用主项目 core/，不是独立离线引擎。",
   "author": {
     "name": "retri",

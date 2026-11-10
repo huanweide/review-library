@@ -1,0 +1,99 @@
+{
+  "label": "v5",
+  "ok": true,
+  "at": "2026-11-10T08:33:27.757Z",
+  "provider": "siliconflow",
+  "model": "deepseek-ai/DeepSeek-V4.1-Flash",
+  "corpusLen": 1659,
+  "elapsedMs": 149535,
+  "stats": {
+    "chapters": 5,
+    "sections": 12,
+    "points": 26,
+    "subtypes": 17,
+    "questionTypes": 7,
+    "questionTypeCounts": {
+      "选择题": 3,
+      "填空题": 2,
+      "判断题": 2,
+      "名词解释": 1,
+      "计算题": 3,
+      "简答题": 3,
+      "综合应用题": 1
+    },
+    "questionCount": 21,
+    "analyzedAt": "2026-11-10T08:33:27.755Z"
+  },
+  "metrics": {
+    "jsonParsed": true,
+    "fieldCompleteRate": 1,
+    "questionCount": 21,
+    "typeCoverage": 7,
+    "pathHitRate": 1,
+    "placeholderRate": 0,
+    "sourceHitRate": 1,
+    "answerRichRate": 1,
+    "rationaleAvgLen": 88,
+    "checks": {
+      "jsonParsed": true,
+      "fieldCompleteRate": true,
+      "questionCount": true,
+      "typeCoverage": true,
+      "pathHitRate": true,
+      "placeholderRate": true,
+      "sourceHitRate": true,
+      "answerRichRate": true,
+      "rationaleDepth": true
+    },
+    "passed": true,
+    "thresholds": {
+      "minQuestions": 8,
+      "maxQuestions": 60,
+      "minTypes": 3,
+      "minFieldRate": 0.9,
+      "minPathRate": 0.7,
+      "maxPlaceholderRate": 0,
+      "minSourceRate": 0.6,
+      "minAnswerRichRate": 0.8,
+      "minRationaleLen": 30
+    }
+  },
+  "samples": [
+    {
+      "type": "选择题",
+      "sub": "存储结构与复杂度辨析",
+      "stem": "下列关于顺序表与链表的说法中，正确的是哪一项？",
+      "answer": "A. 顺序表按下标查找第 i 个元素的时间复杂度为 O(1) —— 顺序表地址连续，可由首地址加下标直接算出元素地址。",
+      "solution": [
+        "第 1 步：回忆顺序表用一段地址连续的存储单元依次存放元素。",
+        "第 2 步：连续存储使第 i 个元素地址可由首地址加偏移直接计算，故查找为 O(1)。",
+        "第 3 步：链表结点靠指针链接，查找第 i 个元素必须从头遍历，为 O(n)；因此 B、C 错误，D 中「O(1)」自相矛盾。"
+      ],
+      "rationale": "题干问两种存储结构的查找代价，切入点是「地址是否连续」。顺序表连续所以能随机访问，链表不连续所以只能顺序访问，用这个本质去排除选项；若只凭「链表灵活」的印象会误选，是常见错误做法。",
+      "source": {
+        "file": "数据结构讲义.pdf",
+        "page": 0,
+        "quote": "顺序表用一段地址连续的存储单元依次存放元素，支持随机访问，按下标查找第 i 个元素的时间复杂度为 O(1)；链表用指针串联结点，查找第 i 个元素需要从头遍历，时间复杂度为 O(n)"
+      },
+      "pointId": "n3_5"
+    },
+    {
+      "type": "选择题",
+      "sub": "存储结构与复杂度辨析",
+      "stem": "在单链表中，已知指针 p 指向某结点，若要删除 p 所指结点本身，其时间复杂度通常为多少？",
+      "answer": "B. O(n) —— 单链表删除结点 p 本身必须先找到它的前驱，需从头遍历，故为 O(n)。",
+      "solution": [
+        "第 1 步：明确单链表结点只有指向后继的指针，没有指向前驱的指针。",
+        "第 2 步：删除 p 需要修改 p 的前驱的指针域，因此必须先定位前驱。",
+        "第 3 步：定位前驱要从头遍历，最坏走 n 步，时间复杂度 O(n)。"
+      ],
+      "rationale": "题干的关键条件是「删除 p 本身」而不是「在 p 之后插入」。删除要改前驱指针，而单链表无前驱指针，只能遍历寻找，所以是 O(n)；若误以为链表删除都 O(1)，就会错选 A。",
+      "source": {
+        "file": "数据结构讲义.pdf",
+        "page": 0,
+        "quote": "在已知指针 p 所指结点之后插入新结点只需 O(1)，但在单链表中删除结点 p 本身需要找到其前驱，时间复杂度为 O(n)"
+      },
+      "pointId": "n3_15"
+    }
+  ]
+}

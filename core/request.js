@@ -56,6 +56,22 @@ async function dispatch(core, path, method, body) {
     if (parts[2] === 'files' && parts.length === 4 && m === 'DELETE') {
       return { status: 200, data: { ok: core.removeFile(id, parts[3]) } };
     }
+    // v2：图书原图回读。题目详情里的「原图」经此路由拿到原始字节（base64），
+    // 只回读 Core 书库内已登记的文件，不接受任意路径；fileId 已由上方 assertSafeId 校验。
+    if (parts[2] === 'files' && parts.length === 5 && parts[4] === 'raw' && m === 'GET') {
+      const book = core.getBook(id);
+      const rec = book && (book.files || []).find(f => f.id === parts[3]);
+      if (!rec) return { status: 404, data: { error: '文件不存在' } };
+      const buf = core.getFileBuffer(id, parts[3]);
+      if (!buf) return { status: 404, data: { error: '文件字节不可读' } };
+      const ext = String(rec.ext || '').toLowerCase();
+      const mime = {
+        '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+        '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp',
+        '.tif': 'image/tiff', '.tiff': 'image/tiff', '.pdf': 'application/pdf'
+      }[ext] || 'application/octet-stream';
+      return { status: 200, data: { name: rec.name, mime, isImage: !!rec.isImage, data: buf.toString('base64') } };
+    }
     if (parts[2] === 'analyze' && parts.length === 3 && m === 'POST') {
       const r = await core.analyze(id, { cfg: b.cfg || {}, maxTokens: b.maxTokens, timeoutMs: b.timeoutMs });
       return { status: 200, data: r };

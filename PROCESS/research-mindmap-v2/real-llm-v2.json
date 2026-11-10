@@ -1,0 +1,93 @@
+{
+  "label": "v2",
+  "ok": true,
+  "at": "2026-11-09T15:51:02.065Z",
+  "provider": "siliconflow",
+  "model": "deepseek-ai/DeepSeek-V4.1-Flash",
+  "corpusLen": 1659,
+  "elapsedMs": 121463,
+  "stats": {
+    "chapters": 4,
+    "sections": 9,
+    "points": 21,
+    "subtypes": 5,
+    "questionTypes": 7,
+    "questionTypeCounts": {
+      "选择题": 3,
+      "填空题": 3,
+      "判断题": 2,
+      "名词解释": 1,
+      "简答题": 2,
+      "计算题": 3,
+      "综合应用题": 1
+    },
+    "questionCount": 31,
+    "analyzedAt": "2026-11-09T15:51:02.037Z"
+  },
+  "metrics": {
+    "jsonParsed": true,
+    "fieldCompleteRate": 1,
+    "questionCount": 31,
+    "typeCoverage": 7,
+    "pathHitRate": 1,
+    "placeholderRate": 0,
+    "sourceHitRate": 1,
+    "checks": {
+      "jsonParsed": true,
+      "fieldCompleteRate": true,
+      "questionCount": true,
+      "typeCoverage": true,
+      "pathHitRate": true,
+      "placeholderRate": true,
+      "sourceHitRate": true
+    },
+    "passed": true,
+    "thresholds": {
+      "minQuestions": 8,
+      "maxQuestions": 60,
+      "minTypes": 3,
+      "minFieldRate": 0.9,
+      "minPathRate": 0.7,
+      "maxPlaceholderRate": 0,
+      "minSourceRate": 0.6
+    }
+  },
+  "samples": [
+    {
+      "type": "选择题",
+      "sub": "概念辨析类",
+      "stem": "下列关于线性表的说法中，正确的是（ ）。",
+      "answer": "A",
+      "solution": [
+        "第 1 步：回忆线性表定义：由 n 个数据元素组成的有限序列。",
+        "第 2 步：n=0 时为空表，因此 A 正确。",
+        "第 3 步：线性表元素不要求有序，存储结构有顺序和链式两种，长度有限，故 B、C、D 错误。"
+      ],
+      "rationale": "解题思路：直接依据线性表的定义逐项判断。",
+      "source": {
+        "file": "数据结构讲义.pdf",
+        "page": 0,
+        "quote": "线性表是由 n 个数据元素组成的有限序列，记作 L=(a1,a2,...,an)。当 n=0 时称为空表。"
+      },
+      "pointId": "n3_3"
+    },
+    {
+      "type": "选择题",
+      "sub": "概念辨析类",
+      "stem": "顺序表支持随机访问，按下标查找第 i 个元素的时间复杂度为（ ）。",
+      "answer": "A",
+      "solution": [
+        "第 1 步：顺序表用一段地址连续的存储单元依次存放元素。",
+        "第 2 步：由首地址和下标可直接计算元素地址。",
+        "第 3 步：因此按下标查找第 i 个元素的时间复杂度为 O(1)。"
+      ],
+      "rationale": "解题思路：顺序存储的地址连续性带来随机访问能力。",
+      "source": {
+        "file": "数据结构讲义.pdf",
+        "page": 0,
+        "quote": "顺序表用一段地址连续的存储单元依次存放元素，支持随机访问，按下标查找第 i 个元素的时间复杂度为 O(1)"
+      },
+      "pointId": "n3_5"
+    }
+  ]
+}

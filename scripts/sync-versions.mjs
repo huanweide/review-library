@@ -30,6 +30,52 @@ if (!fs.existsSync(versionFile) || fs.readFileSync(versionFile, 'utf8') !== want
   fs.writeFileSync(versionFile, want); changed++; console.log('  已同步：VERSION');
 } else console.log('  已一致：VERSION');
 
+// 1b. README 顶部定位行。check-versions.mjs 会检查第 3 行的版本号，但此前 sync 不写它，
+// 于是每次升版本都漂移、必须手改 README，违背「改一处即传播」。这里补齐闭环。
+const readmeFile = path.join(ROOT, 'README.md');
+if (fs.existsSync(readmeFile)) {
+  const rawR = fs.readFileSync(readmeFile, 'utf8');
+  const lines = rawR.split('\n');
+  const reV = /v\d+\.\d+\.\d+/;
+  if (lines[2] && reV.test(lines[2])) {
+    const nextLine = lines[2].replace(reV, 'v' + V);
+    if (nextLine !== lines[2]) {
+      lines[2] = nextLine;
+      fs.writeFileSync(readmeFile, lines.join('\n'));
+      changed++;
+      console.log('  已同步：README.md 顶部定位行');
+    } else console.log('  已一致：README.md 顶部定位行');
+  } else {
+    console.error('  ✗ README.md 第 3 行找不到版本号：' + (lines[2] || ''));
+    process.exitCode = 1;
+  }
+}
+
+// 1c. package-lock.json 的顶层 version 与 packages[""].version。
+// npm ci 不校验根 version 一致性（本机 npm ci --dry-run 实测通过），但 lock 留旧号会造成
+// 版本号不一致的假象，也会让下次重建 lock 产生无关 diff。只替换文件里前两处 version
+// （顶层 + 根包），依赖包版本一律不动；写完用 JSON.parse 复核，防止误伤。
+const lockFile = path.join(ROOT, 'package-lock.json');
+if (fs.existsSync(lockFile)) {
+  const rawL = fs.readFileSync(lockFile, 'utf8');
+  let seen = 0;
+  const nextL = rawL.replace(/"version"\s*:\s*"\d+\.\d+\.\d+"/g,
+    (m) => (++seen <= 2 ? '"version": "' + V + '"' : m));
+  try {
+    const parsed = JSON.parse(nextL);
+    if (parsed.version !== V || !parsed.packages || parsed.packages[''].version !== V) {
+      throw new Error('lock 顶层/根包版本未对齐');
+    }
+  } catch (e) {
+    console.error('  ✗ package-lock.json 同步校验失败：' + e.message + '（已放弃写入）');
+    process.exitCode = 1;
+  }
+  if (!(process && process.exitCode)) {
+    if (nextL !== rawL) { fs.writeFileSync(lockFile, nextL); changed++; console.log('  已同步：package-lock.json（2 处）'); }
+    else console.log('  已一致：package-lock.json');
+  }
+}
+
 // 2. 根 package.json 的 buildVersion（不动 version 本身，它是真源）
 sub(rootPkg, 'package.json#build.buildVersion', /("buildVersion"\s*:\s*")[^"]+(")/, '$1' + V + '$2');
 

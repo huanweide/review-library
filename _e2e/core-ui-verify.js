@@ -39,8 +39,31 @@ const ANALYSIS_PAYLOAD = {
     }]
   },
   questionIndex: [
-    { type: '选择题', items: [{ title: '顺序表', path: ['第一章 数据结构', '1.1 线性表', '顺序表'] }] },
-    { type: '简答题', items: [{ title: '链表', path: ['第一章 数据结构', '1.1 线性表', '链表'] }] }
+    { type: '选择题', items: [{ title: '顺序表', path: ['第一章 数据结构', '1.1 线性表', '顺序表'], questions: [
+      { stem: '长为 10 的顺序表，在第 3 个位置插入元素，需要移动多少个元素？', options: ['A. 7 个', 'B. 8 个', 'C. 9 个', 'D. 10 个'],
+        answer: 'B. 8 个 —— 套用 n-i+1 = 10-3+1 = 8。',
+        solution: ['第 1 步：确定 n=10、i=3。', '第 2 步：移动次数公式为 n-i+1。', '第 3 步：10-3+1=8。'],
+        rationale: '题干问的是固定位置的精确移动次数，不是等概率平均值，所以要用 n-i+1 而非 n/2；先辨认问的是精确值还是期望值，再选公式，误用 n/2 会算出 5。',
+        pitfalls: '把 n-i+1 与 n/2 混淆。', difficulty: '基础',
+        pointPath: ['第一章 数据结构', '1.1 线性表', '顺序表'],
+        source: { file: '验证讲义.txt', page: 2, quote: '顺序表在第 i 个位置插入需移动 n-i+1 个元素' } },
+      { stem: '顺序表按下标查找第 i 个元素的时间复杂度是？', options: ['A. O(1)', 'B. O(n)', 'C. O(log n)'],
+        answer: 'A. O(1) —— 连续存储可由首地址加下标直接算出地址。',
+        solution: ['第 1 步：顺序表地址连续。', '第 2 步：地址 = 首地址 + i × 元素大小。', '第 3 步：一次计算即可，故 O(1)。'],
+        rationale: '看到「按下标」就想到随机访问能力，这是顺序存储区别于链式存储的根本特征；若误判成需要遍历，是把顺序表和单链表的查找代价记反了。',
+        pitfalls: '把顺序表的 O(1) 随机访问与链表的 O(n) 查找记反。', difficulty: '基础',
+        pointPath: ['第一章 数据结构', '1.1 线性表', '顺序表'],
+        source: { file: '原图.png', page: 0, quote: '顺序表支持随机访问，查找第 i 个元素 O(1)' } }
+    ] }] },
+    { type: '简答题', items: [{ title: '链表', path: ['第一章 数据结构', '1.1 线性表', '链表'], questions: [
+      { stem: '简述单链表在已知结点指针 p 后插入新结点为何是 O(1)，删除 p 本身为何是 O(n)。', options: [],
+        answer: '插入只需改指针；删除 p 需先从头找到前驱结点，故 O(n)。',
+        solution: ['第 1 步：p 之后插入，只需令新结点 next 指向 p.next 再改 p.next。', '第 2 步：这两步都是常数次指针赋值。', '第 3 步：删除 p 需要修改其前驱的 next，单链表没有前驱指针，必须遍历。'],
+        rationale: '切入点在于「单链表只有后继指针」这一结构约束；先判断操作需要哪些结点的指针，再看这些指针是否可直接获得，就能推出两种操作的代价差异。',
+        pitfalls: '误以为删除 p 也能 O(1)，忽略前驱不可达。', difficulty: '进阶',
+        pointPath: ['第一章 数据结构', '1.1 线性表', '链表'],
+        source: { file: '验证讲义.txt', page: 3, quote: '单链表插入 O(1)，删除结点需找前驱 O(n)' } }
+    ] }] }
   ],
   summary: '全书概览：线性表的两种存储结构及其复杂度差异。'
 };
@@ -171,7 +194,7 @@ async function runForm({ label, url, tmpRoot, initScript }) {
       if (n >= 6) { analyzed = true; break; }
       await sleep(250);
     }
-    ok(analyzed, '整体分析真跑通：导图渲染出 ≥6 个节点');
+    ok(analyzed, '整体分析真跑通：大纲数据含 ≥6 个节点（画布可见性由后面 SVG 断言另验）');
     const analyzeMsg = await page.$eval('#analyzeStatus', (e) => e.textContent || '');
     ok(/分析完成/.test(analyzeMsg) && !/正在把整本书/.test(analyzeMsg),
       '分析完成后状态条更新为「分析完成…」，不再与 toast 自相矛盾：' + analyzeMsg.slice(0, 80));
@@ -211,10 +234,17 @@ async function runForm({ label, url, tmpRoot, initScript }) {
       highlights: document.querySelectorAll('#tree .node.highlight').length,
       highlightedId: (document.querySelector('#tree .node.highlight') || {}).dataset
         ? document.querySelector('#tree .node.highlight').dataset.id : '',
+      // v2 默认「导图/画布」模式，#tree 大纲是 hidden。只断言大纲高亮是假绿，必须验可见画布。
+      canvasVisible: (() => { const c = document.querySelector('#mmCanvas'); return !!c && getComputedStyle(c).display !== 'none'; })(),
+      canvasLocate: document.querySelectorAll('#mmCanvas .mm-node.locate').length,
+      outlineVisible: (() => { const t = document.querySelector('#tree'); return !!t && getComputedStyle(t).display !== 'none'; })(),
     }));
     ok(linkage.mindmapActive, 'F2 点题型卡片后自动切回思维导图 tab');
-    ok(linkage.highlights === 1, 'F2 恰好 1 个节点被高亮（实为 ' + linkage.highlights + '）');
+    ok(linkage.highlights === 1, 'F2 大纲数据层恰好 1 个节点被高亮（实为 ' + linkage.highlights + '）');
     ok(/^n\d+_\d+$/.test(linkage.highlightedId || ''), 'F2 高亮节点带确定性 id（' + linkage.highlightedId + '）');
+    ok(linkage.outlineVisible === false, 'F2 时大纲确为隐藏态（证明上面那条只是数据层证据）');
+    ok(linkage.canvasVisible && linkage.canvasLocate === 1,
+      'F2 可见画布上该知识点真被定位高亮（实为 locate=' + linkage.canvasLocate + '，visible=' + linkage.canvasVisible + '）');
 
     // 10) 概览页截断/来源信息（F6）可见
     await page.click('.tab[data-tab="summary"]'); await sleep(120);
@@ -222,6 +252,114 @@ async function runForm({ label, url, tmpRoot, initScript }) {
     ok(/全书 \d+ 字/.test(metaText), 'F6 概览显示全书字数来源信息');
 
     await page.click('.tab[data-tab="mindmap"]'); await sleep(120);
+
+    // ===== v2：题型树并入导图 + 三级下钻 + 原图/解答/思路（真点击，非 DOM 存在）=====
+    await page.click('#closeQitem'); await sleep(100);
+
+    // 导入一张真实图片，让「图书原图」路径可真验（不是只显示文件名占位）。
+    await page.setInputFiles('#fileInput', {
+      name: '原图.png', mimeType: 'image/png',
+      buffer: Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360000002000100ffff03000006000557bfabd40000000049454e44ae426082', 'hex'),
+    });
+    await sleep(700);
+
+    // 11) SVG 画布真渲染（不是 ul/li 列表冒充导图）
+    const svgNodes = await page.$$eval('#mmCanvas svg .mm-node', (els) => els.length).catch(() => 0);
+    ok(svgNodes >= 6, 'SVG 导图画布渲染出 ≥6 个节点（实为 ' + svgNodes + '）');
+    const svgEdges = await page.$$eval('#mmCanvas svg path', (els) => els.length).catch(() => 0);
+    ok(svgEdges >= 5, 'SVG 画布有连线（' + svgEdges + ' 条），不是缩进列表');
+
+    // 12) 3 布局切换真生效（坐标变化，不是只换按钮高亮）
+    // 比「全部节点坐标串」而非只比 root 的 x：root 在 right/both 下可能同为 28，会假绿。
+    const coords = () => page.$$eval('#mmCanvas svg .mm-node rect', els => els.map(e => e.getAttribute('x') + ',' + e.getAttribute('y')).join('|'));
+    const xRight = await coords();
+    await page.click('[data-layout="both"]'); await sleep(200);
+    const xBoth = await coords();
+    ok(xRight !== xBoth, '切「双侧」布局后节点坐标真变化（' + xRight.length + ' → ' + xBoth.length + ' 字符坐标串）');
+    await page.click('[data-layout="org"]'); await sleep(200);
+    const xOrg = await coords();
+    ok(xBoth !== xOrg, '切「组织图」布局后坐标再次变化');
+    await page.click('[data-layout="right"]'); await sleep(150);
+
+    // 13) 题型分类长进同一张导图
+    await page.click('[data-perspective="question"]'); await sleep(250);
+    const qkinds = await page.$$eval('#mmCanvas svg .mm-node', els => els.map(e => e.getAttribute('data-kind')));
+    ok(qkinds.includes('qtype'), '题型树含题型节点（kind=qtype）');
+    ok(qkinds.includes('qitem'), '题型树含子题型节点（kind=qitem）');
+    ok(qkinds.includes('question'), '题型树含题目节点（kind=question），三级形状成立');
+
+    // 14) 点子题型 → 看到所有题目
+    await page.click('#mmCanvas svg .mm-node[data-kind="qitem"]'); await sleep(250);
+    const panelVisible = await page.$eval('#qitemPanel', e => getComputedStyle(e).display !== 'none');
+    const listCount = await page.$$eval('#qitemList .sp-qlist-item', els => els.length).catch(() => 0);
+    ok(panelVisible, '点子题型节点后题目列表面板打开');
+    ok(listCount === 2, '该子题型的「所有题目」列出 2 道（实为 ' + listCount + '）');
+
+    // 15) 再点题目 → 图书原图 + 详细解答 + 思路
+    await page.click('#qitemList .sp-qlist-item:nth-child(2)'); await sleep(350);
+    const detail = await page.evaluate(() => ({
+      visible: getComputedStyle(document.querySelector('#questionModal')).display !== 'none',
+      stem: (document.querySelector('#qdStem') || {}).textContent || '',
+      answer: (document.querySelector('#qdAnswer') || {}).textContent || '',
+      steps: document.querySelectorAll('#qdSolution li').length,
+      rationale: (document.querySelector('#qdRationale') || {}).textContent || '',
+      source: (document.querySelector('#qdSource') || {}).textContent || '',
+      img: (document.querySelector('#qdImage img') || {}).src || '',
+      imgVisible: getComputedStyle(document.querySelector('#qdImage')).display !== 'none',
+    }));
+    ok(detail.visible, '点题目后详情弹窗打开');
+    ok(detail.stem.length > 10, '详情含完整题干：' + detail.stem.slice(0, 34));
+    ok(detail.answer.length > 5, '详情含答案（含理由，非单字母）');
+    ok(detail.steps >= 2, '详情含分步详细解答（' + detail.steps + ' 步）');
+    ok(detail.rationale.length >= 30, '详情含解题思路且非一句套话（' + detail.rationale.length + ' 字）');
+    ok(/原图\.png|验证讲义/.test(detail.source), '详情显示图书来源：' + detail.source.slice(0, 40));
+    ok(detail.imgVisible && /^data:image\/png;base64,/.test(detail.img), '图片型资料显示真·图书原图（raw 路由回读 base64）');
+    // 真截图发现的视觉缺陷：详情弹窗被子题型面板盖住，右下「定位」按钮不可点。
+    const zOrder = await page.evaluate(() => {
+      const btn = document.querySelector('#qdLocate');
+      const r = btn.getBoundingClientRect();
+      const top = document.elementFromPoint(Math.round(r.left + r.width / 2), Math.round(r.top + r.height / 2));
+      return { topIsButton: !!(top && (top === btn || btn.contains(top))), topTag: top ? (top.id || top.className) : '' };
+    });
+    ok(zOrder.topIsButton, '详情弹窗层级高于题目列表：「定位知识点」按钮真实可点（命中 ' + zOrder.topTag + '）');
+    await page.screenshot({ path: path.join(SHOTS, label.replace(/[^a-zA-Z0-9]/g, '-') + '-question-detail.png'), fullPage: true });
+    await page.click('#closeQuestion'); await sleep(120);
+    await page.click('#closeQitem'); await sleep(120);
+
+    // 16) 搜索命中高亮 / 大纲双模式 / 键盘
+    await page.fill('#mmSearch', '选择题'); await sleep(200);
+    const hits = await page.$$eval('#mmCanvas svg .mm-node.hit', els => els.length).catch(() => 0);
+    ok(hits >= 1, '全文搜索命中并高亮节点（' + hits + ' 个）');
+    await page.fill('#mmSearch', ''); await sleep(120);
+    await page.click('#btnOutline'); await sleep(180);
+    const outlineOn = await page.evaluate(() => ({
+      tree: getComputedStyle(document.querySelector('#tree')).display !== 'none',
+      canvas: getComputedStyle(document.querySelector('#mmCanvas')).display === 'none',
+    }));
+    ok(outlineOn.tree && outlineOn.canvas, '切「大纲」模式：DOM 树显示、SVG 画布隐藏（Xmind 双模式）');
+    await page.click('[data-view="canvas"]'); await sleep(150);
+
+    // 17) 双击节点聚焦下钻 + 返回全图
+    await page.dblclick('#mmCanvas svg .mm-node[data-kind="qtype"]'); await sleep(350);
+    const focusBack = await page.$eval('#btnFocusBack', e => getComputedStyle(e).display !== 'none');
+    ok(focusBack, '双击节点进入聚焦下钻，「返回全图」按钮出现');
+    if (focusBack) await page.click('#btnFocusBack');
+    await sleep(150);
+
+    // 18) MD / OPML / PNG 导出真产出内容
+    await page.click('#btnExportMd'); await sleep(300);
+    const mdBlob = await page.evaluate(() => window.__lastBlob);
+    ok(mdBlob && /# |^- /m.test(mdBlob.text) && /题型分类|数据结构/.test(mdBlob.text),
+      '导出 Markdown 含层级大纲（' + (mdBlob ? mdBlob.text.length : 0) + ' 字符）');
+    await page.click('#btnExportOpml'); await sleep(300);
+    const opmlBlob = await page.evaluate(() => window.__lastBlob);
+    ok(opmlBlob && opmlBlob.text.includes('<opml') && opmlBlob.text.includes('<outline'), '导出 OPML 合法');
+    await page.click('#btnExportPng'); await sleep(900);
+    const pngBlob = await page.evaluate(() => window.__lastBlob);
+    ok(pngBlob && /image\/png/.test(pngBlob.type), '导出 PNG 生成位图 blob');
+
+    // 恢复知识树视角，截主图
+    await page.click('[data-perspective="knowledge"]'); await sleep(200);
     await page.screenshot({ path: path.join(SHOTS, label.replace(/[^a-zA-Z0-9]/g, '-') + '.png'), fullPage: true });
 
     // 只排除已明确归因的预期错误（favicon、反证故意触发的 file:// fetch 失败）。

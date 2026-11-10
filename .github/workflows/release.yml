@@ -52,10 +52,12 @@ jobs:
         env:
           ELECTRON_RUN_AS_NODE: ''
 
-      # 打包 DSH 插件为独立 zip（每个 tag 都产出，文件名带版本，对应可安装版本）
+      # 打包 DSH 插件为独立 zip（每个 tag 都产出，文件名带版本，对应可安装版本）。
+      # 源目录必须是 plugins/dsh-review-analysis/（真 DeepSeek Harness，读 ~/.dsh）；
+      # plugins/review-analysis/ 是 WorkBuddy 专家形态，两者宿主不同，见 plugins/README.md 形态地图。
       - name: Package DSH plugin zip
         run: |
-          Compress-Archive -Path plugins/review-analysis -DestinationPath review-analysis-dsh-plugin-${{ github.ref_name }}.zip -Force
+          Compress-Archive -Path plugins/dsh-review-analysis -DestinationPath review-analysis-dsh-plugin-${{ github.ref_name }}.zip -Force
           ls review-analysis-dsh-plugin-${{ github.ref_name }}.zip
 
       # 插件 zip：每个 tag 都上传；notes 仅在插件 tag 时生成（避免与桌面步骤冲突）
