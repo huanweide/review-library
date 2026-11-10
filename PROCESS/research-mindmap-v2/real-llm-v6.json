@@ -1,0 +1,231 @@
+{
+  "label": "v6",
+  "ok": true,
+  "at": "2026-11-10T10:05:09.274Z",
+  "provider": "siliconflow",
+  "model": "deepseek-ai/DeepSeek-V4.1-Flash",
+  "corpusLen": 1659,
+  "elapsedMs": 158009,
+  "stats": {
+    "chapters": 5,
+    "sections": 12,
+    "points": 27,
+    "subtypes": 12,
+    "questionTypes": 6,
+    "questionTypeCounts": {
+      "选择题": 3,
+      "计算题": 4,
+      "简答题": 2,
+      "判断题": 2,
+      "综合应用题": 1,
+      "填空题": 1
+    },
+    "questionCount": 15,
+    "analyzedAt": "2026-11-10T10:05:09.272Z"
+  },
+  "metrics": {
+    "jsonParsed": true,
+    "fieldCompleteRate": 1,
+    "questionCount": 15,
+    "typeCoverage": 6,
+    "pathHitRate": 1,
+    "placeholderRate": 0,
+    "sourceHitRate": 1,
+    "answerRichRate": 1,
+    "rationaleAvgLen": 149,
+    "checks": {
+      "jsonParsed": true,
+      "fieldCompleteRate": true,
+      "questionCount": true,
+      "typeCoverage": true,
+      "pathHitRate": true,
+      "placeholderRate": true,
+      "sourceHitRate": true,
+      "answerRichRate": true,
+      "rationaleDepth": true
+    },
+    "passed": true,
+    "thresholds": {
+      "minQuestions": 8,
+      "maxQuestions": 60,
+      "minTypes": 3,
+      "minFieldRate": 0.9,
+      "minPathRate": 0.7,
+      "maxPlaceholderRate": 0,
+      "minSourceRate": 0.6,
+      "minAnswerRichRate": 0.8,
+      "minRationaleLen": 30
+    }
+  },
+  "samples": [
+    {
+      "type": "选择题",
+      "sub": "存储结构对比类",
+      "stem": "关于顺序表与链表的查找效率，下列说法正确的是哪一项？",
+      "answer": "A. 顺序表按下标查找第 i 个元素为 O(1)，链表查找第 i 个元素为 O(n) —— 顺序表地址连续，可由首地址直接算出元素地址；链表必须从头逐结点遍历。",
+      "solution": [
+        "第 1 步：回忆顺序表的存储特点，元素放在一段地址连续的存储单元中。",
+        "第 2 步：由首地址加下标偏移即可直接算出第 i 个元素的地址，故为 O(1)。",
+        "第 3 步：链表结点地址不连续，只能沿指针从头走到第 i 个结点，故为 O(n)。",
+        "第 4 步：对比四个选项，只有 A 与上述分析一致。"
+      ],
+      "rationale": "题干问的是「按下标查找第 i 个元素」的效率，关键词「按下标」直接指向顺序表的随机访问特性；链表没有下标概念，只能顺序访问。判断时应先区分两种存储结构的访问方式，再比较复杂度。若只记住「链表插入删除快」就笼统认为链表处处更优，就会误选 B 或 C，这是本题最常见的错误做法。",
+      "source": {
+        "file": "数据结构讲义.pdf",
+        "page": 0,
+        "anchor": "【块1】",
+        "quote": "支持随机访问，按下标查找第 i 个元素的时间复杂度为 O(1)；链表用指针串联结点"
+      },
+      "pointId": "n3_5"
+    },
+    {
+      "type": "选择题",
+      "sub": "存储结构对比类",
+      "stem": "下列关于单链表结点操作的叙述，正确的是哪一项？",
+      "answer": "A. 在已知指针 p 所指结点之后插入新结点只需 O(1)，删除 p 所指结点本身需要 O(n) —— 后插只需改指针，删 p 必须先找前驱。",
+      "solution": [
+        "第 1 步：分析后插操作，已知 p 时新结点直接挂到 p 之后，修改指针即可，与表长无关，为 O(1)。",
+        "第 2 步：分析删除 p 本身，需要让 p 的前驱指向 p 的后继，但单链表结点没有指向前驱的指针。",
+        "第 3 步：因此必须从头遍历找到 p 的前驱，最坏要走 n 步，为 O(n)。",
+        "第 4 步：综合两步结论，选项 A 正确。"
+      ],
+      "rationale": "题干特意强调「已知指针 p」，这是判断复杂度的关键条件：已知 p 使后插不需要查找位置，所以是 O(1)；但删除要求改前驱的指针域，而单链表只能单向走，找前驱的代价无法省掉。很多人以为「已知 p 就能 O(1) 删除」，忽略了前驱指针这一必要条件，于是错选 C；也有人把后插误判为 O(n)，错选 B。",
+      "source": {
+        "file": "数据结构讲义.pdf",
+        "page": 0,
+        "anchor": "【块1】",
+        "quote": "在已知指针 p 所指结点之后插入新结点只需 O(1)，但在单链表中删除结点 p 本身需要找到其前驱"
+      },
+      "pointId": "n3_13"
+    }
+  ],
+  "quoteAudit": {
+    "checked": 15,
+    "hit": 15,
+    "missed": 0,
+    "rate": 1,
+    "details": [
+      {
+        "i": 0,
+        "id": "q0",
+        "anchor": "【块1】",
+        "quote": "支持随机访问，按下标查找第 i 个元素的时间复杂度为 O(1)；链表用指针串联结点",
+        "found": true,
+        "reason": "exact-span"
+      },
+      {
+        "i": 1,
+        "id": "q1",
+        "anchor": "【块1】",
+        "quote": "在已知指针 p 所指结点之后插入新结点只需 O(1)，但在单链表中删除结点 p 本身需要找到其前驱",
+        "found": true,
+        "reason": "exact-span"
+      },
+      {
+        "i": 2,
+        "id": "q2",
+        "anchor": "【块1】",
+        "quote": "堆排序与快速排序都是不稳定排序；冒泡排序、直接插入排序、归并排序是稳定排序",
+        "found": true,
+        "reason": "exact-span"
+      },
+      {
+        "i": 3,
+        "id": "q3",
+        "anchor": "【块1】",
+        "quote": "折半查找要求表有序且采用顺序存储，每次把区间缩小一半，时间复杂度 O(log2 n)",
+        "found": true,
+        "reason": "exact-span"
+      },
+      {
+        "i": 4,
+        "id": "q4",
+        "anchor": "【块1】",
+        "quote": "删除第 i 个元素需要前移 n-i 个元素，平均移动次数为 (n-1)/2",
+        "found": true,
+        "reason": "exact-span"
+      },
+      {
+        "i": 5,
+        "id": "q5",
+        "anchor": "【块1】",
+        "quote": "若循环队列数组容量为 m，则最多可存放 m-1 个元素",
+        "found": true,
+        "reason": "exact-span"
+      },
+      {
+        "i": 6,
+        "id": "q6",
+        "anchor": "【块1】",
+        "quote": "若叶子结点数为 n0、度为 2 的结点数为 n2，则 n0 = n2 + 1",
+        "found": true,
+        "reason": "exact-span"
+      },
+      {
+        "i": 7,
+        "id": "q7",
+        "anchor": "【块1】",
+        "quote": "对长度为 11 的有序表，最多比较 4 次即可判定查找失败",
+        "found": true,
+        "reason": "exact-span"
+      },
+      {
+        "i": 8,
+        "id": "q8",
+        "anchor": "【块1】",
+        "quote": "先序首字符 A 为根，在中序中找到 A，其左侧 DBE 为左子树、右侧 FCG 为右子树，递归即可还原",
+        "found": true,
+        "reason": "exact-span"
+      },
+      {
+        "i": 9,
+        "id": "q9",
+        "anchor": "【块1】",
+        "quote": "读到左括号入栈，读到右括号时弹出栈顶并检查是否配对，扫描结束后栈空则匹配成功",
+        "found": true,
+        "reason": "exact-span"
+      },
+      {
+        "i": 10,
+        "id": "q10",
+        "anchor": "【块1】",
+        "quote": "判断题常见误区：链表不支持随机访问，因此「链表查找第 i 个元素比顺序表更快」是错误的",
+        "found": true,
+        "reason": "exact-span"
+      },
+      {
+        "i": 11,
+        "id": "q11",
+        "anchor": "【块1】",
+        "quote": "队空条件是 front == rear，队满条件是 (rear+1) % m == front，其中 m 为数组容量",
+        "found": true,
+        "reason": "exact-span"
+      },
+      {
+        "i": 12,
+        "id": "q12",
+        "anchor": "【块1】",
+        "quote": "快速排序采用分治思想，平均时间复杂度 O(n log n)，最坏情况（初始序列已有序）退化为 O(n^2)",
+        "found": true,
+        "reason": "exact-span"
+      },
+      {
+        "i": 13,
+        "id": "q13",
+        "anchor": "【块1】",
+        "quote": "对任何一棵非空二叉树，若叶子结点数为 n0、度为 2 的结点数为 n2，则 n0 = n2 + 1",
+        "found": true,
+        "reason": "exact-span"
+      },
+      {
+        "i": 14,
+        "id": "q14",
+        "anchor": "【块1】",
+        "quote": "直接插入排序在初始序列基本有序时效率最高，最好情况时间复杂度为 O(n)，是稳定排序",
+        "found": true,
+        "reason": "exact-span"
+      }
+    ]
+  },
+  "anchorRate": 1
+}

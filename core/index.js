@@ -38,6 +38,8 @@ class Core {
   removeFile(id, fileId) { return this.store.removeFile(id, fileId); }
 
   // 拼整本书文本（各文件文本用文件名分隔后拼接），供整体分析。
+  // v3：每个文件先经 segmentText 打「页/段锚点」，语料才能被引用、被覆盖统计、被引文校验。
+  // 只改拼装输出，不重抽、不改写已落盘的文本缓存 —— 老书零迁移。
   getBookText(id) {
     const book = this.store.getBook(id);
     if (!book) return null;
@@ -45,7 +47,9 @@ class Core {
     book.files.forEach(f => {
       if (f.isImage) return; // 图片不进文本，后续交给多模态
       const t = this.store.getFileText(id, f.id);
-      if (t && t.trim()) parts.push('【文件：' + f.name + '】\n' + t);
+      if (!t || !t.trim()) return;
+      const segs = extract.segmentText(t, { name: f.name, ext: f.ext });
+      parts.push('【文件：' + f.name + '】\n' + segs.map(s => s.anchor + s.text).join('\n'));
     });
     return parts.join('\n\n');
   }

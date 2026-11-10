@@ -5,6 +5,65 @@
 DSH 插件与 WorkBuddy 专家的 manifest，以及 README 顶部定位行；`scripts/check-versions.mjs`
 挂在 `pretest` 上做漂移检测。发版 tag 必须与 `package.json` 严格一致（`v1.3.0`）。
 
+## 未发布（next）— 2026-11-10
+
+> **本轮不发版、不升版本号。** 下列改动已在本地完成并全量验收，等明确发布指令后
+> 再统一升 `1.5.0`、同步 8 处版本常量、打 tag。云端最新仍是 `v1.4.0`。
+
+**定位**：结合高 star 竞品「确实比我们合理」的能力，做 1 块优化 + 1 块美化。
+基准与采纳门槛见 `PROCESS/research-competitor-e2e/visual-benchmark.md`、
+`fusion-decisions.md`；上一轮横向对比的 star 真值与逐字符引文在 `best-practices.md`。
+
+**先确认，再采纳**（不照单全收）：
+- 采纳「引用锚定」：DeepTutor「cited page by page」、PageIndex「Page-level citations」、
+  NotebookLM「exact quotes from your sources」是竞品共识；我方 `real-llm-v5.json` 两道样例
+  `page` 全为 0、`quote` 由模型自报且 `measureQuality()` 只校验文件名 —— **差距属实**。
+- 采纳「长书结构化」：PageIndex 实测「at 805 pages the document no longer fits in the context
+  window at all」；我方 `raw.slice(0, 50000)` 从头砍、后半本静默丢失 —— **差距属实**。
+- 否决：RAG 分块 / 逐页多次调用 / 先出大纲供审的两阶段 / 播客 / AI 教师 / 多用户协作 ——
+  与「一次 API 整本整体分析」「本地单机」硬需求冲突，或属独立产品线。
+- 缓做：F1「出题→作答→批改→错题→间隔复习闭环接进 core」是架构级差距，但涉及两套 store
+  合并与已有书库迁移，按「不可逆动作先确认边界」铁律本轮不动，留下一轮。
+
+**优化块 · 引用锚定 + 结构化语料**（仍是严格一次 API，零数据迁移）
+- `core/extract.js`：PDF 由 `pdf-parse` 的 `pagerender` 逐页注入真实页码标记；
+  `segmentText()` 把文本切为 `{anchor, page, text}`，锚点为 `【P.3】`（PDF 真页码）或
+  `【块2】`（文本块坐标）。老缓存无页码标记时按块切，不重抽、不改落盘格式。
+- `core/index.js`：`getBookText()` 输出带锚点语料；`core/analyze.js` 的 `composeCorpus()`
+  保证任何调用方（含绕过 Core 的脚本/插件）都拿到带锚点的规范语料。
+- 长书超预算时**按文件均分、跨文件均衡取样**，替掉从头截断；概览逐份资料如实显示
+  「共多少字 / 取了多少字」，不再只给一个模糊的「已截断」。
+- 提示词新增 `source.anchor` 契约：必须逐字抄语料里的现成锚点，引文必须是该锚点后的连续原文。
+- 新增 `verifyQuotes()`：用**真正送进模型的语料**逐字校验引文，结果写回每题
+  `quoteVerified` 与 `result.quoteAudit`；题目详情显示锚点与「已核对 / 未能在原文中定位」徽章。
+  纯文本资料明确写「按锚点+引文直接定位」，不再套用 PDF 的「页图需视觉能力」措辞。
+
+**美化块 · 现代知识工作台规范**（不改任何 DOM id/class 契约）
+- `renderer/css/core.css` 重写为语义 token 体系（surface 0–3 色阶 / 单一强调色 / 状态色只给状态 /
+  圆角与间距节奏 / 统一缓动），新增 `prefers-color-scheme` 深浅双主题，CSS 首帧生效无白闪；
+  去渐变顶栏、双层重阴影、14px 大圆角；补空状态三步引导、加载骨架、可恢复错误态。
+- 导图 SVG 的背景 / 节点 / 文字色改由 `svgTheme()` 从 CSS 变量注入，深色模式不再是一块白；
+  系统主题切换时自动重绘画布。尊重 `prefers-reduced-motion`。
+
+**验收（真跑，非自评）**
+- 判别测试 `test/core-anchor-v3.test.js`：baseline（v1.4.0）`4 通过 / 13 失败 / exit 1`
+  → candidate `32 / 0`；H 组用 pdf-parse 自带合法 5 页 PDF 夹具真解析（页序 1→5、15 个锚点块，
+  并补 G2「老题目无 quote 时如实报未命中」防回归）。
+- `npm test` 19/19、`test/core-mindmap-v2.test.js` 100/0、双形态真 Chromium e2e **121/0**、
+  `node --check` 73/73、版本 8 处 / 形态 18 处门禁、`npm ci --dry-run` 通过。
+- 真模型 `DeepSeek-V4.1-Flash` 重跑 `real-llm-v6.json`：15 题 / 6 类 / 5 章，九项判据全绿，
+  思路平均 149 字，**`source.anchor` 填写率 15/15、引文命中原文 15/15**，158.0s。
+- 双形态各截浅色 / 深色 / 题目详情 / 锚点核对 4 张真图，目视核对无白块、无溢出、层级正确。
+
+**KNOWN-LIMITATION（不夸大）**
+- `verifyQuotes()` 只校验「引文是否逐字存在于送进模型的语料」，**不校验** anchor 是否为真实锚点、
+  引文是否支撑该题、答案是否正确、`page` 是否对应真 PDF 页；15/15 命中不能读作「答案都对」。
+- 真模型验证语料仍是硬编码 1659 字 + 虚构文件名，未跑真实 PDF/Word 抽取语料；
+  v6 台账无上游 response id / usage 哈希，属脚本自报（但判据阈值与当前代码一致）。
+- 深色模式跟随系统，**没有应用内手动切换开关**；深色详情弹窗未单独截图目视（同一套 token 覆盖）。
+- 折叠分支搜不到、方向键只在命中间跳转、F1 闭环未统一、真 Electron GUI 未跑、PDF 页图不渲染，
+  均为既有遗留，本轮未扩大也未修复。
+
 ## v1.4.0 — 2026-11-10
 
 **思维导图 v2 + 一次 API 完整产出**。本轮按 maxloop 阶段零外查（Xmind / markmap /

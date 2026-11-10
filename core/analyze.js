@@ -80,18 +80,21 @@ const SYSTEM_PROMPT = `你是一位严谨的学科分析与出题专家。用户
     "pitfalls": "易错点：最容易错在哪、怎么避开",
     "difficulty": "基础 | 进阶 | 挑战",
     "pointPath": ["章标题", "节标题", "知识点标题"],
-    "source": { "file": "原文件名", "page": 12, "quote": "书中支撑这道题的原文片段（10-60 字）" }
+    "source": { "file": "原文件名", "page": 3, "anchor": "【P.3】", "quote": "书中支撑这道题的原文片段（10-60 字，逐字抄自该锚点后的正文）" }
   }
   · options：选择题 / 判断题必填 2-4 项，其它题型填 []；选项文本要完整（例如 "A. O(1)"），不能只写字母。
   · answer：**必须写「答案内容 + 简要理由」，不能只写一个字母**。选择题写成 "A. O(1) —— 顺序表由首地址加下标可直接算出元素地址"；其它题型写结论加一句依据。
   · solution：2-4 步的分步详细解答，必须能照着一步步做出来，不能只写结论。
   · rationale：**至少 2 句**，必须写清「从题干哪个条件切入」「为什么用这个方法」「常见的错误做法为什么不行」；禁止「直接依据定义判断」「根据题意可得」这类一句套话。
   · pointPath：该题考查的知识点路径，必须指向 outline 里的真实节点；
-  · source.file：只能从下面【资料文件清单】里选一个真实文件名；没有页码信息时 page 填 0；
+  · source.file：只能从下面【资料文件清单】里选一个真实文件名；
+  · source.anchor：**必须从全书内容里逐字抄一个现成锚点**，形如【P.3】（PDF 第 3 页）或【块2】/【块2-1】（第 2 个文本块）；不要自己编号、不要改格式。
+  · source.quote：必须是**该锚点后面正文里的连续原文片段**，10-60 字，逐字照抄；程序会拿它和原文逐字校验，编造、改写、跨块拼接都会被标成「引文未命中」。
+  · source.page：anchor 是【P.N】时填 N；anchor 是【块N】（无页码信息的资料）时填 0，不要猜页码。
   · stem / answer / solution / rationale 四项都不能为空。
 
 【一道合格题目的示例（照这个颗粒度写，不要照抄内容；示例刻意压成单行，你也必须这样输出）】
-{"stem":"长为 10 的顺序表，在第 3 个位置插入一个新元素，需要移动多少个元素？","options":["A. 7 个","B. 8 个","C. 9 个","D. 10 个"],"answer":"B. 8 个 —— 插入位置 i=3，需移动 n-i+1 = 10-3+1 = 8 个元素。","solution":["第 1 步：确定表长 n=10、插入位置 i=3。","第 2 步：套用移动次数公式 n-i+1。","第 3 步：10-3+1=8，因此需要移动 8 个元素。"],"rationale":"题干给的是某个固定位置的插入，所以要用精确公式 n-i+1 而不是平均值 n/2。先辨认问的是精确值还是期望值再选公式；若误用 n/2 会算出 5，这是最常见的错误做法。","pitfalls":"把固定位置的移动次数 n-i+1 与等概率平均移动次数 n/2 混淆。","difficulty":"基础","pointPath":["第一章 线性表","顺序存储","插入与删除"],"source":{"file":"数据结构讲义.pdf","page":3,"quote":"在长度为 n 的顺序表中，在第 i 个位置插入一个元素，共移动 n-i+1 个元素"}}
+{"stem":"长为 10 的顺序表，在第 3 个位置插入一个新元素，需要移动多少个元素？","options":["A. 7 个","B. 8 个","C. 9 个","D. 10 个"],"answer":"B. 8 个 —— 插入位置 i=3，需移动 n-i+1 = 10-3+1 = 8 个元素。","solution":["第 1 步：确定表长 n=10、插入位置 i=3。","第 2 步：套用移动次数公式 n-i+1。","第 3 步：10-3+1=8，因此需要移动 8 个元素。"],"rationale":"题干给的是某个固定位置的插入，所以要用精确公式 n-i+1 而不是平均值 n/2。先辨认问的是精确值还是期望值再选公式；若误用 n/2 会算出 5，这是最常见的错误做法。","pitfalls":"把固定位置的移动次数 n-i+1 与等概率平均移动次数 n/2 混淆。","difficulty":"基础","pointPath":["第一章 线性表","顺序存储","插入与删除"],"source":{"file":"数据结构讲义.pdf","page":3,"anchor":"【P.3】","quote":"在长度为 n 的顺序表中，在第 i 个位置插入一个元素，共移动 n-i+1 个元素"}}
 
 【输出格式契约（机器判定，不可协商）】
 - 首个非空字符必须是 {，最后一个非空字符必须是 }；中间只能是一个 JSON 对象。
@@ -108,7 +111,9 @@ const SYSTEM_PROMPT = `你是一位严谨的学科分析与出题专家。用户
 【资料文件清单】（source.file 只能从这里选）
 {{FILE_LIST}}
 
-要求：只输出一个合法 JSON 对象；结构完整、层级清晰；题目、答案、分步解答、解题思路必须基于给定资料文本，能回溯到清单里的文件。`;
+全书内容按【文件】与【P.N】/【块N】锚点组织；长书会跨文件均衡取样，每个文件的锚点都真实可引用。
+要求：只输出一个合法 JSON 对象；结构完整、层级清晰；题目、答案、分步解答、解题思路必须基于给定资料文本，
+能回溯到清单里的文件，且每道题的 source.anchor / source.quote 必须能在该书内容里逐字找到。`;
 
 // 归一化标题用于匹配：去空白 + 小写。
 function titleKey(s) { return String(s || '').replace(/\s+/g, '').toLowerCase(); }
@@ -122,18 +127,101 @@ function fileListBlock(files) {
     : '- （未登记文件名；source.file 请填「未知」，page 填 0）';
 }
 
-// F6：截断在 buildMessages 内完成，保证任何调用方都拿到有上限的语料。
-// v2：第三参 files 注入真实文件名清单，让模型把题目来源钉在可回溯的文件上。
-function buildMessages(bookTitle, fullText, files) {
+// v3：把「按锚点组织的语料」解析成 文件 → 块 两级结构。
+// 兼容老格式：没有【块N】/【P.N】锚点的行并入当前文件最后一个块，不会丢内容。
+const FILE_LINE = /^【文件：(.+)】\s*$/;
+const ANCHOR_LINE = /^(【(?:P\.\d+|块\d+(?:-\d+)?|页\d+)】)(.*)$/;
+
+function parseCorpus(fullText) {
+  const groups = [];
+  let cur = null;
+  String(fullText || '').split(/\r?\n/).forEach(line => {
+    const fm = line.match(FILE_LINE);
+    if (fm) { cur = { name: fm[1], blocks: [] }; groups.push(cur); return; }
+    if (!cur) { cur = { name: '（未标注文件）', blocks: [] }; groups.push(cur); }
+    const am = line.match(ANCHOR_LINE);
+    if (am) { cur.blocks.push({ anchor: am[1], text: am[2] }); return; }
+    if (!line.trim()) return;
+    if (!cur.blocks.length) cur.blocks.push({ anchor: '【块1】', text: '' });
+    const last = cur.blocks[cur.blocks.length - 1];
+    last.text += (last.text ? '\n' : '') + line;
+  });
+  return groups;
+}
+
+// v3：结构化语料 + 跨文件均衡覆盖。仍是**一次 API、单份语料**，不引入多阶段。
+// 根因：旧实现 raw.slice(0, MAX_CORPUS) 只能从头砍，长书后半本静默丢失；
+// 有了页/段锚点才有「按文件与块取舍」的可能，调大上限只是把问题往后推。
+function composeCorpus(fullText, maxChars) {
   const raw = String(fullText || '');
-  const corpus = raw.length > MAX_CORPUS ? raw.slice(0, MAX_CORPUS) : raw;
+  const cap = Number(maxChars) > 0 ? Math.floor(maxChars) : MAX_CORPUS;
+  const groups = parseCorpus(raw);
+  const coverage = groups.map(g => ({
+    file: g.name,
+    blocks: g.blocks.length,
+    totalChars: g.blocks.reduce((a, b) => a + b.text.length, 0),
+    keptChars: 0,
+    keptBlocks: 0
+  }));
+  const totalChars = coverage.reduce((s, c) => s + c.totalChars, 0);
+  if (totalChars <= cap) {
+    coverage.forEach(c => { c.keptChars = c.totalChars; c.keptBlocks = c.blocks; });
+    // 无论输入是否自带锚点，统一输出「带锚点」的规范语料。
+    // 根因：锚点不能只在 Core.getBookText 里有 —— 直接调 analyze() 的验证脚本 / 插件
+    // 会绕过那层，模型就无从引用真实坐标，提示词的 anchor 约束成了空话。
+    const normalized = groups.map(g =>
+      (g.name === '（未标注文件）' ? '' : '【文件：' + g.name + '】\n') +
+      g.blocks.map(b => b.anchor + b.text).join('\n')
+    ).join('\n\n');
+    return { corpus: normalized, coverage, truncated: false, totalChars, keptChars: totalChars };
+  }
+  // 预算按文件均分，保证「每个文件都有正文进语料」；文件内按块顺序取，尽量在句末软切。
+  const per = Math.max(300, Math.floor(cap / Math.max(1, groups.length)));
+  const out = [];
+  let kept = 0;
+  groups.forEach((g, gi) => {
+    let budget = per;
+    const keptBlocks = [];
+    for (const b of g.blocks) {
+      if (budget <= 0) break;
+      let take = b.text.slice(0, budget);
+      if (b.text.length > budget) {
+        const tail = b.text.slice(budget, budget + 120);
+        const sm = tail.search(/[。！？；\n]/);
+        if (sm >= 0) take += tail.slice(0, sm + 1);
+      }
+      keptBlocks.push({ anchor: b.anchor, text: take });
+      budget -= take.length;
+      kept += take.length;
+      coverage[gi].keptChars += take.length;
+      coverage[gi].keptBlocks++;
+    }
+    out.push('【文件：' + g.name + '】\n' + keptBlocks.map(b => b.anchor + b.text).join('\n'));
+  });
+  return { corpus: out.join('\n\n'), coverage, truncated: true, totalChars, keptChars: kept };
+}
+
+// F6：语料上限在 buildMessages 内完成，保证任何调用方都拿到有上限的语料。
+// v2：第三参 files 注入真实文件名清单；v3：覆盖统计挂到返回数组上（不改数组契约）。
+function buildMessages(bookTitle, fullText, files) {
+  const composed = composeCorpus(fullText, MAX_CORPUS);
   const sys = SYSTEM_PROMPT.replace('{{FILE_LIST}}', fileListBlock(files));
   const content = '书名：' + (bookTitle || '未命名书') +
-    '\n\n===== 全书内容（已拼接各文件文本）=====\n' + corpus;
-  return [
+    '\n\n===== 全书内容（按页/段锚点组织，长书跨文件均衡取样）=====\n' + composed.corpus;
+  const out = [
     { role: 'system', content: sys },
     { role: 'user', content: content }
   ];
+  out.coverage = composed.coverage;
+  out.corpusMeta = {
+    truncated: composed.truncated,
+    totalChars: composed.totalChars,
+    keptChars: composed.keptChars,
+    files: composed.coverage.length,
+    // 每份资料保留了多少字，概览页要如实显示「这次到底读了全书的哪一部分」。
+    coverage: composed.coverage
+  };
+  return out;
 }
 
 // 容错抽取 JSON：去代码块 → 括号配平取「第一个完整对象」。
@@ -264,6 +352,8 @@ function normalizeQuestion(q, idx, seq) {
     source: {
       file: String(src.file || '').trim().slice(0, 200),
       page: Number.isFinite(page) && page > 0 ? Math.floor(page) : 0,
+      // v3：语料锚点（【P.3】/【块2】）。老分析数据没有此字段 → 空串，前端不显示徽章，不谎称已校验。
+      anchor: String(src.anchor || '').trim().slice(0, 60),
       quote: String(src.quote || '').trim().slice(0, 300)
     }
   };
@@ -376,6 +466,42 @@ function measureQuality(result, files, thresholds) {
   return m;
 }
 
+// v3：引文由程序从「真正送进模型的语料」里逐字校验，不再信模型自报。
+// 只做度量与标注，不改变 analyze 的放行逻辑与调用次数（一次 API 硬需求不破）。
+function verifyQuotes(result, corpusText) {
+  const norm = s => String(s || '')
+    .replace(/\s+/g, '')
+    .replace(/[，。、；：“”‘’（）()【】\[\],.;:!?\-—_]/g, '');
+  const nc = norm(corpusText);
+  const groups = (result && Array.isArray(result.questionIndex)) ? result.questionIndex : [];
+  const qs = groups.reduce((a, g) => a.concat((g.items || []).reduce((b, i) => b.concat(i.questions || []), [])), []);
+  const details = qs.map((q, i) => {
+    const src = (q && q.source) || {};
+    const quote = String(src.quote || '').trim();
+    const nq = norm(quote);
+    // 取前 40 字做包含判定：模型常补标点或省末尾几字，全串严格匹配会误伤；
+    // 但 40 字足以区分「真抄了原文」与「编造/改写」。
+    const probe = nq.slice(0, 40);
+    const found = probe.length >= 8 && nc.includes(probe);
+    return {
+      i,
+      id: (q && q.id) || '',
+      anchor: String(src.anchor || ''),
+      quote: quote.slice(0, 80),
+      found,
+      reason: !quote ? 'no-quote' : (found ? 'exact-span' : 'not-in-corpus')
+    };
+  });
+  const hit = details.filter(d => d.found).length;
+  return {
+    checked: qs.length,
+    hit,
+    missed: qs.length - hit,
+    rate: qs.length ? hit / qs.length : 0,
+    details
+  };
+}
+
 // chatFn 可注入（self-test mock）；默认 lib/llm.chat。cfg 只在内存，不落盘。
 // F5：可读文本过少 / 纯图片书明确失败（带 userCode），不静默交给 LLM 产出空壳分析。
 async function analyze(bookTitle, fullText, opts) {
@@ -413,17 +539,28 @@ async function analyze(bookTitle, fullText, opts) {
   if (!parsed) throw new Error('模型未返回可解析的 JSON（请检查模型输出格式或换模型）');
   const result = validate(parsed);
   result.model = (o.cfg && o.cfg.model) || '';
-  // F6：截断标记与原始字数，供概览页诚实显示
-  result.truncated = len > MAX_CORPUS;
+  // F6 / v3：截断与覆盖统计，供概览页诚实显示「这次到底读了全书的哪一部分」。
+  result.truncated = !!(messages.corpusMeta && messages.corpusMeta.truncated);
+  result.corpusCoverage = messages.corpusMeta || null;
   result.sourceLen = len;
   result.corpusLen = messages[1].content.length;
   result.imageCount = Number(o.imageCount) || 0;
   result.materialCount = Number(o.materialCount) || 0;
+  // v3：引文审计 —— 用真正送进模型的语料逐字校验，结果写回题目实体供前端显示徽章。
+  // 老数据没有 quoteVerified 字段时前端不显示徽章，不谎称已核对。
+  const audit = verifyQuotes(result, messages[1].content);
+  let k = 0;
+  (result.questionIndex || []).forEach(g => (g.items || []).forEach(it => (it.questions || []).forEach(q => {
+    q.quoteVerified = !!(audit.details[k] && audit.details[k].found);
+    k++;
+  })));
+  result.quoteAudit = audit;
   return result;
 }
 
 module.exports = {
   analyze, validate, extractJson, buildMessages, measureQuality,
+  composeCorpus, parseCorpus, verifyQuotes,
   SYSTEM_PROMPT, DEFAULT_THRESHOLDS,
   QUESTION_TYPES, MAX_CORPUS, MIN_TEXT
 };

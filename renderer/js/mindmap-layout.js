@@ -196,7 +196,13 @@
     const o = opts || {};
     const pos = {};
     (layout.nodes || []).forEach(n => { pos[n.id] = n; });
+    // v3 美化：颜色由调用方按主题 token 注入；缺省仍是白底，
+    // 保证 Node 侧判别测试与「不带主题信息的导出」行为不变。
     const bg = o.background || '#ffffff';
+    const nodeFill = o.nodeFill || '#ffffff';
+    const textColor = o.textColor || '#1f2733';
+    const metaColor = o.metaColor || '#6b7688';
+    const rootText = o.rootTextColor || '#ffffff';
     let body = '<rect x="0" y="0" width="' + layout.width + '" height="' + layout.height + '" fill="' + bg + '"/>';
     (layout.edges || []).forEach(e => {
       const a = pos[e.from], b = pos[e.to];
@@ -217,20 +223,20 @@
     });
     (layout.nodes || []).forEach(n => {
       const isRoot = n.depth === 0;
-      const fill = isRoot ? n.color : '#ffffff';
+      const fill = isRoot ? n.color : nodeFill;
       const stroke = n.color;
-      const textColor = isRoot ? '#ffffff' : '#1f2733';
+      const tc = isRoot ? rootText : textColor;
       body += '<g class="mm-node" data-id="' + escXml(n.id) + '" data-kind="' + escXml(n.kind || n.type) + '">';
       body += '<rect x="' + n.x + '" y="' + n.y + '" width="' + n.w + '" height="' + n.h + '" rx="9" fill="' + fill +
         '" stroke="' + stroke + '" stroke-width="' + (isRoot ? 0 : 1.4) + '"/>';
       body += '<text x="' + (n.x + 10) + '" y="' + (n.y + n.h / 2 + 4) + '" font-size="12" font-family="system-ui,sans-serif" fill="' +
-        textColor + '">' + escXml(short(n.title, 16)) + '</text>';
+        tc + '">' + escXml(short(n.title, 16)) + '</text>';
       if (n.questionTypes && n.questionTypes.length) {
         body += '<circle cx="' + (n.x + n.w - 10) + '" cy="' + (n.y + 10) + '" r="4" fill="' + n.color + '"/>';
       }
       if (n.meta && typeof n.meta.count === 'number') {
         body += '<text x="' + (n.x + n.w - 8) + '" y="' + (n.y + n.h / 2 + 4) + '" font-size="10" text-anchor="end" fill="' +
-          (isRoot ? '#ffffff' : '#6b7688') + '" font-family="system-ui,sans-serif">' + n.meta.count + '</text>';
+          (isRoot ? rootText : metaColor) + '" font-family="system-ui,sans-serif">' + n.meta.count + '</text>';
       }
       if (n.question && n.question.source && n.question.source.file) {
         body += '<circle cx="' + (n.x + n.w - 10) + '" cy="' + (n.y + n.h - 9) + '" r="3" fill="#f2994a"/>';

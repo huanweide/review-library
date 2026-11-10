@@ -143,6 +143,16 @@ function pct(x) { return (Number(x) * 100).toFixed(1) + '%'; }
   console.log('  解题思路平均字数（≥30）：                       ' + q.rationaleAvgLen + ' 字  ' + (q.checks.rationaleDepth ? '✓' : '✗'));
   console.log('\n  >>> 整体判定：' + (q.passed ? 'PASSED（一次 API 完整版效果达标）' : 'FAILED（需按 D12 迭代提示词）'));
 
+  // v3：引用锚定效果 —— 模型是否真抄了语料锚点、引文能否被程序从原文校验命中。
+  // 这是本轮「优化提示词语逻辑」是否真生效的外部判据，不是自评。
+  const audit = result.quoteAudit || { checked: 0, hit: 0, rate: 0 };
+  const qs = (result.questionIndex || []).reduce((arr, g) =>
+    arr.concat((g.items || []).reduce((b, i) => b.concat(i.questions || []), [])), []);
+  const anchorCount = qs.filter(qq => qq.source && qq.source.anchor).length;
+  console.log('\n  --- v3 引用锚定（程序从送进模型的语料逐字校验）---');
+  console.log('  source.anchor 填写率：                          ' + pct(qs.length ? anchorCount / qs.length : 0) + '  (' + anchorCount + '/' + qs.length + ')');
+  console.log('  引文命中原文：                                  ' + audit.hit + '/' + audit.checked + '  ' + pct(audit.rate));
+
   // 抽 2 道题的真实内容做人工可核的样例（不写 key）。
   const samples = [];
   (result.questionIndex || []).forEach(g => (g.items || []).forEach(it => (it.questions || []).forEach(qq => {
@@ -156,7 +166,9 @@ function pct(x) { return (Number(x) * 100).toFixed(1) + '%'; }
     label: LABEL, ok: q.passed, at: new Date().toISOString(),
     provider: provider.name, model: cfg.model, corpusLen: CORPUS.length,
     elapsedMs: Date.now() - t0,
-    stats: s, metrics: q, samples
+    stats: s, metrics: q, samples,
+    quoteAudit: result.quoteAudit || null,
+    anchorRate: qs.length ? anchorCount / qs.length : 0
   };
   fs.writeFileSync(path.join(ROOT, 'PROCESS', 'research-mindmap-v2', 'real-llm-' + LABEL + '.json'),
     JSON.stringify(out, null, 2), 'utf8');

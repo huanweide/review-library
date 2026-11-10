@@ -172,20 +172,24 @@
   async function analyze() {
     const cfg = loadCfg();
     if (!cfg.baseURL || !cfg.model) { toast('请先在「模型设置」里填写 API 地址与模型名'); $('#openSettings').click(); return; }
-    const st = $('#analyzeStatus'); st.classList.remove('hidden', 'err'); st.textContent = '正在把整本书交给大模型整体分析，请稍候…';
+    const st = $('#analyzeStatus');
+    st.classList.remove('hidden', 'err', 'ok'); st.classList.add('loading');
+    st.textContent = '正在把整本书交给大模型整体分析，请稍候…';
     $('#analyzeBtn').disabled = true;
     try {
       const r = await api('/books/' + state.current.id + '/analyze', { method: 'POST', body: JSON.stringify({ cfg }) });
       state.analysis = r;
       renderResult();
       const s = (r && r.stats) || {};
-      st.classList.remove('err');
+      st.classList.remove('err', 'loading'); st.classList.add('ok');
       st.textContent = '分析完成：' + (s.chapters || 0) + ' 章 / ' + (s.points || 0) + ' 知识点 / ' +
         (s.questionTypes || 0) + ' 类题型 / ' + (s.questionCount || 0) + ' 道题' +
-        (r && r.truncated ? '（语料已截断，见概览）' : '');
+        (r && r.truncated ? '（长书已按锚点均衡取样，见概览）' : '');
       toast('分析完成');
     } catch (e) {
-      st.classList.add('err'); st.textContent = '分析失败：' + e.message;
+      // 错误态要可恢复：说清原因 + 给下一步，不做死路。
+      st.classList.remove('loading', 'ok'); st.classList.add('err');
+      st.textContent = '分析失败：' + e.message + ' — 可在「模型设置」检查 API 地址与模型名后重试。';
     } finally {
       $('#analyzeBtn').disabled = false;
     }
@@ -275,6 +279,20 @@
     return out;
   }
 
+  // v3 美化：导图 SVG 颜色由 CSS 主题 token 驱动（深色模式不再是一块白）。
+  // 只在浏览器调用；Node 侧判别测试直接 require 布局模块，走默认白底。
+  function svgTheme() {
+    const cs = window.getComputedStyle(document.documentElement);
+    const v = (name, fallback) => (cs.getPropertyValue(name) || '').trim() || fallback;
+    return {
+      background: v('--surface-1', '#ffffff'),
+      nodeFill: v('--surface-1', '#ffffff'),
+      textColor: v('--ink', '#1f2733'),
+      metaColor: v('--ink-soft', '#6b7688'),
+      rootTextColor: '#ffffff'
+    };
+  }
+
   function renderCanvas() {
     const box = $('#mmCanvas');
     if (!box) return;
@@ -285,7 +303,7 @@
     const layout = ML.layoutTree(root, view.layout);
     view.layoutData = layout;
     view.treeData = root;
-    box.innerHTML = ML.toSvg(layout);
+    box.innerHTML = ML.toSvg(layout, svgTheme());
     box.style.width = layout.width + 'px';
     box.style.height = layout.height + 'px';
     applyView();
@@ -453,7 +471,12 @@
     const s = q.source || {};
     const file = (state.current && (state.current.files || []).find(f => f.name === s.file)) || null;
     let txt = s.file ? '来源：<b>' + esc(s.file) + '</b>' + (s.page ? ' · 第 <b>' + s.page + '</b> 页' : '') : '来源：未标注';
+    // v3：锚点是语料里的真实坐标（PDF 真页码 / 文本块号），不是模型自报的页码。
+    if (s.anchor) txt += '<span class="qd-anchor">锚点 ' + esc(s.anchor) + '</span>';
     if (s.quote) txt += '<span class="qd-quote">' + esc(s.quote) + '</span>';
+    // 引文由程序从送进模型的语料逐字校验；老分析数据没有该字段，不显示徽章、不谎称已核对。
+    if (q.quoteVerified === true) txt += '<div class="qd-verify ok">✓ 引文已与原文逐字核对</div>';
+    else if (q.quoteVerified === false) txt += '<div class="qd-verify warn">⚠ 引文未能在原文中定位（可能被改写或编造）</div>';
     // 诚实边界：图片型资料可显示真原图；PDF/Office 在 file:// 下无法渲染页图，只做文本定位。
     if (file && file.isImage && state.current) {
       try {
@@ -465,7 +488,11 @@
         }
       } catch (e) { txt += '<div class="qd-quote">原图读取失败：' + esc(e.message) + '</div>'; }
     } else if (file && !file.isImage) {
-      txt += '<div class="qd-quote">该资料为 ' + esc(file.ext || '文档') + '，当前视图按「文件名 + 页码 + 引文」定位原文；页图渲染需视觉/预览能力，未声称可用。</div>';
+      // 纯文本能直接按锚点+引文定位，不该套用 PDF/Office 的「页图需视觉能力」措辞。
+      const textLike = /\.(txt|md|csv|text)$/i.test(String(file.ext || ''));
+      txt += textLike
+        ? '<div class="qd-quote">纯文本资料，已按「锚点 + 引文」直接定位原文，无需页图。</div>'
+        : '<div class="qd-quote">该资料为 ' + esc(file.ext || '文档') + '，当前视图按「文件名 + 页码 + 引文」定位原文；页图渲染需视觉/预览能力，未声称可用。</div>';
     } else if (s.file) {
       txt += '<div class="qd-quote">未在本书资料中找到同名文件，已按模型标注的来源文本定位。</div>';
     }
@@ -527,7 +554,7 @@
   }
   function currentSvg() {
     if (!ML || !view.layoutData) return '';
-    return ML.toSvg(view.layoutData);
+    return ML.toSvg(view.layoutData, svgTheme());
   }
   function exportSvg() {
     if (!state.analysis || !state.analysis.tree) { toast('还没有分析结果'); return; }
@@ -539,7 +566,7 @@
   // 保证「导出与屏幕一致」；无 window 的纯脚本/沙箱环境退化为内置布局，可独立跑。
   function buildTreeSvg(root) {
     const MLib = (typeof window !== 'undefined' && window.MindmapLayout) || null;
-    if (MLib && root) return MLib.toSvg(MLib.layoutTree(root, 'right'));
+    if (MLib && root) return MLib.toSvg(MLib.layoutTree(root, 'right'), svgTheme());
     const W = 180, H = 36, padX = 16, padY = 16;
     let row = 0; const pos = {};
     (function assign(n, depth) {
@@ -607,13 +634,20 @@
     ].map(([l, n]) => '<div class="stat"><div class="num">' + (n || 0) + '</div><div class="lbl">' + l + '</div></div>');
     const typeCards = Object.keys(s.questionTypeCounts || {}).map(k =>
       '<div class="stat typecount"><div class="num">' + s.questionTypeCounts[k] + '</div><div class="lbl">' + esc(k) + '</div></div>');
-    const meta = '<div class="ov-meta" style="width:100%;font-size:12px;color:var(--ink-soft);margin-top:10px">模型：' + esc(a.model || '—') +
+    const audit = (a.quoteAudit && typeof a.quoteAudit.checked === 'number') ? a.quoteAudit : null;
+    const meta = '<div class="ov-meta">模型：' + esc(a.model || '—') +
       ' ｜ 全书 ' + (a.sourceLen || 0) + ' 字 ｜ 资料 ' + (a.materialCount || 0) + ' 份' +
-      (a.imageCount ? ' ｜ 图片 ' + a.imageCount + ' 份' : '') + '</div>';
-    const warn = a.truncated
-      ? '<div class="ov-warn" style="width:100%">⚠ 全书超过 ' + (a.corpusLen || 0) + ' 字的分析上限，已截断；超大书的分析深度可能受限。</div>'
-      : '';
-    $('#statsBox').innerHTML = base.concat(typeCards).join('') + meta + warn;
+      (a.imageCount ? ' ｜ 图片 ' + a.imageCount + ' 份' : '') +
+      (audit ? ' ｜ 引文核对 <b>' + audit.hit + '/' + audit.checked + '</b> 命中原文' : '') + '</div>';
+    // v3：长书不再笼统写「已截断」，而是逐份资料如实显示本次到底读了多少字。
+    const cov = a.corpusCoverage;
+    const covNote = (cov && cov.truncated)
+      ? '<div class="ov-cov">⚠ 全书共 ' + cov.totalChars + ' 字，超过一次 API 的语料预算。' +
+        '已按页/段锚点从 <b>' + cov.files + '</b> 份资料中<b>均衡取样 ' + cov.keptChars + ' 字</b>（每份都覆盖）：' +
+        (cov.coverage || []).map(c => '<span>' + esc(c.file) + ' ' + c.keptChars + '/' + c.totalChars + ' 字</span>').join('') +
+        '</div>'
+      : (a.truncated ? '<div class="ov-warn">⚠ 该分析由旧版本生成，语料曾被整体截断；重新分析可获得按锚点均衡覆盖的结果。</div>' : '');
+    $('#statsBox').innerHTML = base.concat(typeCards).join('') + meta + covNote;
   }
 
   // ---------- 工具 ----------
@@ -717,6 +751,14 @@
     $('#saveSettings').onclick = () => { saveCfg(readSettings()); modal.classList.add('hidden'); toast('已保存模型设置'); };
     $('#testConn').onclick = testConn;
     modal.addEventListener('click', e => { if (e.target === modal) modal.classList.add('hidden'); });
+
+    // 深色模式跟随系统；切换时立刻用新主题色重绘 SVG 画布。
+    if (window.matchMedia) {
+      const mq = window.matchMedia('(prefers-color-scheme: dark)');
+      const onTheme = () => { if (state.analysis) renderCanvas(); };
+      if (mq.addEventListener) mq.addEventListener('change', onTheme);
+      else if (mq.addListener) mq.addListener(onTheme);
+    }
 
     loadBooks();
   }

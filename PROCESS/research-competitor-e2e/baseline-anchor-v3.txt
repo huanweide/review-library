@@ -1,0 +1,76 @@
+判别测试 baseline（改动前，v1.4.0 / git HEAD 8a7077d）
+命令：node test/core-anchor-v3.test.js
+时间：2026-11-10
+结果：通过 4 / 失败 13 / exit 1，无执行异常
+
+--- A 组：解析层产出可回溯锚点 ---
+  ✗ A1 extract.segmentText 存在（v1.4.0 无 → baseline 红）
+  ✗ A2 PDF 按页切成 2 块（函数缺失，无法执行）
+  ✗ A5 纯文本按段切块（函数缺失，无法执行）
+
+--- B 组：Core 拼出的整本书语料带锚点 ---
+  ✓ B1 仍保留文件名分隔（旧契约不破）
+  ✗ B2 语料含可回溯锚点（v1.4.0 无 → baseline 红）
+
+--- C 组：长书不再从头静默砍掉后半本 ---
+  ✓ C0 构造语料确实超上限（120049 > 50000）
+  ✗ C1 analyze.composeCorpus 存在（v1.4.0 无 → baseline 红）
+  ✗ C3(旧路径) 第三个文件内容应出现（v1.4.0 从头砍 → baseline 红）
+  ✗ C4 覆盖统计列出 3 个文件（函数缺失）
+
+--- D 组：引文由程序从原文校验，不再信模型自报 ---
+  ✗ D1 analyze.verifyQuotes 存在（v1.4.0 无 → baseline 红）
+  ✗ D2 校验覆盖全部 2 道题（函数缺失）
+  ✗ D3 真引文命中、编造引文被识破（函数缺失）
+
+--- E 组：analyze() 生产链路挂上引文审计，且严格一次 API ---
+  ✓ E1 仍然只调用一次 chat（一次 API 硬需求不破）
+  ✗ E2 返回结果带引文审计（v1.4.0 无 → baseline 红）
+
+--- F 组：提示词把 source 钉在锚点上 ---
+  ✗ F1 提示词说明锚点格式（v1.4.0 无 → baseline 红）
+  ✗ F2 契约里增加 anchor 字段（旧版无 → baseline 红）
+
+--- G 组：老数据零迁移不崩（防回归） ---
+  ✓ G1 无 anchor/quote 的老分析结果仍能过质量函数
+
+13 个红项收敛为 5 个真缺口：
+  G-a 解析层无页/段锚点（A 组）
+  G-b Core 语料无锚点（B 组）
+  G-c 长书 raw.slice(0,50000) 从头砍，第 3 个文件完全丢失（C 组）
+  G-d 引文 quote 无程序校验，模型自报即可通过（D 组）
+  G-e 生产链路与提示词都不知道锚点的存在（E/F 组）
+不改变：一次 API 只调一次 chat（E1）、文件名分隔契约（B1）、老数据兼容（G1）。
+
+────────────────────────────────────────────
+补充：H 组（真 PDF）与 C 组的 baseline 逐字符证据
+命令：git show HEAD:core/extract.js | sed -n '27,37p'
+      git show HEAD:core/analyze.js | sed -n '125,132p'
+
+H 组 · HEAD:core/extract.js:28-37 原文：
+    let _pdfParse = null;
+    async function extractPdf(buf) {
+      try {
+        _pdfParse = _pdfParse || require('pdf-parse');
+        const r = await _pdfParse(buf);
+        if (r && typeof r.text === 'string' && r.text.trim()) return r.text;
+        return nativePdfText(buf);
+      } catch (e) {
+        return nativePdfText(buf);
+      }
+    }
+  → 无 options、无 pagerender，默认 render_page 不注入任何页码标记，
+    返回文本不可能含 [[PAGE:N]]；H1/H3/H4 在旧版必红。
+
+C 组 · HEAD:core/analyze.js:129 原文：
+    const corpus = raw.length > MAX_CORPUS ? raw.slice(0, MAX_CORPUS) : raw;
+  → 120049 字语料只留前 50000 字，第三个文件（【C】特征串）完全被砍掉，C3 必红。
+
+【测试夹具的教训，记下来防重犯】
+最初用「手搓最小 2 页 PDF」做 H 组夹具，pdfjs 报 `bad XRef entry`，
+连默认解析也失败，只会走 nativePdfText 抓 Tj 兜底 —— H2（正文抽到）绿而 H1/H3/H4 红，
+差点被误判成「pagerender 没生效」。真因是手写 xref 不合法。
+改用 pdf-parse@1.1.1 自带合法夹具 node_modules/pdf-parse/test/data/04-valid.pdf
+（复制到 test/fixtures/anchor-5page.pdf，80 KB / 5 页）后，
+用临时探针实测 14 页夹具注入 14 个 [[PAGE:N]] 标记、页序正确，确认实现无误。
+结论：验证「PDF 逐页」必须用真合法 PDF，不能用手搓字节。

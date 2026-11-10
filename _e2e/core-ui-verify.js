@@ -46,14 +46,14 @@ const ANALYSIS_PAYLOAD = {
         rationale: '题干问的是固定位置的精确移动次数，不是等概率平均值，所以要用 n-i+1 而非 n/2；先辨认问的是精确值还是期望值，再选公式，误用 n/2 会算出 5。',
         pitfalls: '把 n-i+1 与 n/2 混淆。', difficulty: '基础',
         pointPath: ['第一章 数据结构', '1.1 线性表', '顺序表'],
-        source: { file: '验证讲义.txt', page: 2, quote: '顺序表在第 i 个位置插入需移动 n-i+1 个元素' } },
+        source: { file: '验证讲义.txt', page: 2, anchor: '【块1】', quote: '顺序表采用连续内存，支持随机访问' } },
       { stem: '顺序表按下标查找第 i 个元素的时间复杂度是？', options: ['A. O(1)', 'B. O(n)', 'C. O(log n)'],
         answer: 'A. O(1) —— 连续存储可由首地址加下标直接算出地址。',
         solution: ['第 1 步：顺序表地址连续。', '第 2 步：地址 = 首地址 + i × 元素大小。', '第 3 步：一次计算即可，故 O(1)。'],
         rationale: '看到「按下标」就想到随机访问能力，这是顺序存储区别于链式存储的根本特征；若误判成需要遍历，是把顺序表和单链表的查找代价记反了。',
         pitfalls: '把顺序表的 O(1) 随机访问与链表的 O(n) 查找记反。', difficulty: '基础',
         pointPath: ['第一章 数据结构', '1.1 线性表', '顺序表'],
-        source: { file: '原图.png', page: 0, quote: '顺序表支持随机访问，查找第 i 个元素 O(1)' } }
+        source: { file: '原图.png', page: 0, anchor: '【块1】', quote: '顺序表支持随机访问，查找第 i 个元素 O(1)' } }
     ] }] },
     { type: '简答题', items: [{ title: '链表', path: ['第一章 数据结构', '1.1 线性表', '链表'], questions: [
       { stem: '简述单链表在已知结点指针 p 后插入新结点为何是 O(1)，删除 p 本身为何是 O(n)。', options: [],
@@ -323,6 +323,25 @@ async function runForm({ label, url, tmpRoot, initScript }) {
     });
     ok(zOrder.topIsButton, '详情弹窗层级高于题目列表：「定位知识点」按钮真实可点（命中 ' + zOrder.topTag + '）');
     await page.screenshot({ path: path.join(SHOTS, label.replace(/[^a-zA-Z0-9]/g, '-') + '-question-detail.png'), fullPage: true });
+
+    // ===== v3 优化块：锚点与引文校验徽章在真浏览器里可见，正负例都验 =====
+    const anchorUi = await page.evaluate(() => {
+      const box = document.querySelector('#qdSource');
+      const a = box.querySelector('.qd-anchor');
+      const v = box.querySelector('.qd-verify');
+      return { anchor: a ? a.textContent.trim() : '', verify: v ? v.textContent.trim() : '', cls: v ? v.className : '' };
+    });
+    ok(/【块1】/.test(anchorUi.anchor), '详情显示语料锚点（' + anchorUi.anchor + '）');
+    ok(/未能在原文中定位/.test(anchorUi.verify) && /warn/.test(anchorUi.cls),
+      '编造的引文被程序识破并显示警告徽章：' + anchorUi.verify.slice(0, 30));
+    await page.click('#closeQuestion'); await sleep(120);
+    await page.click('#qitemList .sp-qlist-item:nth-child(1)'); await sleep(300);
+    const hitUi = await page.$eval('#qdSource', (box) => {
+      const v = box.querySelector('.qd-verify'); return v ? v.textContent.trim() : '';
+    });
+    ok(/已与原文逐字核对/.test(hitUi), '真引文显示「已与原文逐字核对」徽章：' + hitUi.slice(0, 30));
+    await page.screenshot({ path: path.join(SHOTS, label.replace(/[^a-zA-Z0-9]/g, '-') + '-anchor-verified.png'), fullPage: true });
+
     await page.click('#closeQuestion'); await sleep(120);
     await page.click('#closeQitem'); await sleep(120);
 
@@ -361,6 +380,41 @@ async function runForm({ label, url, tmpRoot, initScript }) {
     // 恢复知识树视角，截主图
     await page.click('[data-perspective="knowledge"]'); await sleep(200);
     await page.screenshot({ path: path.join(SHOTS, label.replace(/[^a-zA-Z0-9]/g, '-') + '.png'), fullPage: true });
+
+    // ===== 美化块：token / 去渐变重阴影 / 浅深双主题（真断言 + 真截图）=====
+    const themeLight = await page.evaluate(() => {
+      const cs = getComputedStyle(document.documentElement);
+      const top = getComputedStyle(document.querySelector('.topbar'));
+      const rect = document.querySelector('#mmCanvas svg rect');
+      return {
+        bg: (cs.getPropertyValue('--bg') || '').trim(),
+        shadow: (cs.getPropertyValue('--shadow') || '').trim(),
+        hasSurface3: !!(cs.getPropertyValue('--surface-3') || '').trim(),
+        topImage: top.backgroundImage,
+        svgBg: rect ? (rect.getAttribute('fill') || '') : ''
+      };
+    });
+    ok(themeLight.hasSurface3, 'V1 语义 token 体系存在（--surface-3 浮层层级）');
+    ok(!/8px 24px/.test(themeLight.shadow), 'V4 移除双层重阴影（' + themeLight.shadow + '）');
+    ok(themeLight.topImage === 'none', 'V3 顶栏不再用渐变（' + themeLight.topImage + '）');
+
+    await page.emulateMedia({ colorScheme: 'dark' }); await sleep(350);
+    const themeDark = await page.evaluate(() => {
+      const cs = getComputedStyle(document.documentElement);
+      const rect = document.querySelector('#mmCanvas svg rect');
+      return {
+        bg: (cs.getPropertyValue('--bg') || '').trim(),
+        bodyBg: getComputedStyle(document.body).backgroundColor,
+        svgBg: rect ? (rect.getAttribute('fill') || '') : ''
+      };
+    });
+    ok(themeDark.bg !== themeLight.bg, 'V2 深色模式 --bg 真切换（' + themeLight.bg + ' → ' + themeDark.bg + '）');
+    ok(themeDark.svgBg !== themeLight.svgBg && themeDark.svgBg.toLowerCase() !== '#ffffff',
+      'V2 深色模式 SVG 画布跟着换底色，不再是一块白（' + themeLight.svgBg + ' → ' + themeDark.svgBg + '）');
+    const firstRgb = (themeDark.bodyBg.match(/\d+/) || [])[0];
+    ok(Number(firstRgb) < 80, 'V2 深色模式 body 首帧即深色（' + themeDark.bodyBg + '），无白闪');
+    await page.screenshot({ path: path.join(SHOTS, label.replace(/[^a-zA-Z0-9]/g, '-') + '-dark.png'), fullPage: true });
+    await page.emulateMedia({ colorScheme: 'light' }); await sleep(200);
 
     // 只排除已明确归因的预期错误（favicon、反证故意触发的 file:// fetch 失败）。
     const realErrors = errors.filter((e) =>
