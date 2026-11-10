@@ -246,7 +246,7 @@ body {
 .search-input { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 5px 10px; font-size: 12px; width: 168px; outline: none; background: var(--surface-1); color: var(--ink); }
 .search-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 .search-count { font-size: 11px; color: var(--ink-soft); min-width: 52px; }
-.mm-hint { font-size: 11px; color: var(--ink-faint); margin: 2px 0 var(--space-2); }
+.mm-hint { font-size: 11px; color: var(--ink-soft); margin: 2px 0 var(--space-2); }
 .mm-viewport {
   position: relative; overflow: auto; max-height: 62vh;
   border: 1px solid var(--line); border-radius: var(--radius); padding: var(--space-4);
@@ -288,7 +288,7 @@ body {
 .qd-card { width: 720px; max-height: 88vh; display: flex; flex-direction: column; padding: 0; }
 .qd-card .modal-head { padding: 14px 20px 11px; margin: 0; border-bottom: 1px solid var(--line); display: flex; align-items: center; }
 .qd-card .modal-actions { padding: 11px 20px; margin: 0; border-top: 1px solid var(--line); flex-wrap: wrap; }
-.qd-body { flex: 1; overflow: auto; padding: var(--space-4) 20px; }
+.qd-body { flex: 1; overflow: auto; padding: var(--space-4) 20px var(--space-5); }
 .qd-block { margin-bottom: var(--space-4); }
 .qd-label { font-size: 10px; font-weight: 700; color: var(--ink-soft); letter-spacing: .08em; margin-bottom: 6px; text-transform: uppercase; }
 .qd-stem { font-size: 15px; line-height: 1.75; font-weight: 500; }

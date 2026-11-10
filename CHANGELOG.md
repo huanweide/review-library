@@ -82,6 +82,13 @@ DSH 插件与 WorkBuddy 专家的 manifest，以及 README 顶部定位行；`sc
 - 折叠分支搜不到、方向键只在命中间跳转、F1 闭环未统一、真 Electron GUI 未跑、PDF 页图不渲染，
   均为既有遗留，本轮未扩大也未修复。
 
+**未发布批次补充（2026-11-10 续 · 全链路测试 + 前端微调）**
+- 修复 `_e2e/e2e.js`：原把 `core.html` 的思维导图断言（`#pane-mindmap/#mm-canvas/#mm-detail` 等）错放进 `index.html` 传统入口测试，而该入口书内 tabs 无 mindmap 子页，导致点击超时崩溃；已移走错配块、保留文字输入回归检查、新增架构守卫断言。重跑 `node _e2e/e2e.js` → **195 通过 / 0 失败**（此前仅约 70+ 检查点后崩溃）。
+- 确认默认入口 `core.html` 全链路已由 `_e2e/core-ui-verify.js`（本地 mock LLM 真发 HTTP→真解析→真渲染，覆盖 HTTP + Electron/file:// 双形态）完整覆盖，重跑 → **139 通过 / 0 失败**；本轮未另建 core-e2e.js，复用现有覆盖。
+- 前端微调（token 系统内、不改 DOM 契约）：`.mm-hint` 颜色提至 `--ink-soft` 提升可读性；`.qd-body` 底部 padding 增至 `--space-5` 避免题目详情末行贴脚。
+- 全量门禁复跑全绿：`npm test` 19/19 套件、`node --check`、凭据扫描无真密钥。
+- 注意：本地无任何 LLM API key，`core.html` 的「大模型整体分析」真实链路仍需走 mock LLM（core-ui-verify 已如此），真烧需配置 key。
+
 ## v1.4.0 — 2026-11-10
 
 **思维导图 v2 + 一次 API 完整产出**。本轮按 maxloop 阶段零外查（Xmind / markmap /
