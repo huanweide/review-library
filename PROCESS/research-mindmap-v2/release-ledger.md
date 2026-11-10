@@ -170,3 +170,34 @@ node --check     72/72
   与判别测试）。PNG 导出只验 blob 生成、未解码像素；MD / OPML 导出不含完整题目详情；
   raw 路由无返回大小上限。均为体验 / 健壮性遗留，不阻塞本版。
 - 真模型效果只在 1 本书 / 1 个模型上验证；换模型 / 换学科 / 超长语料稳定性未验证。
+
+---
+
+## 十、发版结果（2026-11-10 · 云端实测）
+
+- commit `93e7e47` → push `ghssh/main`；annotated tag `v1.4.0`（`ec8c201`）→ push `ghssh/v1.4.0`。
+- GitHub Actions `Build and Release` run `42784476164`：**9 步全 success**，
+  08:40:30 → 08:42:04（1m34s）。`Install dependencies`（`npm ci`）通过，
+  `Build (publish never)` 产出 NSIS + portable + `.blockmap` + `latest.yml`。
+- Release `v1.4.0`：`draft=false`、`prerelease=false`，`published_at=2026-11-10T08:41:49Z`，
+  5 个资产全部 `state=uploaded`：
+
+| 资产 | 字节 |
+|---|---|
+| `ReviewLibrary-Setup-1.4.0.exe` | 84,628,161 |
+| `ReviewLibrary-Setup-1.4.0.exe.blockmap` | 89,047 |
+| `ReviewLibrary-1.4.0-portable.exe` | 84,400,077 |
+| `latest.yml` | 354 |
+| `review-analysis-dsh-plugin-v1.4.0.zip` | 58,421 |
+
+- **自动更新元数据实测**：`latest.yml` 原文 `version: 1.4.0`、
+  `path: ReviewLibrary-Setup-1.4.0.exe`、`size: 84628161` 与资产 size 一致，
+  `sha512` 与安装器一致，`releaseDate` 正确。文件取自 Release 下载 URL，不是读本地 `dist`。
+- **CI 实产物 DSH zip 解包核验**（本机 Python `zipfile`，非推断）：23 个条目，
+  顶层为 `dsh-review-analysis/`，含 `index.js` / `client.js` / `cordis.patch.yml` /
+  `package.json` / `locale/*.json`；**无**专家形态 `review-analysis.md`、
+  **无** `plugins/review-analysis/` 内容。第六项修复在云端闭环。
+  （zip 仍含 `engine/` 旧离线引擎目录，它在 `package.json#files` 之外、运行时不加载，
+  属历史保留源码，见 `plugins/README.md` 废弃清单。）
+- 证据来源如实标注：本地 `gh release view` 返回 401（token 权限不足），
+  改用公开 GitHub REST API + Release 下载 URL 核验；`gh run view` 正常。
