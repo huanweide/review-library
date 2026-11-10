@@ -3,12 +3,16 @@
 版本号遵循 MAJOR.MINOR.PATCH。唯一真源是根 `package.json` 的 `version`，由
 `scripts/sync-versions.mjs` 机械同步到 `VERSION`、`core/index.js#CORE_VERSION`、
 DSH 插件与 WorkBuddy 专家的 manifest，以及 README 顶部定位行；`scripts/check-versions.mjs`
-挂在 `pretest` 上做漂移检测。发版 tag 必须与 `package.json` 严格一致（`v1.3.0`）。
+挂在 `pretest` 上做漂移检测。发版 tag 必须与 `package.json` 严格一致（如 `v1.5.0`）。
 
-## 未发布（next）— 2026-11-10
+## v1.5.0 — 2026-11-10（本地已就绪，待云端发布）
 
-> **本轮不发版、不升版本号。** 下列改动已在本地完成并全量验收，等明确发布指令后
-> 再统一升 `1.5.0`、同步 8 处版本常量、打 tag。云端最新仍是 `v1.4.0`。
+> **状态（如实）**：本地 8 处版本常量已统一升到 `1.5.0`，全量门禁全绿、改动已提交。
+> 但**云端发布被 GitHub 账户侧拦截**：`git push ghssh main` 与 `git push --dry-run` 均返回
+> `ERROR: You must verify your email address`，`gh` 的 token 也已失效，无其它可用推送通道。
+> 这与代码 / SSH 密钥 / 仓库权限无关。待邮箱验证后补推 main + 打 `v1.5.0` tag 即可由 CI 发版。
+> **云端最新仍是 `v1.4.0`；在补推成功前，本节不是「已发布」。**
+> 阻塞详情与一键补推清单见 `PROCESS/research-competitor-e2e/release-prep-v150.md`。
 
 **定位**：结合高 star 竞品「确实比我们合理」的能力，做 1 块优化 + 1 块美化。
 基准与采纳门槛见 `PROCESS/research-competitor-e2e/visual-benchmark.md`、
