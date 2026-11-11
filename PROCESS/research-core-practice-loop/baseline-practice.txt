@@ -1,0 +1,32 @@
+=== 学习闭环进 core · 判别测试（旧版应全红）===
+  ✗ J1a Core 门面存在 getQuiz（DSH / 专家形态可经门面调用）  [Core.prototype.getQuiz 不存在]
+  ✗ J1b 练习列表返回 4 道题（覆盖选择/判断/简答三类）  [got=0]
+  ✗ J1c 练习列表不含答案/分步解答/思路（真隐藏，F12 也看不到答案）  [no questions]
+  ✗ J1d 每题带稳定 key / 题干 / 题型 / 选项（够渲染作答控件）
+  ✗ J2a 存在 gradeOne 判分函数  [core/practice.js 未实现]
+  ✗ J2b 选择题整句答案 "B. 8 个 —— 理由" 判 B 为正确（不是字符串相等）  [null]
+  ✗ J2c 同一题判 C 为错误  [null]
+  ✗ J2d 用户选完整选项文本 "B. 8 个" 也能判对  [null]
+  ✗ J2e 判断题答案 "B. 错误 —— 理由" 判 B 为正确  [null]
+  ✗ J2f 开放题不假判（返回 self 走四档自评，不冒充机器评分）  [null]
+  ✗ J3a Core 门面存在 submitAttempt
+  ✗ J3b 提交错误答案返回「错」  [null]
+  ✗ J3c 作答记录真落盘到该书目录 practice.json
+  ✗ J3d 新 Core 实例读回答错记录（跨会话持久），lapseCount=1  [no card]
+  ✗ J3e 答错后排出下次复习时间 dueAt  [no dueAt]
+  ✗ J4a 存在 dueKeys 纯函数
+  ✗ J4b 到期队列只捞 dueAt<=now 的，未到期的不出现  [null]
+  ✗ J4c leech（反复错）上浮到队首  [null]
+  ✗ J5a dispatch 直调 GET /books/:id/practice/quiz 返回 200（HTTP/Electron 共用分派）  [no dispatch]
+  ✗ J5b dispatch 返回的题目同样不含答案字段（路由层未绕过隐藏契约）
+  ✓ J5c 本地 server 在 5211 就绪
+  ✗ J5d HTTP 真发 GET practice/quiz 返回 200 且题目列表可用  [no http response]
+  ✗ J5e HTTP 真发 POST practice/attempt 判 B 为正确并落盘  [no http response]
+  ✗ J6a 存在内容哈希 questionKey
+  ✗ J6b 题目 id 变（重新分析）key 不变 → 复习史不丢  [null vs null]
+  ✗ J6c 题面改一个字 key 变 → 旧进度不串到新题  [null vs null]
+  ✗ J7 读练习状态不改 book.json 一个字节（零迁移 / 完全可逆）
+  ✗ J8a Core 门面存在 rateCard（四档自评）
+  ✗ J8b 自评「太简单」把下次复习推到未来（排程真的被回写）  [null]
+
+=== 判别测试：1 通过 / 28 失败 ===

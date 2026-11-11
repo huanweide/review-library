@@ -82,6 +82,37 @@ DSH 插件与 WorkBuddy 专家的 manifest，以及 README 顶部定位行；`sc
 - 折叠分支搜不到、方向键只在命中间跳转、F1 闭环未统一、真 Electron GUI 未跑、PDF 页图不渲染，
   均为既有遗留，本轮未扩大也未修复。
 
+**未发布批次补充（2026-11-11 · maxloop 功能端：学习闭环进统一核心）**
+
+- **真问题**：默认入口 `core.html` 此前只能「看分析结果」——`core-ui.js:456` 把答案直接摊开，
+  `core/index.js` 门面止于 `getAnalysis`、`core/request.js` 无练习路由、`core/bookStore.js` 落盘结构
+  无「学习过程」这一层。F1「闭环进 core」自 11-10 起标为最高优先却因「两套 store 合并会砸数据」搁置；
+  本轮复核发现该前提可绕开：**不合并、不迁移，只新增独立 `practice.json`**，风险从高降到零。
+- **实现**：新增 `core/practice.js`（内容哈希题目身份 / 分题型判分 / 排程 / 错题 / 到期队列），
+  `core/bookStore.js` 增 `practice.json` 读写，`core/index.js` 增 6 个门面方法（DSH/专家可达），
+  `core/request.js` 增 5 条 `/books/:id/practice/*` 路由（HTTP/Electron 共用 dispatch 自动生效），
+  `core.html` 增「✍ 练习」tab + 面板、`core-ui.js` 练习逻辑、`core.css` token 内样式。
+- **先答后揭是真的**：练习列表接口**不下发** `answer`/`solution`/`rationale`，
+  答案只在提交判分后的响应里第一次到达；e2e 用网络响应体做硬证据，不是 CSS 遮挡。
+- **判分诚实边界**：`core/analyze.js:86` 强制答案写成「B. 8 个 —— 理由」整句，
+  故按题型分路——选择题/判断题解析出选项字母自动判，其余 5 类**不冒充机器评分**，
+  揭晓答案后由用户四档自评（Anki 本质）。排程复用既有 `lib/srs.js`，零新依赖。
+- **零迁移**：`book.json` / `analysis.json` 结构一个字节不改，老书缺 `practice.json` 即空状态；
+  判别测试 J7 真验「读练习状态不改 book.json」。
+- **真截图目视抓到并修掉 1 个口径假数据**：统计条曾显示「0 可练」却渲染第 1/4 题
+  （前端误把后端「已练卡片数」当「本轮可练题目数」）；已改为列表长度并加 e2e 精确断言锁住。
+- **验收（真跑，非自评）**：判别测试改码前 `28 条能力判据全红 / exit 1`
+  → 改码后 `28/0 / exit 0`；`npm test` **20/20 套件**、`_e2e/e2e.js` **195/0**、
+  `_e2e/core-ui-verify.js` **139/0**、新增 `_e2e/practice-e2e.js` **25/0**（真 Chromium + 本地 mock LLM
+  真发一次整体分析 + 真点完整闭环）、`node --check` **85/85**、版本 8 处 / 形态 18 处门禁、
+  凭据扫描无真命中；浅/深真截图 3 张目视通过。
+- **研究/台账**：`PROCESS/research-core-practice-loop/`（best-practices 三组外查 + GitHub API star 真值 /
+  fusion-decisions R/C/N + 根因 A→B / iteration-log Oracle Gate 五项 + 安全三段 + 效率指数 100 /
+  baseline-practice.txt）。
+- **KNOWN-LIMITATION**：DSH 插件与 WorkBuddy 专家形态仅「Core 门面可达」，
+  action 白名单未暴露 `practice` 入口（下一轮）；开放题不自动判分；排程为轻量三状态量模型非官方 FSRS；
+  真 Electron GUI 未跑、真模型未重跑（本轮不碰提示词）；答案勘误会令该题复习史归零。
+
 **未发布批次补充（2026-11-10 续 · 全链路测试 + 前端微调）**
 - 修复 `_e2e/e2e.js`：原把 `core.html` 的思维导图断言（`#pane-mindmap/#mm-canvas/#mm-detail` 等）错放进 `index.html` 传统入口测试，而该入口书内 tabs 无 mindmap 子页，导致点击超时崩溃；已移走错配块、保留文字输入回归检查、新增架构守卫断言。重跑 `node _e2e/e2e.js` → **195 通过 / 0 失败**（此前仅约 70+ 检查点后崩溃）。
 - 确认默认入口 `core.html` 全链路已由 `_e2e/core-ui-verify.js`（本地 mock LLM 真发 HTTP→真解析→真渲染，覆盖 HTTP + Electron/file:// 双形态）完整覆盖，重跑 → **139 通过 / 0 失败**；本轮未另建 core-e2e.js，复用现有覆盖。

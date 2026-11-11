@@ -9,6 +9,8 @@
 // 落盘结构（每本书一个目录）：
 //   library/books/<id>/book.json        —— 书元数据 + 文件清单（轻量）
 //   library/books/<id>/analysis.json    —— 整体分析结果（树状思维导图 + 题型索引）
+//   library/books/<id>/practice.json    —— 学习过程（作答/错题/复习排程）。2026-11-11 新增，
+//                                          独立文件、不改 book.json 结构，老书缺此文件即视为空状态（零迁移）。
 //   library/books/<id>/files/<fid>__名  —— 文件原始字节
 //   library/books/<id>/files/<fid>.txt  —— 抽取出的纯文本缓存（图片为空）
 const fs = require('fs');
@@ -69,6 +71,7 @@ class BookStore {
   _bookDir(id) { return resolveInside(this.booksDir, id, '书 id'); }
   _bookFile(id) { return path.join(this._bookDir(id), 'book.json'); }
   _analysisFile(id) { return path.join(this._bookDir(id), 'analysis.json'); }
+  _practiceFile(id) { return path.join(this._bookDir(id), 'practice.json'); }
   _filesDir(id) { return path.join(this._bookDir(id), 'files'); }
 
   // 建书：必须先建书，才有 id 可加文件。
@@ -204,6 +207,33 @@ class BookStore {
     }
     const book = this.getBook(id);
     return book ? book.analysisMeta : null;
+  }
+
+  // ---------- 学习过程数据（2026-11-11 新增，独立文件 / 零迁移） ----------
+  // 只读自己这个文件，绝不触碰 book.json：老书没有 practice.json 时返回空状态，
+  // 新书写了也不改任何既有字段。删掉 practice.json 即完全回到未启用状态。
+  getPractice(id) {
+    const f = this._practiceFile(id);
+    if (!fs.existsSync(f)) return { version: 1, cards: {}, updatedAt: '' };
+    try {
+      const s = JSON.parse(fs.readFileSync(f, 'utf8'));
+      return {
+        version: 1,
+        cards: (s && s.cards && typeof s.cards === 'object' && !Array.isArray(s.cards)) ? s.cards : {},
+        updatedAt: (s && s.updatedAt) || ''
+      };
+    } catch (e) { return { version: 1, cards: {}, updatedAt: '' }; }
+  }
+  savePractice(id, state) {
+    const f = this._practiceFile(id);
+    // _practiceFile 已走 resolveInside(id)，此处写的是固定文件名，不接受用户拼路径。
+    const body = {
+      version: 1,
+      cards: (state && state.cards && typeof state.cards === 'object') ? state.cards : {},
+      updatedAt: new Date().toISOString()
+    };
+    fs.writeFileSync(f, JSON.stringify(body, null, 2), 'utf8');
+    return body;
   }
 
   deleteBook(id) {

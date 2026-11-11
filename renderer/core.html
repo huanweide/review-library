@@ -81,6 +81,7 @@
           <div class="tabs">
             <button class="tab active" data-tab="mindmap">🧠 思维导图</button>
             <button class="tab" data-tab="questions">📝 题型索引</button>
+            <button class="tab" data-tab="practice">✍ 练习</button>
             <button class="tab" data-tab="summary">📋 概览</button>
           </div>
 
@@ -129,6 +130,21 @@
           <div id="tab-questions" class="tab-pane">
             <div class="qindex-note">题型分类已并入导图：切到「📝 题型树」可点子题型看全部题目。此处为速查索引。</div>
             <div id="questionIndex" class="qindex"></div>
+          </div>
+
+          <!-- 练习（2026-11-11）：答案默认不下发，提交后才第一次拿到答案与解析。
+               练习列表走 /api/core/books/:id/practice/quiz（不含 answer/solution/rationale），
+               这不是 CSS 遮挡，是数据层真隐藏。 -->
+          <div id="tab-practice" class="tab-pane">
+            <div class="practice-head">
+              <div id="practiceStats" class="practice-stats"></div>
+              <div class="practice-actions">
+                <button id="btnPracticeAll" class="primary-btn small">开始练习（全部）</button>
+                <button id="btnPracticeDue" class="ghost-btn small">今日复习</button>
+              </div>
+            </div>
+            <div id="practiceHint" class="qindex-note">先自己作答，提交后才揭晓答案与分步解析；开放题不假装机器判分，看答案后按掌握度自评。</div>
+            <div id="practiceBox" class="practice-box"></div>
           </div>
 
           <div id="tab-summary" class="tab-pane">

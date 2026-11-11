@@ -312,6 +312,42 @@ body {
 .qd-tag { font-size: 11px; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 3px 8px; color: var(--ink-soft); }
 .qd-point { font-size: 11px; color: var(--ink-soft); }
 
+/* ===== 练习 / 复习（2026-11-11 功能端） ===== */
+.practice-head { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; margin-bottom: var(--space-3); }
+.practice-stats { display: flex; gap: var(--space-2); flex-wrap: wrap; flex: 1; }
+.practice-stats .pstat { border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-2); padding: 6px 12px; min-width: 84px; text-align: center; }
+.practice-stats .pstat .num { font-size: 18px; font-weight: 700; color: var(--accent-ink); line-height: 1.3; }
+.practice-stats .pstat .lbl { font-size: 11px; color: var(--ink-soft); }
+.practice-stats .pstat.due .num { color: var(--warn); }
+.practice-stats .pstat.wrong .num { color: var(--danger); }
+.practice-actions { display: flex; gap: var(--space-2); }
+.practice-box { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-1); padding: var(--space-4); min-height: 180px; }
+.practice-empty { padding: var(--space-5); text-align: center; color: var(--ink-soft); line-height: 1.9; font-size: 13px; }
+.practice-progress { font-size: 11px; color: var(--ink-soft); margin-bottom: var(--space-2); display: flex; align-items: center; gap: var(--space-2); }
+.practice-progress .ptype { border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; color: var(--accent-ink); background: var(--accent-soft); }
+.practice-stem { font-size: 15px; line-height: 1.8; font-weight: 500; margin-bottom: var(--space-3); }
+.practice-options { display: grid; gap: var(--space-2); margin-bottom: var(--space-3); }
+.practice-opt { text-align: left; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-1); color: var(--ink); padding: 9px 12px; font-size: 13px; line-height: 1.6; cursor: pointer; transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease); }
+.practice-opt:hover { border-color: var(--accent); background: var(--surface-2); }
+.practice-opt.selected { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-ink); font-weight: 600; }
+.practice-input { width: 100%; min-height: 92px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-1); color: var(--ink); padding: 9px 12px; font: inherit; font-size: 13px; line-height: 1.7; resize: vertical; margin-bottom: var(--space-3); }
+.practice-input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 2px var(--accent-soft); }
+.practice-bar { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.practice-bar .spacer { flex: 1; }
+.practice-verdict { margin: var(--space-3) 0; padding: 9px 12px; border-radius: var(--radius-sm); font-size: 13px; line-height: 1.7; }
+.practice-verdict.correct { background: var(--ok-soft); color: var(--ok); }
+.practice-verdict.wrong { background: var(--danger-soft); color: var(--danger); }
+.practice-verdict.self { background: var(--surface-2); color: var(--ink-soft); border: 1px solid var(--line); }
+.practice-answer { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: var(--space-3); margin-bottom: var(--space-3); background: var(--surface-2); }
+.practice-answer .pa-label { font-size: 10px; font-weight: 700; letter-spacing: .08em; color: var(--ink-soft); margin-bottom: 5px; text-transform: uppercase; }
+.practice-answer .pa-text { font-size: 14px; font-weight: 600; line-height: 1.75; color: var(--ink); }
+.practice-answer ol { margin: 6px 0 0; padding-left: 22px; }
+.practice-answer li, .practice-answer .pa-note { font-size: 13px; line-height: 1.8; color: var(--ink-soft); }
+.practice-rating { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; margin-top: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--line); }
+.practice-rating .pr-label { font-size: 12px; color: var(--ink-soft); margin-right: var(--space-1); }
+.practice-rating .ghost-btn.rated { border-color: var(--accent); color: var(--accent-ink); background: var(--accent-soft); }
+.practice-next { margin-top: var(--space-3); }
+
 /* 动效克制：尊重系统减弱动效设置 */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }

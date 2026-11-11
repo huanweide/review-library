@@ -93,6 +93,7 @@
     const b = await api('/books/' + id);
     state.current = b;
     state.analysis = null;
+    resetPractice();   // 换书必须清掉上一本的题，避免串题/串进度
     view.focusId = null; view.collapsed = {}; view.hits = []; view.hitIndex = -1;
     renderBookList();
     $('#noSelection').classList.add('hidden');
@@ -198,6 +199,8 @@
   // ---------- 结果渲染 ----------
   function renderResult() {
     if (!state.analysis) return;
+    // 重新分析会换掉题目（内容哈希 key 随之变），旧练习进度与当前题目必须一起失效重拉。
+    resetPractice();
     $('#resultArea').classList.remove('hidden');
     indexQuestions();
     renderTree(state.analysis.tree);          // 大纲模式（DOM 树，保留既有验收契约）
@@ -398,6 +401,8 @@
   function switchTab(name) {
     $$('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
     $$('.tab-pane').forEach(p => p.classList.toggle('active', p.id === 'tab-' + name));
+    // 练习列表懒加载：第一次切进来（或换书后清空了）才拉，不拖慢首屏，也不影响既有 tab。
+    if (name === 'practice' && state.current && !practice.loading && !practice.questions.length) loadPractice(practice.mode);
   }
   function locateNode(pointId, title) {
     switchTab('mindmap');
@@ -650,6 +655,177 @@
     $('#statsBox').innerHTML = base.concat(typeCards).join('') + meta + covNote;
   }
 
+  // ---------- 练习 / 复习（2026-11-11 功能端） ----------
+  // 真隐藏：practice.questions 里永远不含答案。答案只在 submitPractice 的响应里第一次到达，
+  // 展示完就随下一题丢弃。旧「题目详情」弹窗是看解析用的，保持原样，不动既有 DOM 契约。
+  const practice = {
+    questions: [], idx: 0, mode: 'all', given: null, result: null,
+    rated: 0, loading: false, error: '', summary: null
+  };
+  function practicePath(suffix) { return '/books/' + state.current.id + '/practice/' + suffix; }
+  function resetPractice() {
+    practice.questions = []; practice.idx = 0; practice.given = null; practice.result = null;
+    practice.rated = 0; practice.error = ''; practice.summary = null;
+  }
+
+  async function loadPractice(mode) {
+    if (!state.current) return;
+    practice.mode = mode || 'all';
+    practice.idx = 0; practice.given = null; practice.result = null; practice.rated = 0;
+    practice.error = ''; practice.loading = true;
+    renderPractice();
+    try {
+      const r = await api(practicePath(practice.mode === 'due' ? 'due' : 'quiz'));
+      practice.questions = Array.isArray(r.questions) ? r.questions : [];
+      practice.summary = r.summary || null;
+    } catch (e) {
+      practice.questions = []; practice.summary = null;
+      practice.error = e.message || '练习载入失败';
+    } finally { practice.loading = false; }
+    renderPractice();
+  }
+
+  function renderPracticeStats() {
+    const box = $('#practiceStats'); if (!box) return;
+    const s = practice.summary || {};
+    // 口径别混：summary.total 是「已有练习记录的卡片数」（后端 summarize 基于 practice.json），
+    // 不是「本轮可练题目数」。真截图目视抓到过「0 可练」却渲染着第 1/4 题的假数据，
+    // 故「本轮题数」一律取当前列表长度，与上方「第 N/M 题」同源。
+    const cells = [
+      ['本轮题数', practice.questions.length, ''],
+      ['今日到期', s.dueCount || 0, 'due'],
+      ['错过', s.wrongCount || 0, 'wrong'],
+      ['反复错', s.leechCount || 0, 'wrong']
+    ];
+    box.innerHTML = cells.map(([l, n, cls]) =>
+      '<div class="pstat ' + cls + '"><div class="num">' + (n || 0) + '</div><div class="lbl">' + l + '</div></div>').join('');
+  }
+
+  function renderPractice() {
+    const box = $('#practiceBox'); if (!box) return;
+    renderPracticeStats();
+    if (practice.loading) { box.innerHTML = '<div class="practice-empty">正在载入练习…</div>'; return; }
+    if (practice.error) {
+      box.innerHTML = '<div class="practice-empty">' + esc(practice.error) +
+        '<br/>请先完成「大模型整体分析」，再开始练习。</div>';
+      return;
+    }
+    if (!practice.questions.length) {
+      box.innerHTML = '<div class="practice-empty">' +
+        (practice.mode === 'due' ? '今天没有到期要复习的题目。先去「开始练习」做几道，答错的会按记忆曲线到期回来。'
+                                 : '还没有可练习的题目。请先导入资料并完成整体分析。') + '</div>';
+      return;
+    }
+    const q = practice.questions[practice.idx];
+    const hasOpts = Array.isArray(q.options) && q.options.length > 0;
+    const done = !!practice.result;
+    let h = '<div class="practice-progress">第 ' + (practice.idx + 1) + ' / ' + practice.questions.length + ' 题' +
+      '<span class="ptype">' + esc(q.type || '') + '</span>' +
+      '<span>' + esc(q.difficulty || '基础') + '</span>' +
+      (q.auto ? '' : '<span>· 开放题，按答案自评</span>') + '</div>';
+    h += '<div class="practice-stem">' + esc(q.stem) + '</div>';
+
+    if (hasOpts) {
+      h += '<div class="practice-options">' + q.options.map((o, i) =>
+        '<button class="practice-opt' + (practice.given === String(i) || practice.given === o ? ' selected' : '') +
+        '" data-opt="' + esc(o) + '"' + (done ? ' disabled' : '') + '>' + esc(o) + '</button>').join('') + '</div>';
+    } else {
+      h += '<textarea id="practiceText" class="practice-input" placeholder="先自己写出答案，再提交对照解析…"' +
+        (done ? ' disabled' : '') + '>' + esc(practice.given || '') + '</textarea>';
+    }
+
+    if (!done) {
+      h += '<div class="practice-bar"><button id="btnPracticeSubmit" class="primary-btn small">提交作答</button>' +
+        '<span class="spacer"></span><span class="qindex-note" style="border:0;background:none;padding:0;margin:0">提交后才揭晓答案</span></div>';
+    } else {
+      const r = practice.result;
+      const vClass = r.verdict === 'correct' ? 'correct' : (r.verdict === 'wrong' ? 'wrong' : 'self');
+      const vText = r.verdict === 'correct' ? '答对了' : (r.verdict === 'wrong' ? '答错了，已记入错题并按记忆曲线排下次复习' :
+        '开放题不冒充机器判分 —— 请对照下面的答案与解析，按自己的掌握程度自评');
+      h += '<div class="practice-verdict ' + vClass + '">' + vText +
+        (r.expected ? '（正确答案 ' + esc(r.expected) + '）' : '') + '</div>';
+      h += '<div class="practice-answer"><div class="pa-label">答案</div><div class="pa-text">' + esc(r.answer || '（模型未给出答案）') + '</div></div>';
+      if (r.solution && r.solution.length) {
+        h += '<div class="practice-answer"><div class="pa-label">分步解答</div><ol>' +
+          r.solution.map(s => '<li>' + esc(s) + '</li>').join('') + '</ol></div>';
+      }
+      if (r.rationale) {
+        h += '<div class="practice-answer"><div class="pa-label">解题思路</div><div class="pa-note">' + esc(r.rationale) + '</div></div>';
+      }
+      if (r.pitfalls) {
+        h += '<div class="practice-answer"><div class="pa-label">易错点</div><div class="pa-note">' + esc(r.pitfalls) + '</div></div>';
+      }
+      const label = r.verdict === 'self' ? '对照答案后，给自己打几分：' : '掌握度自评（可选，会重排下次复习）：';
+      h += '<div class="practice-rating"><span class="pr-label">' + label + '</span>' +
+        [[1, '重来'], [2, '吃力'], [3, '会了'], [4, '太简单']].map(([v, t]) =>
+          '<button class="ghost-btn tiny practice-rate' + (practice.rated === v ? ' rated' : '') +
+          '" data-rating="' + v + '">' + t + '</button>').join('') +
+        (practice.rated ? '<span class="pr-label">已排下次复习：' +
+          new Date(practice.result.dueAt || Date.now()).toLocaleDateString('zh-CN') + '</span>' : '') + '</div>';
+      h += '<div class="practice-next"><button id="btnPracticeNext" class="ghost-btn small">' +
+        (practice.idx < practice.questions.length - 1 ? '下一题 →' : '完成本轮，刷新统计') + '</button></div>';
+    }
+    box.innerHTML = h;
+    bindPracticeCard();
+  }
+
+  function bindPracticeCard() {
+    $$('#practiceBox .practice-opt').forEach(b => b.onclick = () => {
+      if (practice.result) return;
+      practice.given = b.dataset.opt;
+      $$('#practiceBox .practice-opt').forEach(x => x.classList.toggle('selected', x === b));
+    });
+    const txt = $('#practiceText');
+    if (txt) txt.oninput = () => { practice.given = txt.value; };
+    const submit = $('#btnPracticeSubmit');
+    if (submit) submit.onclick = submitPractice;
+    $$('#practiceBox .practice-rate').forEach(b => b.onclick = () => ratePractice(Number(b.dataset.rating)));
+    const next = $('#btnPracticeNext');
+    if (next) next.onclick = nextPractice;
+  }
+
+  async function submitPractice() {
+    if (!state.current || practice.result) return;
+    const q = practice.questions[practice.idx];
+    const given = practice.given;
+    if (given == null || !String(given).trim()) { toast('请先作答再提交'); return; }
+    const btn = $('#btnPracticeSubmit'); if (btn) btn.disabled = true;
+    try {
+      practice.result = await api(practicePath('attempt'), {
+        method: 'POST', body: JSON.stringify({ key: q.key, given })
+      });
+    } catch (e) {
+      toast('提交失败：' + e.message);
+      if (btn) btn.disabled = false;
+      return;
+    }
+    renderPractice();
+  }
+
+  async function ratePractice(rating) {
+    if (!state.current || !practice.result || practice.rated) return;
+    const q = practice.questions[practice.idx];
+    try {
+      const r = await api(practicePath('rate'), {
+        method: 'POST', body: JSON.stringify({ key: q.key, rating })
+      });
+      practice.rated = rating;
+      if (practice.result) practice.result.dueAt = r.dueAt;
+      toast('已排下次复习');
+      renderPractice();
+    } catch (e) { toast('自评失败：' + e.message); }
+  }
+
+  function nextPractice() {
+    if (practice.idx < practice.questions.length - 1) {
+      practice.idx++; practice.given = null; practice.result = null; practice.rated = 0;
+      renderPractice();
+    } else {
+      loadPractice(practice.mode);   // 本轮做完，重新拉列表刷新到期/错题统计
+      toast('本轮练习完成');
+    }
+  }
+
   // ---------- 工具 ----------
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
   function cssEsc(s) { return String(s || '').replace(/["\\]/g, '\\$&'); }
@@ -669,6 +845,8 @@
     dz.addEventListener('drop', e => { if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files); });
 
     $$('.tab').forEach(t => t.onclick = () => switchTab(t.dataset.tab));
+    $('#btnPracticeAll').onclick = () => loadPractice('all');
+    $('#btnPracticeDue').onclick = () => loadPractice('due');
 
     $('#expandAll').onclick = () => {
       $$('#tree ul ul').forEach(u => u.classList.remove('hidden'));

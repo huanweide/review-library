@@ -11,6 +11,7 @@
 const { BookStore } = require('./bookStore');
 const extract = require('./extract');
 const analyzeLib = require('./analyze');
+const practiceLib = require('./practice');
 
 // 版本号唯一真源 = 根 package.json 的 version；本常量由 scripts/sync-versions.mjs 机械同步，禁止手改。
 const CORE_VERSION = '1.5.0';
@@ -73,6 +74,64 @@ class Core {
   }
 
   getAnalysis(id) { return this.store.getAnalysis(id); }
+
+  // ---------- 学习闭环（2026-11-11）：门面方法，DSH / 专家形态直接调这里 ----------
+  // 关键边界：getQuiz 返回的是**脱敏题目**（不含 answer / solution / rationale），
+  // 答案只在 submitAttempt 判分后才第一次下发。这不是 CSS 遮挡，是数据层真隐藏。
+
+  // 练习列表 + 进度概览。未分析时明确报错，不返回空壳骗前端。
+  getQuiz(id, opts) {
+    const a = this.store.getAnalysis(id);
+    if (!a || !Array.isArray(a.questionIndex)) throw new Error('请先完成整体分析，再开始练习');
+    const questions = practiceLib.flatten(a, true);
+    const state = practiceLib.normalizeState(this.store.getPractice(id));
+    const now = (opts && opts.now) || Date.now();
+    return { questions, total: questions.length, summary: practiceLib.summarize(state, now) };
+  }
+
+  // 原始过程状态（供统计 / 调试 / 判别测试跨实例回读）。
+  getPractice(id) {
+    return practiceLib.normalizeState(this.store.getPractice(id));
+  }
+
+  // 今日到期题目（脱敏）。now 可注入，判别测试不依赖真实时间。
+  getDue(id, opts) {
+    const a = this.store.getAnalysis(id);
+    if (!a || !Array.isArray(a.questionIndex)) return { questions: [], dueCount: 0 };
+    const now = (opts && opts.now) || Date.now();
+    const state = practiceLib.normalizeState(this.store.getPractice(id));
+    const keys = practiceLib.dueKeys(state, now);
+    const set = new Set(keys);
+    const questions = practiceLib.flatten(a, true).filter(q => set.has(q.key));
+    // 保持 leech 上浮 / 到期先后，不按题目原序打乱。
+    questions.sort((x, y) => keys.indexOf(x.key) - keys.indexOf(y.key));
+    return { questions, dueCount: keys.length, summary: practiceLib.summarize(state, now) };
+  }
+
+  // 提交作答。body = { key, given }；只有这里才把答案与解析返回给调用方。
+  submitAttempt(id, body, opts) {
+    const a = this.store.getAnalysis(id);
+    if (!a || !Array.isArray(a.questionIndex)) throw new Error('尚无分析结果');
+    const b = body && typeof body === 'object' ? body : {};
+    const q = practiceLib.findQuestion(a, b.key);
+    if (!q) throw new Error('题目不存在或已随重新分析改变，请刷新练习列表');
+    const now = (opts && opts.now) || Date.now();
+    const state = this.store.getPractice(id);
+    const r = practiceLib.attempt(state, q, b.given, now);
+    this.store.savePractice(id, r.state);
+    return r.result;
+  }
+
+  // 开放题揭晓后四档自评，或答完调整掌握度。body = { key, rating(1-4) }。
+  rateCard(id, body, opts) {
+    const b = body && typeof body === 'object' ? body : {};
+    const now = (opts && opts.now) || Date.now();
+    const state = this.store.getPractice(id);
+    const r = practiceLib.rate(state, b.key, b.rating, now);
+    if (r.error) throw new Error(r.error);
+    this.store.savePractice(id, r.state);
+    return r.result;
+  }
 }
 
-module.exports = { CORE_VERSION, Core, BookStore, extract, analyze: analyzeLib };
+module.exports = { CORE_VERSION, Core, BookStore, extract, analyze: analyzeLib, practice: practiceLib };

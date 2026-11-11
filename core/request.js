@@ -80,6 +80,25 @@ async function dispatch(core, path, method, body) {
       const a = core.getAnalysis(id);
       return a ? { status: 200, data: a } : { status: 404, data: { error: '尚未分析' } };
     }
+    // ---------- 学习闭环（2026-11-11） ----------
+    // 路由挂在 /books/:id/practice/*，与 files/analyze 同等地位；canonical 一处定义，
+    // server.js 与 app/main.js 的 core:request 都走这里，故 HTTP / Electron 两形态自动生效。
+    // 安全：路径里没有用户可控的 key（key 只在 body），body 交给 practiceLib 做白名单校验。
+    if (parts[2] === 'practice' && parts.length === 3 && m === 'GET') {
+      return { status: 200, data: core.getPractice(id) };
+    }
+    if (parts[2] === 'practice' && parts.length === 4 && parts[3] === 'quiz' && m === 'GET') {
+      return { status: 200, data: core.getQuiz(id) };
+    }
+    if (parts[2] === 'practice' && parts.length === 4 && parts[3] === 'due' && m === 'GET') {
+      return { status: 200, data: core.getDue(id) };
+    }
+    if (parts[2] === 'practice' && parts.length === 4 && parts[3] === 'attempt' && m === 'POST') {
+      return { status: 200, data: core.submitAttempt(id, b) };
+    }
+    if (parts[2] === 'practice' && parts.length === 4 && parts[3] === 'rate' && m === 'POST') {
+      return { status: 200, data: core.rateCard(id, b) };
+    }
     return { status: 404, data: { error: 'unknown core route' } };
   } catch (e) {
     // 错误文本统一经 scrub（抹掉 apiKey 与 sk- 前缀）。cfg 只在这里用于脱敏，不进日志。
