@@ -52,9 +52,9 @@ source: 本轮真跑输出（判别 baseline/candidate、npm test、三套 e2e�
 1. **不可逆动作**：本轮**零迁移、零删除、零发布、零推送**。新增 `practice.json` 是纯附加文件，
    删掉即回到原状；判别 J7 真验「读练习状态不改 `book.json` 一个字节」。`git` 只做本地 commit，
    push 仍被 GitHub 账户邮箱验证拦截（已知人类动作，不重试、不绕）。
-2. **凭据**：工作区全量扫描 `sk-` / `ghp_` / `github_pat_` / `AKIA` 无真命中；命中的
-   `sk-SUPERSECRET123456789` 等是既有测试固件里验证脱敏逻辑的假密钥，已排除。
-   e2e 只用本地 mock LLM 与假 key `test-key`，不烧真模型、不联网取数（GitHub API 查 star 除外）。
+2. **凭据**：工作区全量扫描常见密钥前缀无真命中；既有测试固件里用于验证脱敏逻辑的
+   **假密钥字面串**已排除（此处按「绝不落字面值」纪律不复写该串）。
+   e2e 只用本地 mock LLM 与占位假 key，不烧真模型、不联网取数（GitHub API 查 star 除外）。
 3. **既有契约**：不改任何 DOM id/class（`core-ui-verify` 139 / `e2e` 195 全绿为证）；
    不改 `book.json` / `analysis.json` 结构；不改 `index.html` 旧入口行为；不升版本号（仍 `1.5.0`）。
    新增路由挂 `/books/:id/practice/*`，key 只在 body 且经 `/^[a-f0-9]{16}$/` 白名单校验，
