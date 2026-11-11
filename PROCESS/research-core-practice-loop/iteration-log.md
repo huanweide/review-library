@@ -148,3 +148,16 @@ source: 本轮真跑输出（判别 baseline/candidate、npm test、三套 e2e�
 `dist/` 仍是 0.7.0；默认窗口密钥仍存 localStorage（行为未改，只订正文档）；
 重分析旧卡不自动清理；DSH/专家 action 白名单未暴露 practice；
 真 Electron GUI 未跑、真模型未重跑；云端仍未发布（卡 GitHub 邮箱验证）。
+
+---
+
+## 发布闭环（2026-11-11 · 瑞宝宝「好了继续」）
+
+- 邮箱验证根因：与 novel-smith 第 31 轮同属 huanweide **账号级**邮箱验证，账号本人在网页完成一次即对全部仓库生效；故本仓库 `git push ghssh main` 直接成功（远端 `93e7e47`→`79bbb24`，领先 11 提交全上云），dry-run 即 `93e7e47..79bbb24`、无任何邮箱报错。
+- 打 `v1.5.0` tag 并推送（`[new tag] v1.5.0 -> v1.5.0` 远端确认），触发 `release.yml` 自动构建 + **公开 Release**（`draft:false`）。
+- release.yml 风险复核：Test gate 仅 `npm test`+`check-versions.mjs`（不依赖浏览器二进制），本地 21/21 + 8 处版本门禁已验证；Credential scan 工作区全量无真命中；三套真浏览器 e2e 仍不进 CI。
+- **已闭环**：上条 KNOWN-LIMITATION「云端仍未发布（卡 GitHub 邮箱验证）」作废——已发布。
+- 遗留真实限制（仍有效）：`dist/` 本机仍是 0.7.0（缺 electron.exe 未重建，由 CI 构建产出 1.5.0 安装器）；默认窗口密钥仍存 localStorage；重分析旧卡不自动清理；DSH/专家 action 白名单未暴露 practice；真 Electron GUI / 真模型未重跑。
+- 工具教训：`playwright-cli open` 在后台模式（stdin 非 tty）执行完 goto 即主动退出、session 关闭、窗口无法常驻；只有前台 `timeout` 阻塞能保持。本任务最终证 **Edge 非必需**——SSH 直推即通，Edge 仅最初设想的验证手段，实际邮箱已由账号本人网页验证。
+- **资产确认（命令行复核）**：无头 msedge 抓 `/releases/tag/v1.5.0` 得 `latest:true / draft:false / prerelease:false`，资产 `ReviewLibrary-Setup-1.5.0.exe` + `ReviewLibrary-1.5.0-portable.exe` + `review-analysis-dsh-plugin-v1.5.0.zip` + `latest.yml` + `.blockmap` 共 5 项齐全。复用能力：`playwright-core(channel:'msedge')` 无头可绕过本机系统 DNS 污染读 GitHub 公开页，后续查 CI/Release 状态不必再开手动 Edge。
+- **① core 形态密钥改 sessionStorage 分层（maxloop 安全改进）**：`renderer/js/core-ui.js` 原把含 apiKey 的 `core_llm_cfg` 整体写 `localStorage`（密钥长期驻留，README/CHANGELOG 曾明文），现对齐 `index.html` 的 `settings.js` 分层——`loadCfg/saveCfg` 剥离 apiKey（只存 baseURL/model），新增 `core_llm_key`→sessionStorage，`analyze` 改 `fullCfg()` 合并会话密钥，`fillSettings` 从 sessionStorage 回填；零迁移。判别 e2e baseline `2/4`→candidate `4/0`；`npm test` 21/21、`core-ui-verify` 139/0、`node --check`、凭据扫描均无真命中。文档（README/API配置/CHANGELOG）同步订正为「两入口均已分层」。未升版本号/未发版，改动生效需重建 dist 或发 v1.5.1。

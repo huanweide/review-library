@@ -49,11 +49,19 @@
   }
 
   // ---------- 设置 ----------
-  const SETTINGS_KEY = 'core_llm_cfg';
+  const SETTINGS_KEY = 'core_llm_cfg';   // 只存非敏感：baseURL / model
+  const KEY_KEY = 'core_llm_key';        // 敏感：apiKey 只进 sessionStorage，关标签页即失效（凭据分层，对齐 settings.js）
   function loadCfg() {
-    try { return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; } catch (e) { return {}; }
+    try { const c = JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; delete c.apiKey; return c; } catch (e) { return {}; }
   }
-  function saveCfg(cfg) { localStorage.setItem(SETTINGS_KEY, JSON.stringify(cfg)); }
+  function saveCfg(cfg) {
+    const c = Object.assign({}, cfg); delete c.apiKey;   // 密钥绝不进 localStorage
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(c));
+  }
+  function getKey() { try { return sessionStorage.getItem(KEY_KEY) || ''; } catch (e) { return ''; } }
+  function setKey(v) { try { v ? sessionStorage.setItem(KEY_KEY, v) : sessionStorage.removeItem(KEY_KEY); } catch (e) {} }
+  // 发给引擎的完整 cfg 合并 sessionStorage 密钥（不落 localStorage）
+  function fullCfg() { const c = loadCfg(); c.apiKey = getKey(); return c; }
 
   function toast(msg) {
     const t = $('#toast'); t.textContent = msg; t.classList.remove('hidden');
@@ -171,7 +179,7 @@
 
   // ---------- 分析 ----------
   async function analyze() {
-    const cfg = loadCfg();
+    const cfg = fullCfg();
     if (!cfg.baseURL || !cfg.model) { toast('请先在「模型设置」里填写 API 地址与模型名'); $('#openSettings').click(); return; }
     const st = $('#analyzeStatus');
     st.classList.remove('hidden', 'err', 'ok'); st.classList.add('loading');
@@ -926,7 +934,12 @@
     const modal = $('#settingsModal');
     $('#openSettings').onclick = () => { fillSettings(); modal.classList.remove('hidden'); };
     $('#closeSettings').onclick = () => modal.classList.add('hidden');
-    $('#saveSettings').onclick = () => { saveCfg(readSettings()); modal.classList.add('hidden'); toast('已保存模型设置'); };
+    $('#saveSettings').onclick = () => {
+      const s = readSettings();
+      saveCfg({ baseURL: s.baseURL, model: s.model });   // 非敏感存 localStorage
+      setKey(s.apiKey);                                   // 敏感存 sessionStorage（关标签页即失效）
+      modal.classList.add('hidden'); toast('已保存模型设置');
+    };
     $('#testConn').onclick = testConn;
     modal.addEventListener('click', e => { if (e.target === modal) modal.classList.add('hidden'); });
 
@@ -943,7 +956,8 @@
 
   function fillSettings() {
     const c = loadCfg();
-    $('#cfgBase').value = c.baseURL || ''; $('#cfgModel').value = c.model || ''; $('#cfgKey').value = c.apiKey || '';
+    $('#cfgBase').value = c.baseURL || ''; $('#cfgModel').value = c.model || '';
+    $('#cfgKey').value = getKey() || '';   // 密钥从 sessionStorage 回填（不读 localStorage）
   }
   function readSettings() { return { baseURL: $('#cfgBase').value.trim(), model: $('#cfgModel').value.trim(), apiKey: $('#cfgKey').value.trim() }; }
   async function testConn() {

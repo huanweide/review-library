@@ -273,3 +273,10 @@ DSH 插件与 WorkBuddy 专家改为复用同一核心；版本与形态漂移�
 ## v1.0.0 — 2026-11-08
 
 首次发布统一项目形态。更早的 v0.5–v0.9 为分层架构时期，见 README 历史章节。
+
+## 未发布批次（2026-11-11 · ① core 形态密钥分层）
+
+- **① core.html 默认窗口密钥改 sessionStorage 分层**：原 `renderer/js/core-ui.js` 把含 apiKey 的 `core_llm_cfg` 整体写 `localStorage`（密钥长期驻留，README/CHANGELOG 曾明文），现对齐 `index.html` 的 `settings.js` 凭据分层——`loadCfg/saveCfg` 剥离 apiKey（只存 baseURL/model 到 `core_llm_cfg`），新增 `core_llm_key`→sessionStorage，`analyze` 发送处改用 `fullCfg()` 合并会话密钥（否则分析丢密钥）；`fillSettings` 从 sessionStorage 回填；零迁移，旧 `core_llm_cfg` 含 apiKey 的旧数据读取时忽略。
+- **判别**：独立 e2e `_e2e/core-key-split.e2e.js` baseline `2/4 exit 1`（localStorage 含 apiKey / sessionStorage 无）→ candidate `4/0`，两条回归守卫（baseURL/model 保留、重开弹窗回填）两版恒绿。
+- **门禁**：`npm test` 21/21、`core-ui-verify.js` 139/0（双形态不退化）、`node --check`、`core-key-split` 4/0、凭据扫描无真命中。
+- **未升版本号 / 未发版**：改动要生效需重建 dist 或发 v1.5.1（CI 构建）；本机 `dist/` 仍是 0.7.0，待发布环节。
