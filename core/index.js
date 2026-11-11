@@ -14,7 +14,7 @@ const analyzeLib = require('./analyze');
 const practiceLib = require('./practice');
 
 // 版本号唯一真源 = 根 package.json 的 version；本常量由 scripts/sync-versions.mjs 机械同步，禁止手改。
-const CORE_VERSION = '1.5.0';
+const CORE_VERSION = '1.5.1';
 
 class Core {
   constructor(root) {

@@ -5,14 +5,27 @@
 DSH 插件与 WorkBuddy 专家的 manifest，以及 README 顶部定位行；`scripts/check-versions.mjs`
 挂在 `pretest` 上做漂移检测。发版 tag 必须与 `package.json` 严格一致（如 `v1.5.0`）。
 
-## v1.5.0 — 2026-11-10（本地已就绪，待云端发布）
+## v1.5.1 — 2026-11-11（已发布，安全补丁）
 
-> **状态（如实）**：本地 8 处版本常量已统一升到 `1.5.0`，全量门禁全绿、改动已提交。
-> 但**云端发布被 GitHub 账户侧拦截**：`git push ghssh main` 与 `git push --dry-run` 均返回
-> `ERROR: You must verify your email address`，`gh` 的 token 也已失效，无其它可用推送通道。
-> 这与代码 / SSH 密钥 / 仓库权限无关。待邮箱验证后补推 main + 打 `v1.5.0` tag 即可由 CI 发版。
-> **云端最新仍是 `v1.4.0`；在补推成功前，本节不是「已发布」。**
-> 阻塞详情与一键补推清单见 `PROCESS/research-competitor-e2e/release-prep-v150.md`。
+安全补丁：默认窗口 `core.html` 的 API 密钥不再驻留 `localStorage`。
+
+- **真问题**：`renderer/js/core-ui.js` 的 `saveCfg` 把含 `apiKey` 的 `core_llm_cfg` 整体写
+  `localStorage`（密钥长期驻留，共享电脑有风险）；旧版 `index.html` 的 `settings.js` 早就是
+  `sessionStorage` 分层且被 e2e 守护。两形态不一致。
+- **修复（限定 core-ui.js）**：`loadCfg/saveCfg` 剥离 `apiKey`（只存 baseURL/model 到
+  `core_llm_cfg`）；新增 `core_llm_key`→`sessionStorage` + `getKey/setKey/fullCfg()`；
+  `#saveSettings` 把密钥单独存 `sessionStorage`、`fillSettings` 从 `sessionStorage` 回填、
+  `analyze` 改用 `fullCfg()` 合并会话密钥；零迁移，旧数据读取时忽略 `apiKey`。
+- **判别与门禁**：`_e2e/core-key-split.e2e.js` baseline 2/4 → candidate 4/0；`npm test` 21/21、
+  `core-ui-verify.js` 139/0（双形态不退化）、`node --check`、凭据扫描无真命中、版本 8 处一致。
+- 文档：README / API配置 / CHANGELOG 同步订正为「两入口均已凭据分层」。
+
+## v1.5.0 — 2026-11-10（已发布）
+
+> **状态（已闭环）**：`huanweide` 账号邮箱在网页侧验证后（账号级，对所有仓库生效），
+> `git push ghssh main` 与 `git tag -a v1.5.0` 均已成功上云，CI 自动构建并公开发布。
+> 命令行无头 msedge 复核资产 5 项齐全（Setup / portable / `.blockmap` / DSH 插件 zip / `latest.yml`）。
+> 阻塞详情见 `PROCESS/research-competitor-e2e/release-prep-v150.md`。
 
 **定位**：结合高 star 竞品「确实比我们合理」的能力，做 1 块优化 + 1 块美化。
 基准与采纳门槛见 `PROCESS/research-competitor-e2e/visual-benchmark.md`、

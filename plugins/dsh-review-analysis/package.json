@@ -1,6 +1,6 @@
 {
   "name": "dsh-review-analysis",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "DeepSeek Harness 插件（统一复习项目的 DSH 入口）：复用主项目 core/ 建书、导入资料、大模型整本整体分析，输出可层层展开的思维导图 + 题型分类索引；左侧栏面板可直接查看。不是独立引擎。",
   "type": "module",
   "main": "index.js",
