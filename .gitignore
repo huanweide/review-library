@@ -10,6 +10,9 @@ library/
 *.sqlite
 .DS_Store
 
+# 生成物（分析脚本产出，非源码，不入库）
+review-analysis-out/
+
 # 截图 / 临时
 _e2e/shots/
 _verify-data/

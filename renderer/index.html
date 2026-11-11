@@ -201,6 +201,34 @@
             <button id="f-clear" class="btn ghost sm">清空筛选</button>
             <span id="mat-count" class="mat-count"></span>
           </div>
+          <div id="mat-dropzone" class="mat-dropzone" tabindex="0" role="button" aria-label="拖入、点击或粘贴添加资料">
+            <input id="mat-drop-input" type="file" multiple
+              accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.csv,.png,.jpg,.jpeg,.gif,.webp,.bmp,.txt,.md"
+              hidden>
+            <div class="dz-folder" aria-hidden="true">
+              <svg class="dz-folder-svg" viewBox="0 0 96 82" fill="none">
+                <path d="M8 24 L32 24 L41 33 L88 33 C92 33 95 36 95 40 L95 68 C95 72 92 75 88 75 L10 75 C6 75 3 72 3 68 L3 28 C3 25 5 24 8 24 Z" fill="var(--folder-back)"/>
+                <path d="M3 44 L95 44 L90 70 C89 73 86 75 83 75 L13 75 C10 75 7 73 6 70 Z" fill="var(--folder-front)" stroke="var(--folder-edge)" stroke-width="1.5"/>
+                <rect x="33" y="13" width="34" height="42" rx="3" fill="var(--folder-paper)" stroke="var(--folder-edge)" stroke-width="1.5"/>
+                <line x1="40" y1="24" x2="60" y2="24" stroke="var(--folder-line)" stroke-width="2.2" stroke-linecap="round"/>
+                <line x1="40" y1="31" x2="60" y2="31" stroke="var(--folder-line)" stroke-width="2.2" stroke-linecap="round"/>
+                <line x1="40" y1="38" x2="53" y2="38" stroke="var(--folder-line)" stroke-width="2.2" stroke-linecap="round"/>
+                <g class="dz-arrow">
+                  <path d="M50 40 V20" stroke="var(--brand)" stroke-width="3.2" stroke-linecap="round"/>
+                  <path d="M41 28 L50 19 L59 28" stroke="var(--brand)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+                </g>
+              </svg>
+            </div>
+            <div class="dz-main">
+              <div class="dz-title">把资料拖进这个文件夹，或<span class="dz-link">点击选择</span></div>
+              <div class="dz-sub">松开即导入到本书（第 1 层）· 也可直接 <span class="dz-paste">Ctrl / ⌘ + V 粘贴</span></div>
+            </div>
+            <div class="dz-formats">
+              <span class="dz-chip">PDF</span><span class="dz-chip">Word</span><span class="dz-chip">PPT</span>
+              <span class="dz-chip">Excel</span><span class="dz-chip">图片</span><span class="dz-chip">Markdown</span>
+            </div>
+            <div id="mat-drop-status" class="dz-status" role="status"></div>
+          </div>
           <div id="material-grid" class="material-grid"></div>
         </section>
       </div>

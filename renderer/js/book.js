@@ -58,6 +58,7 @@
       this.renderTagOptions();
       this.renderLayers();
       this.renderMaterials();
+      this.initDropzone();
     },
 
     resetFilterControls() {
@@ -236,6 +237,62 @@
       this.data = await API.books.get(this.id);
       this.renderTagOptions();
       this.renderLayers(); this.renderMaterials();
+    },
+
+    // v1.5.1 美化：资料页常驻拖入区——点击选文件 / 拖拽落入都导入到本书（第 1 层）。
+    // 复用已有的 uploadFiles，不重复造上传逻辑。只在首次进入书时绑定一次。
+    initDropzone() {
+      if (this._dzInited) return;
+      this._dzInited = true;
+      const dz = document.getElementById('mat-dropzone');
+      const input = document.getElementById('mat-drop-input');
+      const status = document.getElementById('mat-drop-status');
+      if (!dz || !input) return;
+      const setStatus = (msg, warn) => {
+        if (status) { status.textContent = msg || ''; status.classList.toggle('warn', !!warn); }
+      };
+      const ingest = (files) => {
+        if (!files || !files.length) return;
+        const n = files.length;
+        setStatus('正在导入 ' + n + ' 份资料…');
+        this.uploadFiles(files, 1)
+          .then(() => setStatus('已导入 ' + n + ' 份资料'))
+          .catch(err => setStatus('导入失败：' + ((err && err.message) || err), true));
+      };
+      dz.addEventListener('click', (e) => { if (e.target !== input) input.click(); });
+      dz.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); }
+      });
+      input.addEventListener('change', () => { ingest(input.files); input.value = ''; });
+      ['dragenter', 'dragover'].forEach(ev => dz.addEventListener(ev, (e) => {
+        e.preventDefault(); e.stopPropagation(); dz.classList.add('drag');
+      }));
+      ['dragleave', 'dragend'].forEach(ev => dz.addEventListener(ev, (e) => {
+        e.preventDefault(); e.stopPropagation(); if (e.target === dz) dz.classList.remove('drag');
+      }));
+      dz.addEventListener('drop', (e) => {
+        e.preventDefault(); e.stopPropagation(); dz.classList.remove('drag');
+        ingest(e.dataTransfer && e.dataTransfer.files);
+      });
+      // 复制粘贴：从剪贴板取文件（含截图等 image blob），仅当本资料区可见且焦点不在输入框时生效。
+      document.addEventListener('paste', (e) => {
+        if (!dz || dz.offsetParent === null) return;          // 资料页不可见则不拦截
+        const t = e.target;
+        if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+        const dt = e.clipboardData || window.clipboardData;
+        if (!dt) return;
+        let files = (dt.files && dt.files.length) ? Array.from(dt.files) : null;
+        if (!files && dt.items) {
+          const blobs = [];
+          for (const it of dt.items) {
+            if (it.kind === 'file' && it.type && it.type.indexOf('image/') === 0) {
+              const b = it.getAsFile(); if (b) blobs.push(b);
+            }
+          }
+          if (blobs.length) files = blobs;
+        }
+        if (files && files.length) { e.preventDefault(); ingest(files); }
+      });
     },
 
     async submitAdd() {

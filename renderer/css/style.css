@@ -552,3 +552,49 @@ body.is-dragging .layers { outline: 2px dashed var(--accent); outline-offset: 6p
 
 /* 书内资料区空态 */
 .materials .empty { padding: 48px; font-size: 14px; }
+
+/* 资料页拖入区（v1.5.1 美化：把朴素「+ 添加资料」补一个「文件夹装置桶」常驻入口，支持拖入/点击/粘贴） */
+.mat-dropzone {
+  --folder-back: var(--surface-3);
+  --folder-front: var(--surface-1);
+  --folder-paper: var(--surface);
+  --folder-edge: var(--line-strong);
+  --folder-line: var(--line);
+  position: relative; overflow: hidden;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 16px;
+  padding: 18px 22px; margin-bottom: 16px; min-height: 92px;
+  border: 1.5px solid var(--line-strong); border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, var(--surface-1), var(--surface-2));
+  box-shadow: var(--shadow-sm);
+  cursor: pointer; outline: none;
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease),
+    box-shadow var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+.mat-dropzone:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.mat-dropzone:focus-visible { box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow-md); }
+.mat-dropzone.drag {
+  border-color: var(--accent); background: var(--accent-soft);
+  box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow-md); transform: translateY(-1px);
+}
+
+/* 左侧文件夹/装置桶插画 */
+.dz-folder { flex: 0 0 auto; width: 78px; height: 66px; display: flex; align-items: center; justify-content: center; }
+.dz-folder-svg { width: 100%; height: 100%; display: block; transition: transform var(--dur) var(--ease); transform-origin: center bottom; }
+.mat-dropzone.drag .dz-folder-svg { transform: scale(1.07); }
+@keyframes dzArrow { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+.dz-arrow { animation: dzArrow 1.8s var(--ease) infinite; transform-origin: center; }
+.mat-dropzone.drag .dz-arrow { animation-duration: 0.8s; }
+
+.dz-main { flex: 1 1 220px; min-width: 200px; }
+.dz-title { font-size: 15px; font-weight: 600; color: var(--ink); }
+.dz-link { color: var(--accent-ink); text-decoration: underline; }
+.dz-sub { font-size: 12px; color: var(--muted); margin-top: 3px; line-height: 1.5; }
+.dz-paste { color: var(--accent-ink); font-weight: 600; white-space: nowrap; }
+.dz-formats { display: flex; flex-wrap: wrap; gap: 6px; }
+.dz-chip {
+  font-size: 11px; line-height: 1; padding: 5px 9px; border-radius: 999px;
+  background: var(--surface-1); border: 1px solid var(--line); color: var(--ink-soft);
+}
+.dz-status { flex-basis: 100%; min-height: 0; font-size: 12px; color: var(--ok); }
+.dz-status:empty { display: none; }
+.dz-status.warn { color: var(--danger); }
