@@ -198,10 +198,12 @@ async function handleApi(req, res, u) {
     if (parts[1] === 'feedback' && parts[2] && parts.length === 3 && method === 'GET') {
       return send(res, 200, store.listFeedback(parts[2]));
     }
-    // GET /api/review/queue（跨书到期卡）  POST /api/review/rate（四档自评回写 SRS）
+    // GET /api/review/queue（跨书到期卡优先 + 填充成大量刷题会话）  POST /api/review/rate（四档自评回写 SRS）
     if (parts[1] === 'review' && parts[2] === 'queue' && method === 'GET') {
-      const limit = Math.max(1, Math.min(200, Number(u.searchParams.get('limit')) || 50));
-      return send(res, 200, reviewLib.queueAcrossBooks(store, Date.now(), { limit }));
+      const limit = Math.max(1, Math.min(500, Number(u.searchParams.get('limit')) || 50));
+      const fillRaw = u.searchParams.get('fill');
+      const fill = fillRaw != null ? Math.max(0, Math.min(500, Number(fillRaw) || 0)) : undefined;
+      return send(res, 200, reviewLib.queueAcrossBooks(store, Date.now(), { limit, fill }));
     }
     if (parts[1] === 'review' && parts[2] === 'rate' && method === 'POST') {
       const m = JSON.parse(await readBody(req) || '{}');

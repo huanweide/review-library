@@ -83,7 +83,11 @@
       list: (b) => J('/api/feedback/' + encodeURIComponent(b))
     },
     review: {
-      queue: (limit) => J('/api/review/queue?limit=' + (limit || 50)),
+      queue: (arg) => {
+        const o = (typeof arg === 'number') ? { limit: arg } : (arg || {});
+        const q = '?limit=' + (o.limit || 50) + (o.fill != null ? '&fill=' + o.fill : '');
+        return J('/api/review/queue' + q);
+      },
       rate: (b, pointId, rating) => POST('/api/review/rate', { bookId: b, pointId, rating })
     },
     // v0.8 思维导图（与 preload 的 mindmap:* 一一镜像；无后端时走 demo 只读）

@@ -11,16 +11,52 @@
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const RATES = [[1, '重来'], [2, '吃力'], [3, '会了'], [4, '太简单']];
 
-  const ReviewUI = {
-    queue: [], done: 0, revealed: false,
+  function fmtInterval(dueAt, now) {
+    const diff = Number(dueAt) - Number(now);
+    if (diff <= 0) return '今天';
+    const h = diff / 3600000;
+    if (h < 24) return Math.max(1, Math.round(h)) + '小时后';
+    const d = Math.floor(diff / 86400000);
+    if (d === 1) return '明天';
+    if (d < 30) return d + '天后';
+    if (d < 365) return Math.round(d / 30) + '个月后';
+    return Math.round(d / 365) + '年后';
+  }
 
-    async enter() { await this.load(); },
+  const ReviewUI = {
+    queue: [], done: 0, revealed: false, _keyBound: false,
+
+    async enter() {
+      if (!this._keyBound) {
+        const self = this;
+        document.addEventListener('keydown', e => self.onKey(e));
+        this._keyBound = true;
+      }
+      await this.load();
+    },
+
+    // 键盘：空格揭示答案；1/2/3/4 对应四档自评（仅在「今日复习」视图可见时生效）。
+    onKey(e) {
+      const rv = $('review-view');
+      if (!rv || rv.classList.contains('hidden')) return;
+      const tag = (e.target && e.target.tagName) || '';
+      if (/INPUT|TEXTAREA/.test(tag)) return;
+      if (e.key === ' ' || e.code === 'Space') {
+        const sa = $('show-answer');
+        if (sa && !sa.disabled) { e.preventDefault(); sa.click(); }
+      } else if (e.key === '1' || e.key === '2' || e.key === '3' || e.key === '4') {
+        const rates = $('review-rates');
+        if (rates && rates.classList.contains('hidden')) return;
+        const btn = document.querySelector('.review-rate-btn[data-rate="' + e.key + '"]');
+        if (btn) { e.preventDefault(); btn.click(); }
+      }
+    },
 
     async load() {
       const box = $('review-body');
       if (box) box.innerHTML = '<div class="review-loading">正在汇总今天该复习的知识点…</div>';
       let cards = [], err = '';
-      try { cards = await API.review.queue(50); } catch (e) { err = String(e && e.message || e); }
+      try { cards = await API.review.queue({ limit: 80, fill: 80 }); } catch (e) { err = String(e && e.message || e); }
       this.queue = Array.isArray(cards) ? cards : [];
       this.done = 0; this.revealed = false;
       if (err) { const st = $('review-status'); if (st) st.textContent = '读取失败：' + err; }
@@ -31,7 +67,7 @@
       const box = $('review-body'), st = $('review-status');
       if (!box) return;
       const total = this.queue.length + this.done;
-      if (st) st.textContent = '今天共 ' + total + ' 张到期卡 · 已完成 ' + this.done + ' 张';
+      if (st) st.textContent = '今天共 ' + total + ' 张 · 已完成 ' + this.done + ' 张';
       if (!this.queue.length) {
         box.innerHTML = '<div class="review-done"><h3>' + (total ? '今天的复习做完了' : '今天没有到期的知识点') + '</h3>' +
           '<p>' + (total ? '刚刚的自评已经写进本机，下次复习时间会自动排好。' :
@@ -41,18 +77,27 @@
         return;
       }
       const c = this.queue[0];
+      const now = Date.now();
+      const pct = total ? Math.round(this.done / total * 100) : 0;
+      const rateBtns = RATES.map(([v, label]) => {
+        const nx = c.next && c.next.find(x => x.r === v);
+        const sub = nx ? '<span class="rr-next">下次·' + fmtInterval(nx.dueAt, now) + '</span>' : '';
+        return '<button type="button" class="rate-btn review-rate-btn" data-rate="' + v + '">' +
+          '<span class="rr-label">' + label + '</span>' + sub + '</button>';
+      }).join('');
       box.innerHTML =
+        '<div class="review-progress"><div class="review-progress-bar" style="width:' + pct + '%"></div></div>' +
         '<div class="review-card" data-pid="' + E(c.pointId) + '">' +
-        '<div class="review-card-head"><span class="review-book">' + E(c.bookTitle) + '</span>' +
+        '<div class="review-card-head"><span class="review-book">' + E(c.bookTitle) +
+          (c.tag === 'drill' ? ' · 加练' : '') + '</span>' +
         '<span class="review-count">还剩 ' + this.queue.length + ' 张</span></div>' +
         '<div class="review-card-title">' + E(c.title) + (c.hint ? ' · ' + E(c.hint) : '') + '</div>' +
         '<div class="review-prompt">' + E(c.prompt) + '</div>' +
         '<div id="review-answer" class="review-answer hidden">答案：<b>' + E(c.answer) + '</b></div>' +
-        '<button id="show-answer" class="btn primary" type="button">显示答案</button>' +
+        '<button id="show-answer" class="btn primary" type="button">显示答案（空格）</button>' +
         '<div id="review-rates" class="review-rates hidden">' +
-        '<span class="review-rate-tip">看完答案，这一下你想起来了吗？选一档，下次复习时间跟着变。</span>' +
-        '<div class="review-rate-row">' + RATES.map(([v, label]) =>
-          '<button type="button" class="rate-btn review-rate-btn" data-rate="' + v + '">' + label + '</button>').join('') + '</div>' +
+        '<span class="review-rate-tip">看完答案，这一下你想起来了吗？选一档，下次复习时间跟着变（也可按 1/2/3/4）。</span>' +
+        '<div class="review-rate-row">' + rateBtns + '</div>' +
         '<span id="review-rate-status" class="review-rate-status"></span></div>' +
         '</div>';
       const sa = $('show-answer');
