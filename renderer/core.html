@@ -132,9 +132,11 @@
             <div id="questionIndex" class="qindex"></div>
           </div>
 
-          <!-- 练习（2026-11-11）：答案默认不下发，提交后才第一次拿到答案与解析。
-               练习列表走 /api/core/books/:id/practice/quiz（不含 answer/solution/rationale），
-               这不是 CSS 遮挡，是数据层真隐藏。 -->
+          <!-- 练习（2026-11-11）：练习列表走 /api/core/books/:id/practice/quiz
+               （不含 answer/solution/rationale），提交判分后才在本视图第一次看到答案与解析。
+               订正（2026-11-11）：这是「练习视图内不渲染」，不是「数据层真隐藏」——
+               打开书时 /analysis 已把完整分析结果（含全部答案）送到前端，
+               题目详情与「导出 JSON」也可见。别把本视图当成防作弊。 -->
           <div id="tab-practice" class="tab-pane">
             <div class="practice-head">
               <div id="practiceStats" class="practice-stats"></div>
@@ -143,7 +145,7 @@
                 <button id="btnPracticeDue" class="ghost-btn small">今日复习</button>
               </div>
             </div>
-            <div id="practiceHint" class="qindex-note">先自己作答，提交后才揭晓答案与分步解析；开放题不假装机器判分，看答案后按掌握度自评。</div>
+            <div id="practiceHint" class="qindex-note">先自己作答，提交后才揭晓答案与分步解析；开放题不假装机器判分，看答案后按掌握度自评。说明：完整分析结果在打开书时已到本机，题目详情与「导出 JSON」也能看到答案——这里是「练习视图内不渲染」，不是防作弊。</div>
             <div id="practiceBox" class="practice-box"></div>
           </div>
 

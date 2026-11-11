@@ -93,11 +93,21 @@ class BookStore {
     return book;
   }
 
-  getBook(id) {
+  // 格式判别（2026-11-11）：core 书的 book.json 恒有 files 数组（createBook 写入），
+  // 旧版 lib/store.js 的 book.json 只有 exam/subject/coverColor 等、另配 materials.json。
+  // 两套 schema 共用同一个 books/ 目录，只判「book.json 存在」会把旧版书误认成 core 书：
+  // 默认窗口会把老书列成 0 资料空壳，删除时 rmSync 整个目录会真删掉老书资料。
+  // 这里只读判别、不迁移、不改写任何已有数据；老书缺此文件即视为不属于本引擎。
+  _readCoreBook(id) {
     const f = this._bookFile(id);
     if (!fs.existsSync(f)) return null;
-    return JSON.parse(fs.readFileSync(f, 'utf8'));
+    try {
+      const b = JSON.parse(fs.readFileSync(f, 'utf8'));
+      return b && Array.isArray(b.files) ? b : null;
+    } catch (e) { return null; }
   }
+
+  getBook(id) { return this._readCoreBook(id); }
 
   listBooks() {
     if (!fs.existsSync(this.booksDir)) return [];
@@ -106,13 +116,14 @@ class BookStore {
       .map(d => {
         try {
           const b = this.getBook(d);
+          if (!b) return null; // 旧版书 / 格式不符：不列进本引擎书架
           return {
             id: b.id,
             title: b.title,
             description: b.description || '',
             createdAt: b.createdAt,
             updatedAt: b.updatedAt,
-            fileCount: (b.files || []).length,
+            fileCount: b.files.length,
             analyzed: !!b.analysisMeta
           };
         } catch (e) { return null; }
@@ -122,6 +133,10 @@ class BookStore {
   }
 
   _saveBook(book) {
+    // 兜住所有按 id 的写路径：绝不把非本引擎格式的 book.json 改写成 core 格式。
+    if (!book || !Array.isArray(book.files)) {
+      throw new Error('拒绝写入：书元数据不属于本引擎格式（缺少 files 清单）');
+    }
     book.updatedAt = nowIso();
     fs.writeFileSync(this._bookFile(book.id), JSON.stringify(book, null, 2), 'utf8');
     return book;
@@ -238,8 +253,14 @@ class BookStore {
 
   deleteBook(id) {
     const d = this._bookDir(id);
-    if (fs.existsSync(d)) { fs.rmSync(d, { recursive: true, force: true }); return true; }
-    return false;
+    if (!fs.existsSync(d)) return false;
+    // 不可逆动作守卫：目录存在但不是本引擎格式（旧版书 / 损坏数据）时绝不 rmSync。
+    // 上层 request.js 会把这个业务错误转成 400 并显示原因，用户可到旧版视图操作。
+    if (!this._readCoreBook(id)) {
+      throw new Error('拒绝删除：该目录不是本引擎书库（旧版书或格式不符），请到旧版视图操作：' + id);
+    }
+    fs.rmSync(d, { recursive: true, force: true });
+    return true;
   }
 }
 

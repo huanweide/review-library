@@ -76,17 +76,23 @@ class Core {
   getAnalysis(id) { return this.store.getAnalysis(id); }
 
   // ---------- 学习闭环（2026-11-11）：门面方法，DSH / 专家形态直接调这里 ----------
-  // 关键边界：getQuiz 返回的是**脱敏题目**（不含 answer / solution / rationale），
-  // 答案只在 submitAttempt 判分后才第一次下发。这不是 CSS 遮挡，是数据层真隐藏。
+  // 边界（2026-11-11 订正，勿再写「数据层真隐藏」）：getQuiz 返回**脱敏题目**
+  // （不含 answer / solution / rationale），提交判分后才在本视图看到答案与解析。
+  // 但这只是「练习视图内不渲染」，**不是**「答案未到达客户端」：打开书时
+  // /books/:id/analysis 会原样下发完整 analysis.json（含全部答案），题目详情与
+  // 「导出 JSON」也可见。本地离线工具的用户本来就能直接读 library/books/*/analysis.json，
+  // 不存在对持有者的保密；脱敏 /analysis 会砸掉导图、详情与 5 种导出，属过度设计。
 
   // 练习列表 + 进度概览。未分析时明确报错，不返回空壳骗前端。
   getQuiz(id, opts) {
     const a = this.store.getAnalysis(id);
     if (!a || !Array.isArray(a.questionIndex)) throw new Error('请先完成整体分析，再开始练习');
     const questions = practiceLib.flatten(a, true);
+    // 统计与列表同源：只认当前分析结果里还存在的题目 key（重分析换题后旧卡留作历史，不进统计）。
+    const validKeys = new Set(questions.map(q => q.key));
     const state = practiceLib.normalizeState(this.store.getPractice(id));
     const now = (opts && opts.now) || Date.now();
-    return { questions, total: questions.length, summary: practiceLib.summarize(state, now) };
+    return { questions, total: questions.length, summary: practiceLib.summarize(state, now, validKeys) };
   }
 
   // 原始过程状态（供统计 / 调试 / 判别测试跨实例回读）。
@@ -100,12 +106,15 @@ class Core {
     if (!a || !Array.isArray(a.questionIndex)) return { questions: [], dueCount: 0 };
     const now = (opts && opts.now) || Date.now();
     const state = practiceLib.normalizeState(this.store.getPractice(id));
-    const keys = practiceLib.dueKeys(state, now);
+    const all = practiceLib.flatten(a, true);
+    const validKeys = new Set(all.map(q => q.key));
+    const keys = practiceLib.dueKeys(state, now, validKeys);
     const set = new Set(keys);
-    const questions = practiceLib.flatten(a, true).filter(q => set.has(q.key));
+    const questions = all.filter(q => set.has(q.key));
     // 保持 leech 上浮 / 到期先后，不按题目原序打乱。
     questions.sort((x, y) => keys.indexOf(x.key) - keys.indexOf(y.key));
-    return { questions, dueCount: keys.length, summary: practiceLib.summarize(state, now) };
+    // dueCount 取自同源的 keys，故恒等于 questions.length（判别测试 J2a 锁住）。
+    return { questions, dueCount: keys.length, summary: practiceLib.summarize(state, now, validKeys) };
   }
 
   // 提交作答。body = { key, given }；只有这里才把答案与解析返回给调用方。

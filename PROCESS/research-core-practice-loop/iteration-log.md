@@ -86,3 +86,65 @@ source: 本轮真跑输出（判别 baseline/candidate、npm test、三套 e2e�
    能力判据 28 条在两版中完全一致，红→绿一一对应。
 8. **云端仍未发布**：本地领先 `origin/main` 9 个 commit，卡在 GitHub 账户邮箱验证；
    v1.5.0 待发布批次已包含本轮改动，但未推、未发版。
+
+---
+
+## 续轮（2026-11-11 14:3x）：端到端盘点后的「修真缺陷 + 收口」轮
+
+**阶段零（信息优先）**：本轮是同一 maxloop 的**修复类连续轮**，不新增产品能力。基准沿用本会话
+已外查并落盘的 `best-practices.md`（Anki/FSRS/ts-fsrs/repeater/Engram 五仓 API 验真 + 六环
+功能基准）；放行判据不来自模型自评，来自 6 次真跑探针的可证伪输出（见下「证据锚点」）。
+按 SKILL 0.4「发现真问题 → 轮次修复 → 测试 → 交付真结果」，不重搜、不扩大范围。
+
+**公示即授权，自行执行，不打断用户**（用户「继续」+ 前轮「自己尝试 不要问我」）。
+
+### R/C/N + 根因 A/B（每条改动必过）
+
+| # | 改动 | R 必要性（非改不可吗） | C 正确性（外部锚点） | N 最小性 / 更轻替代为何不够 |
+|---|---|---|---|---|
+| G1 | `core/bookStore.js` 增加 core 格式判别：`createBook` 恒写 `files: []`（:88），legacy `book.json` 无此字段（lib/store.js:110-121）。`getBook` 对非 core 返回 null、`listBooks` 过滤、`deleteBook` 拒绝、 `_saveBook` 兜底写路径 | **会删用户数据**：实测混放目录里 `deleteBook(legacyId)` 后旧书目录与真实 PDF 均不存在，legacy `index.json` 留幽灵项；且点开老书 `core-ui.js:102 "+ b.files.length +"` 抛 TypeError | 真跑探针输出「core.listBooks() 含旧版书 / 删除后目录与 a.pdf 均不存在」；`core/bookStore.js:105` `.filter(d => fs.existsSync(this._bookFile(d)))` | 只加只读判别，不改任何已有数据、不迁移、不改 schema。更轻替代「UI 标灰旧版书」挡不住 DSH/专家直接调门面删除，且挡不住幽灵索引 → 否 |
+| G2 | 统计与列表同源：`practiceLib.dueKeys/summarize` 增**可选**第三参 `validKeys`；`Core.getQuiz/getDue` 传入当前 analysis 的题目 key 集合 | **统计条显示假数据**：实测重分析后 `getDue(now+30d)` 返回 `dueCount=1` 而 `questions.length=0`；与上一轮修的「0 可练 / 第 1/4 题」同源 | 真跑探针输出 + `practice.js:262 Object.values(s.cards)` / `:251 Object.keys(s.cards)` 全量累计；`core/index.js:105 .filter(q => set.has(q.key))` 只过滤列表 | 第三参可选，不传时旧行为完全不变（保 28 条判别 + 139/0）。**不改 `questionKey` 哈希算法**——改了会让所有已落盘练习记录 key 失效（破坏用户数据），答案勘误归零留作 KNOWN-LIMITATION。更轻替代「重分析弹确认」只让用户选丢或不丢，没碰根因 → 否 |
+| G3 | 订正「数据层真隐藏」宣称（`core/index.js:80`、`core.html:135-137`、CHANGELOG、台账） | **不造假铁律**：`/analysis`（request.js:80）原样返回全部答案，`core-ui.js:107` 开书即取、`:558` 导出 JSON 一键下载、`:461` 详情明文 | 唯一标记探针：quiz 无 answer 字段、analysis 含 answer+solution | 只改措辞为「练习视图内隐藏」，**不脱敏 `/analysis`**——本地离线文件本就明文，脱敏会砸 139 条断言与详情/导出，是过度设计 |
+| G4 | 交付链：`.bat` 版本校验 + `release.yml` 加测试门禁 | 可预先准备却没做：双击静默开 0.7.0；CI 零门禁，tag 落漂移 commit 照发 | `dist/latest.yml version: 0.7.0`、`启动桌面版.bat:7` 只判存在；release.yml 无 npm test | 只加校验与门禁，不重建 dist（electron.exe 本机缺失，构建留待发布环节） |
+| G5 | README 当前口吻的密钥段落按默认入口实情订正 | 公开承诺「只进 sessionStorage」与 `core-ui.js:56` localStorage 明文不符 | 逐行锚点 | 只订正文档，**不改密钥存储行为**（本轮不碰登录态/安全语义，列为下一轮候选） |
+
+**根因 A≠B，两处同修**：
+- G1：A=`listBooks` 只判 `book.json` 存在 + 硬删；B=两套 schema 共用一个 `books/` 目录却无格式判别契约 → 修判别契约，不是只补 UI。
+- G2：A=统计全量累计旧卡；B=统计与列表两个数据源 + key 依赖非确定的模型答案文本 → 修「同源」，不修哈希（会破坏数据）。
+
+**可证伪判据（新判别测试，旧代码必红）**：J1 混放目录 `listBooks` 不含 legacy / `getBook(legacy)===null` /
+`deleteBook(legacy)` 拒绝且资料仍在 / core 书不受影响；J2 重分析后 `dueCount===questions.length`、
+`summary.total` 不残留旧卡 / 未重分析时统计正常 / `dueKeys(state,now)` 不传第三参行为不变。
+
+**边界（本轮明确不做）**：不升版本号、不发版、不推（仍卡邮箱验证）；不合并两套 store、不迁移
+任何已有书库数据；不改 DOM id/class 契约；不改提示词与分析链路；不改密钥存储；不重建 dist；
+不接 DSH/专家 action 白名单（已记录待办）。
+
+---
+
+## 续轮 Oracle Gate（2026-11-11 14:3x，五项全填）
+
+| 项 | 证据 |
+|---|---|
+| (a) 目标命令真跑贴输出 | `npm test` 21/21 套件；`e2e.js` **195/0**；`core-ui-verify.js` **139/0**（HTTP + file:// 双形态）；`practice-e2e.js` **25/0**；`core-gap-fixes.test.js` **8/0**；`versions:check` 8 处、`forms:check` 18 处 |
+| (b) 改动文件语法 | `node --check` 全量 **86/86 bad=0**；`core/index.js` / `core/practice.js` / `core/bookStore.js` / 新判别测试逐个通过；`release.yml` 经 js-yaml 解析 **YAML OK / 10 steps / 含 Test gate + Credential scan** |
+| (c) 真实入口可达性 | 三套真 Chromium e2e 全绿（195 + 139 + 25 断言），新增 tab 与 `#practiceHint` 文案未破坏既有契约；bat 版本解析用等价替身真跑 `WANT=1.5.0 GOT=0.7.0 MISMATCH_DETECTED`（不启动 GUI、临时探针已删） |
+| (d) 修复前失败输出 | `baseline-gap-fixes.txt`：**能力判据 0 通过 / 8 失败 / exit 1**（J1a 列出两个 id 证明旧书被误列；J1d 旧书资料被删；J2a `dueCount=1 questions=0`）。8 条回归守卫两版恒绿，不计入红→绿判据 |
+| (e) 逐字符证据锚点 | 计划表 G1–G5 每条带 `文件:行号`；`core/bookStore.js:105` 原 `.filter(d => fs.existsSync(this._bookFile(d)))`、`core/practice.js:262` 原 `Object.values(s.cards)`、`core/index.js:105` 原 `.filter(q => set.has(q.key))`；6 次真跑探针输出见今日日志 |
+
+**效率指数**：产出级别 A（2 个 P0 + 宣称订正 + 交付链加固）/ 轮数 1 / **效率指数 100**
+（无返工、无假绿、无范围膨胀；baseline 一次成红、candidate 一次成绿）。
+
+**安全三段卡点**：
+1. **不砸坏**：只读格式判别、不迁移不删任何已有书库数据；重分析旧卡保留为历史；
+   bat 只警告不阻断启动；不升版本号、不发版、不推。
+2. **不泄密**：凭据扫描工作区全量无真命中；CI 新增 Credential scan 步骤；
+   文档订正不含任何真实密钥字面值。
+3. **不造假**：主动订正上一轮「数据层真隐藏」不实宣称（历史原文保留、追加订正段，不悄悄改写）；
+   e2e 因 CI 缺 chromium 二进制**不写进 CI 冒充门禁**，如实列 KNOWN-LIMITATION；
+   `dist/` 未重建也如实写明，不拿 0.7.0 冒充 1.5.0 交付物。
+
+**本轮 KNOWN-LIMITATION**：`_e2e/` 仍不在 `npm test`；CI 门禁只覆盖无浏览器依赖的检查；
+`dist/` 仍是 0.7.0；默认窗口密钥仍存 localStorage（行为未改，只订正文档）；
+重分析旧卡不自动清理；DSH/专家 action 白名单未暴露 practice；
+真 Electron GUI 未跑、真模型未重跑；云端仍未发布（卡 GitHub 邮箱验证）。

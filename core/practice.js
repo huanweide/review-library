@@ -244,11 +244,18 @@ function rate(state, key, rating, now) {
   return { state: s, result: { key, rating: r, dueAt: card.dueAt, card } };
 }
 
-/** 到期队列：只捞 dueAt <= now，leech（反复错）上浮队首。now 可注入，判别测试不靠真实时间。 */
-function dueKeys(state, now) {
+/**
+ * 到期队列：只捞 dueAt <= now，leech（反复错）上浮队首。now 可注入，判别测试不靠真实时间。
+ * validKeys（可选）= 当前分析结果里的题目 key 集合。传了就只统计还存在的题：
+ * 重分析会换掉题目内容哈希，旧卡留在盘上当历史，但绝不能再让「今日到期 N」显示 N 却列不出题。
+ * 不传时行为与旧版完全一致（向后兼容，判别测试 J2g4 锁住）。
+ */
+function dueKeys(state, now, validKeys) {
   const t = Number(now) || Date.now();
   const s = normalizeState(state);
+  const allow = validKeys instanceof Set ? validKeys : (Array.isArray(validKeys) ? new Set(validKeys) : null);
   return Object.keys(s.cards)
+    .filter(k => !allow || allow.has(k))
     .filter(k => {
       const c = s.cards[k];
       return c && typeof c.dueAt === 'number' && c.dueAt <= t;
@@ -256,17 +263,21 @@ function dueKeys(state, now) {
     .sort((a, b) => (s.cards[b].lapseCount || 0) - (s.cards[a].lapseCount || 0) || (s.cards[a].dueAt - s.cards[b].dueAt));
 }
 
-function summarize(state, now) {
+function summarize(state, now, validKeys) {
   const t = Number(now) || Date.now();
   const s = normalizeState(state);
-  const cards = Object.values(s.cards);
+  const allow = validKeys instanceof Set ? validKeys : (Array.isArray(validKeys) ? new Set(validKeys) : null);
+  const cards = Object.keys(s.cards)
+    .filter(k => !allow || allow.has(k))
+    .map(k => s.cards[k]);
+  const due = dueKeys(s, t, validKeys);
   return {
     total: cards.length,
-    dueCount: dueKeys(s, t).length,
+    dueCount: due.length,
     wrongCount: cards.filter(c => (c.lapseCount || 0) > 0).length,
     leechCount: cards.filter(c => (c.lapseCount || 0) >= LEECH_THRESHOLD).length,
     masteredCount: cards.filter(c => (c.correctCount || 0) > 0 && !(c.leech)).length,
-    dueKeys: dueKeys(s, t)
+    dueKeys: due
   };
 }
 

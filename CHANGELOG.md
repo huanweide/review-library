@@ -82,6 +82,50 @@ DSH 插件与 WorkBuddy 专家的 manifest，以及 README 顶部定位行；`sc
 - 折叠分支搜不到、方向键只在命中间跳转、F1 闭环未统一、真 Electron GUI 未跑、PDF 页图不渲染，
   均为既有遗留，本轮未扩大也未修复。
 
+**未发布批次补充（2026-11-11 续 · 端到端盘点后：修两处 P0 + 收口）**
+
+- **订正上一轮不实宣称（不造假）**：上段写「先答后揭是真的……答案只在提交判分后的响应里
+  第一次到达……不是 CSS 遮挡，是数据层真隐藏」。经端到端复盘，该措辞**不成立**：
+  `/books/:id/analysis`（`core/request.js:80`）原样下发完整 `analysis.json`（含全部
+  `answer`/`solution`/`rationale`），`core-ui.js:107` 打开书即取进 `state.analysis`，
+  `:558`「导出 JSON」直接 `JSON.stringify(state.analysis)` 一键下载，`:461` 题目详情明文显示。
+  唯一标记探针实测：`/practice/quiz` 确不含答案字段、`/analysis` 含 answer 与 solution。
+  准确说法是「**练习视图内不渲染答案**」，不是「答案未到达客户端」。
+  已订正 `core/index.js:79-84` 注释、`core.html` 注释与 `#practiceHint` 用户可见文案、
+  README / `API配置.md` 的密钥段落。**不脱敏 `/analysis`**：导图 / 题目详情 / 5 种导出都依赖完整
+  analysis，且本地离线工具的用户本来就能直读 `library/books/*/analysis.json`，脱敏属过度设计。
+- **P0-1 修「混放书库误列误删」**：两套书库共用 `books/` 且元数据都叫 `book.json`，
+  `core/bookStore.js` 原先只判文件存在，导致旧版书被默认窗口列成 0 资料空壳、
+  `deleteBook` 的 `rmSync` 会真删掉旧书资料并在 legacy `index.json` 留幽灵项。
+  新增只读格式判别 `_readCoreBook()`（`createBook` 恒写 `files: []`，legacy 无此字段），
+  覆盖 `getBook` / `listBooks` / `deleteBook`，`_saveBook` 兜住按 id 的写路径；
+  **零迁移、不改任何已有数据**。判别测试 J1a–J1d 旧版全红 → 全绿，含真实 `lib/store.js` 建的老书。
+- **P0-2 修「重分析后统计条留假数据」**：题目身份是 stem/options/answer 的内容哈希，重分析换题后
+  旧卡 key 失配但不删；`summarize/dueKeys` 全量累计旧卡，`getDue` 列表却按新 key 过滤，
+  实测出现「今日到期 1」却列不出题。`practice.js` 的 `dueKeys/summarize` 增**可选**第三参
+  `validKeys`，`Core.getQuiz/getDue` 传当前分析结果的 key 集合，统计与列表同源；
+  旧卡保留为历史不删（零迁移），不参与当前统计。不传第三参时行为完全不变（向后兼容）。
+  **未改 `questionKey` 哈希算法**——改了会让所有已落盘练习记录失效，属破坏用户数据。
+- **交付链加固**：`启动桌面版.bat` 增版本核对（读 `VERSION` vs `dist/latest.yml`），
+  不一致时醒目提示「当前安装包 0.7.0 / 源码 1.5.0，看不到练习等新功能」并给重建命令，
+  不再静默启动旧版（替身真跑输出 `WANT=1.5.0 GOT=0.7.0 MISMATCH_DETECTED`，不阻断启动）；
+  `.github/workflows/release.yml` 补 `Test gate`（`npm test` + `check-versions`）与
+  `Credential scan` 两步，结束「推 tag 就打包、CI 零复核」。
+- **文档订正**：README 三处 + `API配置.md` 一处原写「密钥只进 sessionStorage / 关掉即失效」，
+  但默认窗口 `core.html` 实际存 `localStorage`（`core-ui.js:56` `core_llm_cfg`，含 apiKey）。
+  已按入口分别写明，并补「默认窗口配置不属于整库备份范围，换机需重填」。
+  **本轮不改密钥存储行为**（不碰登录态 / 安全语义，列为下一轮候选）。
+- **验收（真跑，非自评）**：新判别 `baseline 0 通过 / 8 失败 / exit 1` →
+  `candidate 8 通过 / 0 失败 / exit 0`（8 条回归守卫两版恒绿）；`npm test` **21/21 套件**、
+  `_e2e/e2e.js` **195/0**、`_e2e/core-ui-verify.js` **139/0**、`_e2e/practice-e2e.js` **25/0**、
+  `node --check` **86/86**、版本 8 处 / 形态 18 处、凭据扫描无真命中、
+  `release.yml` YAML 解析通过（10 步含 2 步门禁）。
+- **KNOWN-LIMITATION**：`_e2e/` 仍不在 `npm test` 内，三套真浏览器 e2e 需 playwright-core 的
+  chromium 二进制，全新 CI 机器没有，故**未写进 CI 冒充门禁**，仍由本机 Oracle Gate 手动跑；
+  `dist/` 未重建（本机 `electron.exe` 缺失，留给发布环节）；默认窗口密钥仍存 localStorage；
+  重分析后旧卡留作历史不自动清理；DSH / 专家 action 白名单未暴露 practice（上轮已记录待办）；
+  未升版本号、未发版、未推（仍卡 GitHub 账户邮箱验证）。
+
 **未发布批次补充（2026-11-11 · maxloop 功能端：学习闭环进统一核心）**
 
 - **真问题**：默认入口 `core.html` 此前只能「看分析结果」——`core-ui.js:456` 把答案直接摊开，

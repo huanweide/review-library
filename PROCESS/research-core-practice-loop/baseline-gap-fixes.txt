@@ -1,0 +1,21 @@
+=== 两条 P0 判别测试（旧版应全红）===
+-- J1 混放书库（同一 books/ 目录两套 schema）--
+  ✗ J1a core.listBooks() 不把旧版书列成空壳  [["78cc1b912d90b971","b_a0c385cb8c37"]]
+  ✗ J1b core.getBook(旧版id) 返回 null（不再把 legacy book.json 当自己的书）  [{"id":"b_a0c385cb8c37","title":"旧版·高等数学","exam":"","subject":"","coverColor":"#3a7afe","note":"","createdAt":1794379070572}]
+  ✗ J1c 删除旧版书被明确拒绝（不静默 rmSync）  [true]
+  ✗ J1d 旧书里的真实资料未被删除
+  · guard ✓ J1g1 core 书仍正常出现在书架
+  · guard ✓ J1g2 旧版书架仍能看到自己的书
+  · guard ✓ J1g3 core 书 getBook 正常
+  · guard ✓ J1g4 core 书删除仍正常（未被守卫误伤）
+-- J2 重分析后统计条不得残留旧卡 --
+  · guard ✓ J2g1 未重分析时到期题能列出来
+  · guard ✓ J2g2 未重分析时统计条有卡
+  ✗ J2a 到期数与到期列表长度同源（不再显示「今日到期 N」却列不出题）  [dueCount=1 questions=0]
+  ✗ J2b 重分析后不残留上一轮的到期卡  [dueCount=1]
+  ✗ J2c 统计条不把失配旧卡算进当前进度  [total=1]
+  ✗ J2d getQuiz 的 summary 与 getDue 列表同源  [summary.dueCount=1 questions=0]
+  · guard ✓ J2g3 旧卡保留为历史未删用户数据（零迁移）
+  · guard ✓ J2g4 dueKeys(state, now) 不传第三参行为不变（向后兼容）
+
+=== 能力判据：0 通过 / 8 失败 | 回归守卫 8 恒绿 ===
