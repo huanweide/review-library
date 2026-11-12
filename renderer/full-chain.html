@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>复习资料图书馆 · 全链路大导图（静态实验站）</title>
+<title>天道书阁 · Tiandao Library · 全链路大导图</title>
 <!--
-  静态实验站 · 单文件自包含（零外部依赖 / 零后端 / 零网络请求）
+  天道书阁 · Tiandao Library · 单文件自包含（零外部依赖 / 零后端 / 零网络请求）
   布局算法：内联自 renderer/js/mindmap-layout.js 的原文快照（生成时逐字拷贝），
             与桌面端、SVG/PNG 导出共用同一份坐标，不是照着画个像的。
   数据来源：本仓库真实文件与真实锚点，见 TREE / DOCS；不接大模型、不读本地书库。
@@ -117,12 +117,12 @@ button{cursor:pointer}
   <div class="brand">
     <div class="logo">📚</div>
     <div style="min-width:0">
-      <h1>复习资料图书馆 · 全链路大导图</h1>
-      <div class="sub">静态实验站 · 8 段主链路 / 48 个节点 / 14 份真实资料 · 默认收起分支，点「全部展开」看全貌</div>
+      <h1>天道书阁 · 全链路大导图</h1>
+      <div class="sub">Tiandao Library · 顺天而应人，温故而知新 · 8 段主链路 / 48 节点 / 14 份真实资料 · 默认收起，点「全部展开」看全貌</div>
     </div>
   </div>
   <div class="spacer"></div>
-  <span class="badge lab">实验功能</span>
+  <span class="badge ok">天道书阁 · 正式版</span>
   <span class="badge">静态只读 · 零后端</span>
   <button class="ghost" id="themeBtn" title="切换浅/深主题">◐ 主题</button>
 </header>
@@ -444,7 +444,7 @@ button{cursor:pointer}
 const S = (file, anchor, quote, note) => ({ file, anchor, quote: quote || '', note: note || '' });
 const N = (id, title, desc, extra) => Object.assign({ id, title, desc, children: [] }, extra || {});
 
-const TREE = N('root', '复习资料图书馆 · 全链路',
+const TREE = N('root', '天道书阁 · 全链路',
   '从一份资料到一次复习，再到五种入口共用同一核心。八段主链路、四个数据文件、一份能力清单。', {
   children: [
     N('c1', '① 资料输入', '把 PDF / PPT / Word / 图片 / Txt / Md / Csv 变成一本书里的资料文件。', { children: [
