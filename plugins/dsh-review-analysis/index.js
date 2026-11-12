@@ -72,6 +72,20 @@ function coreLoader(config) {
   };
 }
 
+// 能力清单单一真源：与 CLI / HTTP / Electron 共用主项目 core/capabilities.js，
+// 本插件不再自己维护一份「能用哪些 action」的手写列表。
+// projectRoot 本就是插件必填配置（README 已标），这里在注册期就取到清单：
+// 配置缺失时提前大声失败，而不是等用户调用工具才发现能力表是旧的。
+function loadCapabilities(config) {
+  const root = String((config && config.projectRoot) || process.env.DSH_REVIEW_PROJECT_ROOT || '').trim();
+  if (!root) throw new Error('未配置统一核心目录：请在插件 config.projectRoot（或环境变量 DSH_REVIEW_PROJECT_ROOT）填写主项目根目录（含 core/）。');
+  const p = path.resolve(root, 'core', 'capabilities.js');
+  if (!fs.existsSync(p)) throw new Error('找不到统一核心能力清单：' + p);
+  const mod = require(p);
+  if (!mod || !Array.isArray(mod.ACTIONS)) throw new Error('能力清单格式不正确：' + p);
+  return mod;
+}
+
 // 密钥只走工具参数或环境变量；任何情况下不写盘。
 function cfgFrom(args) {
   const c = (args && args.cfg) || {};
@@ -160,26 +174,33 @@ const OUTPUT_SCHEMA = {
     questionIndex: { type: 'array', items: { type: 'object' } },
     summary: { type: 'string' },
     coreVersion: { type: 'string' },
+    data: { type: 'object', description: '学习闭环动作的返回值（quiz/due/attempt/rate/practice）' },
   },
   required: ['ok', 'action'],
 };
 
 export function apply(ctx, config) {
   const getCore = coreLoader(config);
+  const CAPS = loadCapabilities(config);
+  const ACTIONS = CAPS.ACTIONS;
 
   const tool = {
     name: 'review_analysis',
     description:
       '统一复习项目的入口（不是独立引擎）：先建一本书，导入 PDF/PPT/Word/图片等资料，' +
       '再由大模型把整本书当作一个整体分析，产出可层层展开的思维导图、按题型分类的索引与全书概览。' +
-      'action 取 list（列书）/ create（建书）/ add（加资料）/ analyze（整体分析）/ get（取分析结果）。' +
+      'action 取 list（列书）/ create（建书）/ add（加资料）/ analyze（整体分析）/ get（取分析结果）' +
+      '/ quiz（练习列表）/ due（今日到期）/ attempt（提交作答）/ rate（四档自评）/ practice（读回过程数据）。' +
       '数据与主程序、专家形态共用同一套 core/，此处不复制引擎、不做离线规则分析。',
     parameters: {
       type: 'object',
       additionalProperties: false,
       properties: {
-        action: { type: 'string', enum: ['list', 'create', 'add', 'analyze', 'get'], description: '要执行的动作' },
-        bookId: { type: 'string', description: '书 id；add/analyze/get 必填' },
+        action: { type: 'string', enum: ACTIONS, description: '要执行的动作（与统一核心能力清单同源）' },
+        bookId: { type: 'string', description: '书 id；除 list/create 外必填' },
+        key: { type: 'string', description: '题目 key（取自 quiz 返回）；attempt/rate 必填' },
+        given: { type: 'string', description: 'attempt 的作答内容（选择题可填 A/B/C/D）' },
+        rating: { type: 'integer', description: 'rate 的四档自评，1-4（重来/吃力/会了/太简单）' },
         title: { type: 'string', description: 'create 时的书名' },
         description: { type: 'string', description: 'create 时的备注（可选）' },
         files: {
@@ -256,7 +277,31 @@ export function apply(ctx, config) {
             coreVersion: loaded.version,
           });
         }
-        throw new Error('不支持的 action：' + action);
+        if (CAPS.isPractice(action)) {
+          // 学习闭环：只做协议转换，全部委托给 Core 门面，与 CLI / 网页端 / 桌面端同源。
+          const id = String((args && args.bookId) || '');
+          if (!id) throw new Error(action + ' 需要 bookId');
+          let data;
+          if (action === 'practice') {
+            data = core.getPractice(id);
+          } else if (action === 'quiz') {
+            data = core.getQuiz(id);
+          } else if (action === 'due') {
+            data = core.getDue(id);
+          } else if (action === 'attempt') {
+            const key = String((args && args.key) || '');
+            if (!key) throw new Error('attempt 需要 key（取自 quiz 返回的题目 key）');
+            data = core.submitAttempt(id, { key, given: String((args && args.given) || '') });
+          } else { // rate
+            const key = String((args && args.key) || '');
+            if (!key) throw new Error('rate 需要 key（取自 quiz 返回的题目 key）');
+            const rating = Number((args && args.rating) || 3);
+            if (!Number.isInteger(rating) || rating < 1 || rating > 4) throw new Error('rate 需要 rating 1-4（四档自评）');
+            data = core.rateCard(id, { key, rating });
+          }
+          return Object.assign(base, { bookId: id, data, coreVersion: loaded.version });
+        }
+        throw new Error('不支持的 action：' + action + '（可用 ' + ACTIONS.join('/') + '）');
       } catch (error) {
         // 不回显 args（可能含 apiKey），也不回显上游原始错误体。
         return { ok: false, action, error: errorText(error) };

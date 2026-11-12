@@ -27,6 +27,10 @@ function parseArgs(argv) {
     else if (x === '--file') a.files.push(argv[++i]);
     else if (x === '--maxTokens') a.maxTokens = parseInt(argv[++i], 10);
     else if (x === '--timeoutMs') a.timeoutMs = parseInt(argv[++i], 10);
+    // 学习闭环动作入参（key 取题目内容哈希，见 core/practice.js questionKey）。
+    else if (x === '--key') a.key = argv[++i];
+    else if (x === '--given') a.given = argv[++i];
+    else if (x === '--rating') a.rating = parseInt(argv[++i], 10);
   }
   return a;
 }
@@ -40,7 +44,11 @@ function loadCore(a) {
   const mod = require(entry);
   if (!mod || typeof mod.Core !== 'function') throw new Error('统一核心未导出 Core 类：' + entry);
   const dataRoot = a.library ? path.resolve(a.library) : path.resolve(root, 'library');
-  return { core: new mod.Core(dataRoot), version: mod.CORE_VERSION || '', root, dataRoot };
+  // 能力清单与核心同源：wrapper 不自己维护「能用哪些动作」，避免新增能力时静默漂移。
+  const capsPath = path.resolve(root, 'core', 'capabilities.js');
+  if (!fs.existsSync(capsPath)) throw new Error('找不到统一核心能力清单：' + capsPath);
+  const caps = require(capsPath);
+  return { core: new mod.Core(dataRoot), version: mod.CORE_VERSION || '', root, dataRoot, caps };
 }
 
 function cfgFromEnv() {
@@ -54,8 +62,10 @@ function cfgFromEnv() {
 async function main() {
   const a = parseArgs(process.argv.slice(2));
   const loaded = loadCore(a);
-  const { core } = loaded;
+  const { core, caps } = loaded;
   const action = String(a.action || 'list');
+  // 单一真源白名单：不在清单里一律大声失败，错误信息带完整可用列表（J1d 行为级守卫取数处）。
+  if (!caps.has(action)) throw new Error(caps.unsupported(action));
   let out;
 
   if (action === 'list') {
@@ -90,8 +100,30 @@ async function main() {
     const r = core.getAnalysis(a.bookId);
     if (!r || !r.tree) throw new Error('该书尚无分析结果，请先 analyze');
     out = { ok: true, action, bookId: a.bookId, stats: r.stats, tree: r.tree, questionIndex: r.questionIndex, summary: r.summary };
+  } else if (caps.isPractice(action)) {
+    // 学习闭环：只做协议转换，全部委托给 Core 门面（与桌面端 / 网页端 / DSH 同源）。
+    // 不 require core/practice.js、不读写 practice.json —— 业务逻辑只存在核心一处。
+    const id = String(a.bookId || '');
+    if (!id) throw new Error(action + ' 需要 --bookId');
+    let data;
+    if (action === 'practice') {
+      data = core.getPractice(id);
+    } else if (action === 'quiz') {
+      data = core.getQuiz(id);
+    } else if (action === 'due') {
+      data = core.getDue(id);
+    } else if (action === 'attempt') {
+      if (!a.key) throw new Error('attempt 需要 --key（取自 quiz 返回的题目 key）');
+      data = core.submitAttempt(id, { key: a.key, given: a.given == null ? '' : a.given });
+    } else { // rate
+      if (!a.key) throw new Error('rate 需要 --key（取自 quiz 返回的题目 key）');
+      const rating = Number(a.rating);
+      if (!Number.isInteger(rating) || rating < 1 || rating > 4) throw new Error('rate 需要 --rating 1-4（四档自评）');
+      data = core.rateCard(id, { key: a.key, rating });
+    }
+    out = { ok: true, action, bookId: id, data };
   } else {
-    throw new Error('不支持的 action：' + action + '（可用 list/create/add/analyze/get）');
+    throw new Error(caps.unsupported(action));
   }
 
   process.stdout.write(JSON.stringify(out, null, 2) + '\n');

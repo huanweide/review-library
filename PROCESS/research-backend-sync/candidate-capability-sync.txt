@@ -1,0 +1,18 @@
+=== 后端革命 · 跨入口能力同步契约测试（旧版必红 / 新版必绿）===
+  ✓ J1a canonical 能力清单存在且非空（core/capabilities.js）
+  ✓ J1b 能力清单含 5 个 practice 动作
+  ✓ J1c DSH tool 的 action enum 与 canonical 完全一致
+  ✓ J1d CLI 可用动作列表与 canonical 完全一致
+  ✓ J2a CLI --action quiz 成功（旧版报「不支持的 action」并 exit 1）
+  ✓ J2b CLI 练习列表返回 3 题且不含答案（与 canonical 同契约）
+  ✓ J3a DSH action=due 成功（旧版返回「不支持的 action」）
+  ✓ J4a dispatch 提交作答并判分
+  ✓ J4b CLI 提交作答并判分
+  ✓ J4c DSH 提交作答并判分
+  ✓ J4d DSH 四档自评成功
+  ✓ J4e 三入口回读同一份过程状态（卡片 key 与历史条数一致）
+  ✓ J4f 磁盘 practice.json 与三入口回读同源（不是各自内存副本）
+  ✓ J5 driver.js 不含 practiceLib / savePractice / 文件写入（不复制业务逻辑）
+  ✓ J5 dsh/index.js 不含 practiceLib / savePractice / 文件写入（不复制业务逻辑）
+
+=== 跨入口能力同步契约测试：通过 15 / 失败 0 ===
