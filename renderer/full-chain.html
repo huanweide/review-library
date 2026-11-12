@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>复习资料图书馆 · 全链路大导图（静态实验站）</title>
+<!--
+  静态实验站 · 单文件自包含（零外部依赖 / 零后端 / 零网络请求）
+  布局算法：内联自 renderer/js/mindmap-layout.js 的原文快照（生成时逐字拷贝），
+            与桌面端、SVG/PNG 导出共用同一份坐标，不是照着画个像的。
+  数据来源：本仓库真实文件与真实锚点，见 TREE / DOCS；不接大模型、不读本地书库。
+  部署：本文件位于 renderer/，现有 .github/workflows/pages.yml 的 `cp -r renderer/* _site/`
+        会自动带上；推送后访问 https://<user>.github.io/review-library/full-chain.html
+  也可直接双击用 file:// 打开，效果相同。
+-->
+<style>
+:root{
+  --bg:#f6f7f9; --surface-1:#ffffff; --surface-2:#f1f3f7; --surface-3:#ffffff;
+  --ink:#1c2330; --ink-soft:#596274; --ink-faint:#8992a3;
+  --line:#e2e6ed; --line-strong:#cbd3df;
+  --accent:#3b5bdb; --accent-soft:#edf1ff; --accent-ink:#2f49b0;
+  --ok:#167a3c; --ok-soft:#eaf7ef; --warn:#9a5b08; --warn-soft:#fdf4e5;
+  --danger:#c22f37; --shadow:0 1px 2px rgba(20,28,45,.05);
+  --radius:8px; --radius-lg:10px;
+  --mono:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace;
+}
+:root[data-theme="dark"]{
+  --bg:#141922; --surface-1:#1c2330; --surface-2:#232c3b; --surface-3:#1c2330;
+  --ink:#e8ecf4; --ink-soft:#aab4c6; --ink-faint:#78839a;
+  --line:#2c3545; --line-strong:#3b465a;
+  --accent:#7b93ff; --accent-soft:#232f52; --accent-ink:#a9b9ff;
+  --ok:#5fbf85; --ok-soft:#1c3327; --warn:#d9a44e; --warn-soft:#33291a;
+  --danger:#ef6a72; --shadow:0 1px 2px rgba(0,0,0,.2);
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.6 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;display:flex;flex-direction:column;overflow:hidden}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+.topbar{display:flex;align-items:center;gap:12px;padding:10px 18px;background:var(--surface-1);border-bottom:1px solid var(--line);flex:0 0 auto}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.logo{width:34px;height:34px;border-radius:9px;background:var(--accent-soft);color:var(--accent-ink);display:grid;place-items:center;font-size:18px;flex:0 0 auto}
+.brand h1{margin:0;font-size:15px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brand .sub{font-size:11.5px;color:var(--ink-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.spacer{flex:1}
+.badge{font-size:11px;padding:3px 9px;border-radius:999px;background:var(--ok-soft);color:var(--ok);border:1px solid var(--line);white-space:nowrap}
+.badge.lab{background:var(--warn-soft);color:var(--warn)}
+.ghost{background:var(--surface-1);border:1px solid var(--line);border-radius:7px;padding:6px 11px;font-size:12.5px}
+.ghost:hover{border-color:var(--accent);color:var(--accent-ink)}
+.ghost.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-ink)}
+.toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 18px;background:var(--surface-1);border-bottom:1px solid var(--line);flex:0 0 auto}
+.group{display:flex;align-items:center;gap:4px;padding-right:10px;border-right:1px solid var(--line)}
+.group:last-child{border-right:0}
+.group .lbl{font-size:11.5px;color:var(--ink-faint);margin-right:2px}
+.chip{background:var(--surface-1);border:1px solid var(--line);border-radius:6px;padding:5px 10px;font-size:12.5px;line-height:1.3}
+.chip:hover{border-color:var(--accent)}
+.chip.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.search{display:flex;align-items:center;gap:6px;background:var(--surface-2);border:1px solid var(--line);border-radius:7px;padding:0 9px}
+.search input{border:0;background:transparent;outline:0;width:170px;height:30px;font-size:12.5px}
+.search input::placeholder{color:var(--ink-faint)}
+.hitcount{font-size:11.5px;color:var(--ink-faint);white-space:nowrap}
+.workspace{display:flex;gap:0;flex:1;min-height:0}
+.stage{flex:1;min-width:0;position:relative;background:var(--surface-2);overflow:hidden}
+#mm{display:block;width:100%;height:100%;cursor:grab;touch-action:none}
+#mm.dragging{cursor:grabbing}
+#mm .edge{fill:none;stroke-width:1.6;opacity:.62}
+#mm .node rect{stroke-width:1.4;rx:8}
+#mm .node{cursor:pointer}
+#mm .node:hover rect{stroke-width:2.4}
+#mm .node.sel rect{stroke-width:3}
+#mm .node .t{font-size:12px;font-family:inherit;font-weight:500;pointer-events:none;dominant-baseline:middle}
+#mm .node .badge-dot{pointer-events:none}
+#mm .node .tw{cursor:pointer}
+#mm .node.dim{opacity:.22}
+#mm .node.hit rect{stroke-width:3}
+#mm .node.locate rect{stroke:var(--warn);stroke-width:3.5}
+.zoom-hint{position:absolute;left:14px;bottom:12px;font-size:11.5px;color:var(--ink-faint);background:var(--surface-1);border:1px solid var(--line);border-radius:6px;padding:4px 9px;pointer-events:none}
+.panel{width:372px;flex:0 0 372px;background:var(--surface-1);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.tabs{display:flex;border-bottom:1px solid var(--line);flex:0 0 auto}
+.tab{flex:1;padding:10px 8px;text-align:center;font-size:12.5px;background:transparent;border:0;border-bottom:2px solid transparent;color:var(--ink-soft)}
+.tab.on{border-bottom-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.pane{flex:1;overflow:auto;padding:16px;display:none}
+.pane.on{display:block}
+.d-title{font-size:16px;font-weight:650;line-height:1.45;margin:0 0 8px}
+.tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:6px;background:var(--accent-soft);color:var(--accent-ink);margin:0 6px 6px 0}
+.tag.q{background:var(--ok-soft);color:var(--ok)}
+.tag.gray{background:var(--surface-2);color:var(--ink-soft)}
+.sec{font-size:11.5px;color:var(--ink-faint);font-weight:600;margin:16px 0 6px;letter-spacing:.02em}
+.desc{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px;font-size:13px;line-height:1.75}
+.src{font-size:12.5px;border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px;background:var(--surface-1)}
+.src .f{font-family:var(--mono);font-size:11.5px;color:var(--accent-ink);word-break:break-all}
+.src .a{font-size:11.5px;color:var(--ink-faint);margin:4px 0 8px}
+.src .q{border-left:2px solid var(--accent);padding-left:9px;color:var(--ink-soft);font-size:12.5px;line-height:1.7}
+.mini{display:block;width:100%;text-align:left;margin:5px 0;padding:7px 10px;border:1px solid var(--line);border-radius:7px;background:var(--surface-1);font-size:12.5px}
+.mini:hover{border-color:var(--accent);color:var(--accent-ink)}
+.empty{color:var(--ink-faint);font-size:13px;text-align:center;padding:44px 10px;line-height:1.9}
+.doc{border:1px solid var(--line);border-radius:var(--radius);padding:11px 12px;margin-bottom:10px;background:var(--surface-1)}
+.doc .dn{font-weight:600;font-size:13px}
+.doc .dp{font-family:var(--mono);font-size:11px;color:var(--accent-ink);word-break:break-all;margin:3px 0 7px}
+.doc .dd{font-size:12.5px;color:var(--ink-soft);line-height:1.7}
+.doc .dl{margin-top:8px;font-size:11.5px;color:var(--accent-ink);background:none;border:0;padding:0;text-decoration:underline}
+.statusbar{display:flex;align-items:center;gap:16px;padding:6px 18px;background:var(--surface-1);border-top:1px solid var(--line);font-size:11.5px;color:var(--ink-faint);flex:0 0 auto;flex-wrap:wrap}
+.statusbar b{color:var(--ink-soft);font-weight:600}
+.toast{position:fixed;left:50%;bottom:44px;transform:translateX(-50%) translateY(14px);background:var(--ink);color:var(--surface-1);padding:8px 16px;border-radius:8px;font-size:12.5px;opacity:0;pointer-events:none;transition:.2s;z-index:99}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+@media(max-width:960px){
+  body{overflow:auto}
+  .workspace{flex-direction:column}
+  .stage{height:56vh;flex:0 0 56vh}
+  .panel{width:100%;flex:1 1 auto;border-left:0;border-top:1px solid var(--line);min-height:320px}
+  .brand .sub{display:none}
+}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <div class="logo">📚</div>
+    <div style="min-width:0">
+      <h1>复习资料图书馆 · 全链路大导图</h1>
+      <div class="sub">静态实验站 · 8 段主链路 / 48 个节点 / 14 份真实资料 · 默认收起分支，点「全部展开」看全貌</div>
+    </div>
+  </div>
+  <div class="spacer"></div>
+  <span class="badge lab">实验功能</span>
+  <span class="badge">静态只读 · 零后端</span>
+  <button class="ghost" id="themeBtn" title="切换浅/深主题">◐ 主题</button>
+</header>
+
+<div class="toolbar">
+  <div class="group"><span class="lbl">布局</span>
+    <button class="chip on" data-mode="right">右向逻辑图</button>
+    <button class="chip" data-mode="both">双侧导图</button>
+    <button class="chip" data-mode="org">组织结构图</button>
+  </div>
+  <div class="group"><span class="lbl">视图</span>
+    <button class="chip" id="zoomOut">−</button>
+    <button class="chip" id="zoomLabel" title="点击复位">100%</button>
+    <button class="chip" id="zoomIn">+</button>
+    <button class="chip" id="fitBtn">适应窗口</button>
+    <button class="chip" id="expandAll">全部展开</button>
+    <button class="chip" id="collapseAll">收起分支</button>
+  </div>
+  <div class="group"><span class="lbl">查找</span>
+    <div class="search"><input id="searchInput" placeholder="搜索节点（/ 聚焦）" /><button class="chip" id="prevHit" style="border:0;background:transparent">↑</button><button class="chip" id="nextHit" style="border:0;background:transparent">↓</button></div>
+    <span class="hitcount" id="hitCount"></span>
+  </div>
+  <div class="group"><span class="lbl">导出</span>
+    <button class="chip" data-exp="svg">SVG</button>
+    <button class="chip" data-exp="png">PNG</button>
+    <button class="chip" data-exp="md">MD</button>
+    <button class="chip" data-exp="opml">OPML</button>
+    <button class="chip" data-exp="json">JSON</button>
+  </div>
+</div>
+
+<main class="workspace">
+  <section class="stage">
+    <svg id="mm" xmlns="http://www.w3.org/2000/svg"><g id="vp"></g></svg>
+    <div class="zoom-hint">滚轮缩放 · 拖拽平移 · 单击看资料 · 双击或点 ± 折叠/展开 · 键盘 + / − / 0 / / · 首屏默认收起分支保证可读</div>
+  </section>
+  <aside class="panel">
+    <div class="tabs">
+      <button class="tab on" data-pane="detail">节点资料</button>
+      <button class="tab" data-pane="docs">资料清单</button>
+    </div>
+    <div class="pane on" id="pane-detail"><div class="empty">点左侧任意节点<br/>查看说明、来源文件与定位要点</div></div>
+    <div class="pane" id="pane-docs"></div>
+  </aside>
+</main>
+
+<footer class="statusbar">
+  <span>节点 <b id="stNodes">—</b></span>
+  <span>布局 <b id="stMode">右向逻辑图</b></span>
+  <span>缩放 <b id="stZoom">100%</b></span>
+  <span>命中 <b id="stHits">0</b></span>
+  <span>数据 <b>内置全链路快照（不联网、不读本地书库）</b></span>
+  <span>布局算法 <b>mindmap-layout.js 同源内联</b></span>
+</footer>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ==== 内联开始：renderer/js/mindmap-layout.js 原文（生成时逐字拷贝） ==== */
+'use strict';
+/* 统一核心 · 思维导图布局与题型树（UMD：浏览器 window.MindmapLayout / Node require 同源）。
+ *
+ * 为什么单独成模块：布局算法是纯函数，能被 Node 判别测试真调用；
+ * 前端画布、SVG 导出、PNG 光栅化全部复用同一份坐标，杜绝「导出与屏幕不一致」。
+ *
+ * 对标（PROCESS/research-mindmap-v2/best-practices.md）：
+ *   markmap —— 交互式 SVG、branch colors、initial expansion level
+ *   Xmind   —— 多结构（右向逻辑图 / 双侧导图 / 组织结构图）、大纲模式、按章配色
+ *   mind-elixir —— 简洁 JSON 树 + 事件总线（本模块只产出数据，事件由 core-ui.js 绑定）
+ */
+(function (root, factory) {
+  const api = factory();
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  else root.MindmapLayout = api;
+})(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+
+  // 按章分支配色（markmap branch colors / Xmind 彩虹线）。同色贯穿连线与后代。
+  const BRANCH_COLORS = ['#3a7afe', '#f2994a', '#27ae60', '#9b51e0', '#eb5757', '#00a3b8', '#d4a017'];
+  const NODE_W = 176, NODE_H = 34, GAP_X = 62, GAP_Y = 14, PAD = 28;
+
+  function escXml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c]));
+  }
+  function short(s, n) {
+    const t = String(s == null ? '' : s);
+    return t.length > n ? t.slice(0, n - 1) + '…' : t;
+  }
+  function childrenOf(n) { return (n && Array.isArray(n.children)) ? n.children : []; }
+
+  // 收集扁平节点 + 深度 + 所属分支色 + 父 id。先给每个叶子一个「行号」，
+  // 父节点取子节点行号均值 —— 这是 Reingold-Tilford 的简化版，够用且无第三方依赖。
+  function flatten(root) {
+    const flat = [];
+    let leafRow = 0;
+    const rowOf = {};
+    (function walk(node, depth, parentId, color, branch) {
+      if (!node || typeof node !== 'object') return null;
+      const id = node.id || ('n' + depth + '_' + flat.length);
+      const kids = childrenOf(node);
+      const b = depth === 1 ? (branch == null ? flat.filter(n => n.depth === 1).length : branch) : branch;
+      // 一级分支强制取自己的分支色，不继承 root 的蓝；后代才继承父色。
+      const col = depth === 0 ? '#3a7afe'
+        : depth === 1 ? BRANCH_COLORS[(b || 0) % BRANCH_COLORS.length]
+        : (color || BRANCH_COLORS[0]);
+      const rec = {
+        id, title: String(node.title || '未命名'), type: node.type || 'node',
+        depth, parentId, color: col, w: NODE_W, h: NODE_H,
+        desc: node.desc || '', questionTypes: node.questionTypes || [],
+        kind: node.kind || null, question: node.question || null,
+        meta: node.meta || null, x: 0, y: 0
+      };
+      flat.push(rec);
+      if (!kids.length) { rowOf[id] = leafRow++; return rec; }
+      const rows = kids.map(k => walk(k, depth + 1, id, col, b)).filter(Boolean).map(c => rowOf[c.id]);
+      rowOf[id] = rows.length ? (Math.min.apply(null, rows) + Math.max.apply(null, rows)) / 2 : leafRow++;
+      return rec;
+    })(root, 0, null, null, null);
+    return { flat, rowOf, maxRow: Math.max(1, leafRow), maxDepth: flat.reduce((m, n) => Math.max(m, n.depth), 0) };
+  }
+
+  // 3 种布局。坐标都是「画布内绝对像素」，供 SVG 直接绘制。
+  function layoutTree(root, mode) {
+    const m = ['right', 'both', 'org'].includes(mode) ? mode : 'right';
+    const { flat, rowOf, maxRow, maxDepth } = flatten(root);
+    const byId = {};
+    flat.forEach(n => { byId[n.id] = n; });
+
+    if (m === 'right') {
+      flat.forEach(n => {
+        n.x = PAD + n.depth * (NODE_W + GAP_X);
+        n.y = PAD + rowOf[n.id] * (NODE_H + GAP_Y);
+      });
+    } else if (m === 'org') {
+      // 组织结构图：自上而下，层级在 y，兄弟在 x。
+      flat.forEach(n => {
+        n.x = PAD + rowOf[n.id] * (NODE_W + GAP_X * 0.45);
+        n.y = PAD + n.depth * (NODE_H + GAP_Y * 1.7);
+      });
+    } else {
+      // 双侧导图：一级分支按奇偶分到左右两侧，两侧各自独立排行号（不互相挤占）。
+      const tops = flat.filter(n => n.depth === 1);
+      const kidsOf = {};
+      flat.forEach(n => { if (n.parentId) (kidsOf[n.parentId] = kidsOf[n.parentId] || []).push(n.id); });
+      const sideOf = {}, rowSide = {}, counter = { L: 0, R: 0 };
+      tops.forEach((t, i) => {
+        const side = i % 2 === 0 ? 'R' : 'L';
+        let row = counter[side];
+        (function assign(id) {
+          sideOf[id] = side;
+          const kids = kidsOf[id] || [];
+          if (!kids.length) { rowSide[id] = row++; return rowSide[id]; }
+          const rows = kids.map(assign);
+          rowSide[id] = (Math.min.apply(null, rows) + Math.max.apply(null, rows)) / 2;
+          return rowSide[id];
+        })(t.id);
+        counter[side] = row;
+      });
+      flat.forEach(n => {
+        if (n.depth === 0) return;
+        const side = sideOf[n.id] || 'R';
+        n.x = (side === 'L' ? -1 : 1) * (PAD + n.depth * (NODE_W + GAP_X));
+        n.y = PAD + (rowSide[n.id] || 0) * (NODE_H + GAP_Y);
+      });
+      // 归一化到正坐标；root 放在左右一级节点的中线、垂直居中。
+      const nonRoot = flat.filter(n => n.depth > 0);
+      const minX = Math.min.apply(null, nonRoot.map(n => n.x));
+      const shift = PAD - minX;
+      nonRoot.forEach(n => { n.x += shift; });
+      const rootNode = flat.find(n => n.depth === 0);
+      if (rootNode) {
+        const topXs = flat.filter(n => n.depth === 1).map(n => n.x);
+        const maxRows = Math.max(counter.L, counter.R, 1);
+        rootNode.x = (Math.min.apply(null, topXs) + Math.max.apply(null, topXs)) / 2;
+        rootNode.y = PAD + (maxRows - 1) * (NODE_H + GAP_Y) / 2;
+      }
+    }
+
+    flat.forEach(n => { n.x = Math.round(n.x); n.y = Math.round(n.y); });
+    const width = Math.max.apply(null, flat.map(n => n.x + n.w)) + PAD;
+    const height = Math.max.apply(null, flat.map(n => n.y + n.h)) + PAD;
+    const edges = flat.filter(n => n.parentId).map(n => ({ from: n.parentId, to: n.id, color: n.color }));
+    return { nodes: flat, edges, width, height, mode: m, maxDepth, maxRow };
+  }
+
+  // 全文搜索：返回命中节点 id 列表（大小写不敏感）。折叠态下 DOM 里没有文本也能搜。
+  function searchNodes(nodes, keyword) {
+    const k = String(keyword || '').trim().toLowerCase();
+    if (!k) return [];
+    return (nodes || []).filter(n => String(n.title || '').toLowerCase().includes(k)).map(n => n.id);
+  }
+
+  // 题型分类长进同一张导图：根 → 题型 → 子题型 → 题目（三级下钻的数据形状）。
+  function buildQuestionTree(qIndex) {
+    const groups = Array.isArray(qIndex) ? qIndex : [];
+    const children = groups.map((g, gi) => {
+      const items = Array.isArray(g.items) ? g.items : [];
+      const itemNodes = items.map((it, ii) => {
+        const qs = Array.isArray(it.questions) ? it.questions : [];
+        return {
+          id: 'qi_' + gi + '_' + ii,
+          type: 'qitem', kind: 'qitem',
+          title: String(it.title || '未命名子题型'),
+          desc: '', path: it.path || [], pointId: it.pointId || null,
+          meta: { count: qs.length },
+          children: qs.map((q, qi) => ({
+            id: String(q.id || ('qq_' + gi + '_' + ii + '_' + qi)),
+            type: 'question', kind: 'question',
+            title: String(q.stem || '未命名题目').slice(0, 42),
+            desc: '', question: q,
+            meta: { difficulty: q.difficulty || '基础' },
+            children: []
+          }))
+        };
+      });
+      const count = itemNodes.reduce((s, i) => s + i.children.length, 0);
+      return {
+        id: 'qt_' + gi, type: 'qtype', kind: 'qtype',
+        title: String(g.type || '未分类'), desc: '',
+        meta: { count }, children: itemNodes
+      };
+    });
+    const total = children.reduce((s, c) => s + (c.meta ? c.meta.count : 0), 0);
+    return {
+      id: 'qt_root', type: 'root', kind: 'qroot',
+      title: '题型分类', desc: '', meta: { count: total }, children
+    };
+  }
+
+  // 大纲导出（Xmind 大纲模式 / Markdown 列表）
+  function toMarkdown(tree) {
+    const lines = [];
+    (function walk(n, depth) {
+      if (depth === 0) lines.push('# ' + String(n.title || '未命名'));
+      else lines.push('  '.repeat(depth - 1) + '- ' + String(n.title || '未命名'));
+      childrenOf(n).forEach(c => walk(c, depth + 1));
+    })(tree, 0);
+    return lines.join('\n') + '\n';
+  }
+  // OPML：可导入 Xmind / OmniOutliner / 多数大纲工具
+  function toOpml(tree) {
+    const out = [];
+    (function walk(n) {
+      out.push('<outline text="' + escXml(n.title || '') + '">');
+      childrenOf(n).forEach(walk);
+      out.push('</outline>');
+    })(tree);
+    return '<?xml version="1.0" encoding="UTF-8"?>\n<opml version="2.0">\n<head><title>' +
+      escXml(tree.title || '') + '</title></head>\n<body>\n' + out.join('\n') + '\n</body>\n</opml>\n';
+  }
+
+  // 单一真源：画布与「导出 SVG / PNG」都吃这份坐标。含节点徽章（题型 / 题目数 / 原图）。
+  function toSvg(layout, opts) {
+    const o = opts || {};
+    const pos = {};
+    (layout.nodes || []).forEach(n => { pos[n.id] = n; });
+    // v3 美化：颜色由调用方按主题 token 注入；缺省仍是白底，
+    // 保证 Node 侧判别测试与「不带主题信息的导出」行为不变。
+    const bg = o.background || '#ffffff';
+    const nodeFill = o.nodeFill || '#ffffff';
+    const textColor = o.textColor || '#1f2733';
+    const metaColor = o.metaColor || '#6b7688';
+    const rootText = o.rootTextColor || '#ffffff';
+    let body = '<rect x="0" y="0" width="' + layout.width + '" height="' + layout.height + '" fill="' + bg + '"/>';
+    (layout.edges || []).forEach(e => {
+      const a = pos[e.from], b = pos[e.to];
+      if (!a || !b) return;
+      let d;
+      if (layout.mode === 'org') {
+        const x1 = a.x + a.w / 2, y1 = a.y + a.h;
+        const x2 = b.x + b.w / 2, y2 = b.y;
+        d = 'M' + x1 + ' ' + y1 + ' C' + x1 + ' ' + (y1 + y2) / 2 + ' ' + x2 + ' ' + (y1 + y2) / 2 + ' ' + x2 + ' ' + y2;
+      } else {
+        const rightward = b.x >= a.x;
+        const x1 = rightward ? a.x + a.w : a.x, y1 = a.y + a.h / 2;
+        const x2 = rightward ? b.x : b.x + b.w, y2 = b.y + b.h / 2;
+        const mx = (x1 + x2) / 2;
+        d = 'M' + x1 + ' ' + y1 + ' C' + mx + ' ' + y1 + ' ' + mx + ' ' + y2 + ' ' + x2 + ' ' + y2;
+      }
+      body += '<path d="' + d + '" stroke="' + e.color + '" stroke-width="1.6" fill="none" opacity="0.65"/>';
+    });
+    (layout.nodes || []).forEach(n => {
+      const isRoot = n.depth === 0;
+      const fill = isRoot ? n.color : nodeFill;
+      const stroke = n.color;
+      const tc = isRoot ? rootText : textColor;
+      body += '<g class="mm-node" data-id="' + escXml(n.id) + '" data-kind="' + escXml(n.kind || n.type) + '">';
+      body += '<rect x="' + n.x + '" y="' + n.y + '" width="' + n.w + '" height="' + n.h + '" rx="9" fill="' + fill +
+        '" stroke="' + stroke + '" stroke-width="' + (isRoot ? 0 : 1.4) + '"/>';
+      body += '<text x="' + (n.x + 10) + '" y="' + (n.y + n.h / 2 + 4) + '" font-size="12" font-family="system-ui,sans-serif" fill="' +
+        tc + '">' + escXml(short(n.title, 16)) + '</text>';
+      if (n.questionTypes && n.questionTypes.length) {
+        body += '<circle cx="' + (n.x + n.w - 10) + '" cy="' + (n.y + 10) + '" r="4" fill="' + n.color + '"/>';
+      }
+      if (n.meta && typeof n.meta.count === 'number') {
+        body += '<text x="' + (n.x + n.w - 8) + '" y="' + (n.y + n.h / 2 + 4) + '" font-size="10" text-anchor="end" fill="' +
+          (isRoot ? rootText : metaColor) + '" font-family="system-ui,sans-serif">' + n.meta.count + '</text>';
+      }
+      if (n.question && n.question.source && n.question.source.file) {
+        body += '<circle cx="' + (n.x + n.w - 10) + '" cy="' + (n.y + n.h - 9) + '" r="3" fill="#f2994a"/>';
+      }
+      body += '</g>';
+    });
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="' + layout.width + '" height="' + layout.height +
+      '" viewBox="0 0 ' + layout.width + ' ' + layout.height + '">' + body + '</svg>';
+  }
+
+  return {
+    layoutTree, searchNodes, buildQuestionTree, toMarkdown, toOpml, toSvg,
+    BRANCH_COLORS, NODE_W, NODE_H, escXml
+  };
+});
+
+/* ==== 内联结束 ==== */
+</script>
+<script>
+'use strict';
+/* ============ 内置数据：全链路大导图（真实文件与锚点，非编造） ============ */
+const S = (file, anchor, quote, note) => ({ file, anchor, quote: quote || '', note: note || '' });
+const N = (id, title, desc, extra) => Object.assign({ id, title, desc, children: [] }, extra || {});
+
+const TREE = N('root', '复习资料图书馆 · 全链路',
+  '从一份资料到一次复习，再到五种入口共用同一核心。八段主链路、四个数据文件、一份能力清单。', {
+  children: [
+    N('c1', '① 资料输入', '把 PDF / PPT / Word / 图片 / Txt / Md / Csv 变成一本书里的资料文件。', { children: [
+      N('c1a', '拖入 / 点击 / 粘贴', '资料页做成「文件夹装置桶」：拖入文件、点击图标选择、Ctrl+V 粘贴三条路都进同一个入口。', { source: S('renderer/index.html + renderer/js/book.js', '资料文件区 / 拖入区', '', '上一轮 058a427 提交：拖入区支持拖入/点击/复制粘贴。') }),
+      N('c1b', '多格式抽取', '按扩展名分流：PDF 按页切块、Office 取文本、图片只登记并标记 isImage（需视觉模型）。', { source: S('core/extract.js', 'extract 入口', '', '纯图片书会明确提示需视觉模型，不静默空分析。') }),
+      N('c1c', '每书独立目录', '一本书一个目录：book.json 记元信息，files/ 放原始字节与抽取文本。', { source: S('core/bookStore.js', '_bookFile / _filesDir / _analysisFile / _practiceFile', '', '四类文件各有独立路径方法，互不覆盖。') }),
+      N('c1d', '零云端本地存储', '数据只落本机 library/，不上传、不依赖账号；这是全项目的硬约束。', { source: S('计划追踪/对话计划-2026-11-07.md', ':123', '明确不做（打了回的）：云端同步 / 多端（跟零云端冲突）', '这是已打回的方向，不是待办。'), questionTypes: ['概念'] })
+    ]}),
+    N('c2', '② 整体分析', '一次 API 把整本书当作一个整体分析，产出章节树、题型索引与全书概览。', { children: [
+      N('c2a', '一次 API 整本分析', '不分层、不 RAG、不多轮：一次调用产出完整结构，这是用户明确的产品硬需求。', { source: S('core/analyze.js', 'SYSTEM_PROMPT / analyze()', '', '两阶段先出大纲供审、逐页多次调用均被否决。') }),
+      N('c2b', '引用锚定', '解析层给文本打「文件 + 页/段」锚点，提示词要求 source.page / source.quote，返回后由程序从原文校验引文真伪。', { source: S('core/analyze.js', 'source.page / source.quote 契约', '', '修掉「page 全为 0、quote 由模型自报」的假锚点。') }),
+      N('c2c', '长文均衡覆盖', '超长时按锚点分段，跨文件/章节均衡取语料，替代从头部硬砍 50000 字。', { source: S('core/analyze.js', '语料组装段', '', '并在概览显式告知覆盖情况，不让后半本静默丢失。') }),
+      N('c2d', '诚实降级', '纯图片书、模型不支持视觉、无文本资料、无薄弱点——一律大声失败或明确标注，不造假卷、不假判通过。', { source: S('core/analyze.js + lib/study.js', 'visionUnsupported / visionDegraded / 离线零重试', '', '「模型没真看图」会写进结果字段，不冒充看过。') }),
+      N('c2e', '契约校验', 'normalizeNode 把模型输出收敛成 root/chapter/section/point/subtype 五层，validateGeneration 检查题型与答案契约。', { source: S('core/analyze.js', 'normalizeNode / validateGeneration', '', 'id 由 validate 统一替换为确定性 id。') })
+    ]}),
+    N('c3', '③ 思维导图', '把章节树画成可交互导图；这一页（本静态站）复用的就是同一份布局算法。', { children: [
+      N('c3a', '三种布局', 'right 右向逻辑图 / both 双侧导图 / org 组织结构图，同一棵树换坐标不换数据。', { source: S('renderer/js/mindmap-layout.js', 'layoutTree(root, mode)', '', '本页三颗按钮直接调它。') }),
+      N('c3b', '单一坐标源', '布局是纯函数，浏览器与 Node 同源；画布、SVG 导出、PNG 光栅化吃同一份坐标，杜绝导出与屏幕不一致。', { source: S('renderer/js/mindmap-layout.js', ':2-4', '布局算法是纯函数，能被 Node 判别测试真调用', '本页内联的就是这个文件原文。') }),
+      N('c3c', '缩放 / 平移 / 折叠', '滚轮以鼠标为中心缩放、拖拽平移、双击节点折叠展开、适应窗口一键归位。', { source: S('renderer/js/core-ui.js', 'applyView / zoomBy / resetView', '', '静态站实现了同一套交互，不依赖后端。') }),
+      N('c3d', '五种导出', 'JSON / SVG / PNG / MD / OPML。SVG 与画布同一坐标，MD/OPML 可直接进 Xmind 或大纲工具。', { source: S('renderer/js/mindmap-layout.js', 'toSvg / toMarkdown / toOpml', '', '本页五颗导出按钮全部真跑。') }),
+      N('c3e', '搜索高亮', '折叠态下 DOM 没有文本也能搜：searchNodes 直接查布局数据，命中高亮、其余变暗、上下跳转。', { source: S('renderer/js/mindmap-layout.js', 'searchNodes(nodes, keyword)', '', '不靠 DOM 文本匹配。') })
+    ]}),
+    N('c4', '④ 题型索引', '分析结果里的题目按题型归类，题目有稳定身份，能回指原文位置。', { children: [
+      N('c4a', 'questionIndex 分组', '题型 → 子题型 → 题目三层，题型徽章直接挂在导图节点上。', { source: S('core/analyze.js', 'questionIndex', '', '也是「大量刷题」填充队列的素材来源。') }),
+      N('c4b', '内容稳定哈希', '题目身份 = 题面 + 答案的 sha256 前 16 位；重新分析换了 id 也不会让历史错位。', { source: S('core/practice.js', 'questionKey()', '', 'findQuestion 只认 16 位 hex，兼挡原型污染与任意路径。') }),
+      N('c4c', '题目详情', '答案、分步解答、思路、易错点、难度、来源；练习列表默认不下发这些字段。', { source: S('renderer/js/core-ui.js', '题目详情面板', '', '注意：只是练习视图内不渲染，不是答案没到客户端。') }),
+      N('c4d', '锚点回原文', 'source 带 file / page / anchor / quote，可定位到哪份资料哪一页哪一段。', { source: S('core/analyze.js', 'source 契约', '', '文本类资料直接按锚点+引文定位，无需页图。') })
+    ]}),
+    N('c5', '⑤ 练习闭环', '从「只能看答案」变成「自己先答 → 判分 → 记下来 → 隔几天再练」。', { children: [
+      N('c5a', '练习 tab', '统一核心默认窗口新增练习入口，旧题目详情保持「看解析」原样，避免砸掉 139 条 e2e 断言的 DOM 契约。', { source: S('renderer/core.html + renderer/js/core-ui.js', '练习 tab', '', '真隐藏的硬要求是答案不下发到前端，与哪个弹窗无关。') }),
+      N('c5b', '先答后揭', '点开题目答案默认盖住，先选/写答案提交，才返回答案与解析。', { source: S('PROCESS/research-core-practice-loop/best-practices.md', 'active recall 基准', '', '外部基准：active recall，一周后留存 61% vs 40%。') }),
+      N('c5c', '判分与自评', '选择题/判断题自动判分；开放题与简答题走四档自评，不假判。', { source: S('core/practice.js', 'attempt() / rate()', '', 'gradeOne 按题型分流，self 模式不改对错计数。') }),
+      N('c5d', 'practice.json 零迁移', '每本书目录里新增一份独立过程数据，老 book.json / analysis.json / files/ 一个字节不改，删掉即回原状。', { source: S('core/bookStore.js', 'getPractice / savePractice / _practiceFile', '', '这是解开 F1「必须迁移书库」误判的关键。') })
+    ]}),
+    N('c6', '⑥ 复习排程', '答对拉长间隔、答错退回短期，到期自动进今日复习。', { children: [
+      N('c6a', 'Leitner 盒子 + lapse/leech', '纯函数排程，无 store 依赖、零新依赖；反复错的 leech 上浮队首。', { source: S('lib/srs.js', 'schedule / dueDate / clamp', '', '不上 FSRS：起步为空、没有成百上千条日志可拟合权重。') }),
+      N('c6b', '四档透明预览', '重来/吃力/会了/太简单，每档评分按钮直接标出「下次·X」。服务端一次算好随卡下发，前端只展示。', { source: S('lib/srs.js + lib/review.js', 'previewNext / c.next', '', '浏览器调不到 node 的 lib/srs，必须数据层算。') }),
+      N('c6c', '今日到期队列', 'dueKeys 只捞 dueAt <= now，且只用当前分析里还存在的题目 key 统计，杜绝「显示 N 张却列不出题」。', { source: S('core/practice.js + core/index.js', 'dueKeys / getDue', '', 'now 可注入，判别测试不依赖真实时间。') }),
+      N('c6d', '大量刷题填充', '到期卡不足时，从 questionIndex 展平知识点补满成批会话，排序 到期优先 > 错次降序 > 到期升序。', { source: S('lib/review.js', 'queueAcrossBooks(store, now, {limit, fill})', '', '你要的是连续刷题流，不是两张卡弹窗。') }),
+      N('c6e', '键盘操作', '空格揭示答案、1-4 评四档；仅「今日复习」视图可见且焦点不在输入框时生效。', { source: S('renderer/js/review-ui.js', 'onKey(e)', '', '双手不离开键盘。') })
+    ]}),
+    N('c7', '⑦ 多形态入口', '网页 / 桌面 / 命令行 / DSH 插件 / 专家工具，五种打开方式共用唯一核心。', { children: [
+      N('c7a', '唯一核心门面', 'Core 类承载全部业务方法，所有形态只是入口，不复制引擎、不各写一份映射。', { source: S('core/index.js', 'class Core / module.exports', '', '导出 CORE_VERSION / Core / BookStore / extract / analyze / practice。') }),
+      N('c7b', 'canonical 路由', 'HTTP-like 分派，路由语义只存在一份；路径 id 进 Core 前先 assertSafeId。', { source: S('core/request.js', ':4-6', '保证「所有形态只是入口」——路由语义只存在一份，杜绝各形态各写一份映射导致漂移。', 'server.js:85 与 app/main.js:49 都调 dispatch。') }),
+      N('c7c', '能力清单单一真源', '十项能力收成一份表，CLI 与 DSH 运行时读它，不再各自手写「能用哪些动作」。', { source: S('core/capabilities.js', 'ACTIONS / CAPABILITIES / has / isPractice / unsupported', '', '新增能力五步顺序写在文件头，漏一步 J1 守卫就红。') }),
+      N('c7d', 'HTTP / Electron', 'server.js 的 /api/core/* 与 Electron 的 core:request 都走同一个 dispatch，practice 五条路由两形态自动生效。', { source: S('server.js + app/main.js + app/preload.js', ':85 / :49 / :74', '', 'preload 暴露 coreRequest，core-ui 有 Electron 分支不裸 fetch。') }),
+      N('c7e', 'CLI 专家 / DSH 插件', '两者 new Core() 直调门面、不走 dispatch；补齐五个 practice action 后，十项能力在五个入口一致。', { source: S('plugins/review-analysis/bin/driver.js + plugins/dsh-review-analysis/index.js', 'bin/driver.js / index.js', '', '只做协议转换，J5 断言不含 practiceLib / savePractice / 文件写入。') }),
+      N('c7f', '跨三入口契约测试', '同一临时书库，dispatch / CLI 真子进程 / DSH 真 ESM 插件各跑同一组用例，断言能力集合一致、数据同源。', { source: S('test/core-capability-sync.test.js', 'J1–J5', '', 'baseline 11 红 4 绿 exit 1 → candidate 15/0 exit 0。') })
+    ]}),
+    N('c8', '⑧ 工程门禁', '改完不算完，外部判据跑绿才算数。', { children: [
+      N('c8a', '判别测试旧红新绿', '先写测试跑到旧版上贴失败输出，再改代码贴通过输出，两份成对归档。', { source: S('PROCESS/research-backend-sync/', 'baseline-capability-sync.txt / candidate-capability-sync.txt', '', '旧版上也通过 = 该验证无效，重写。') }),
+      N('c8b', 'Oracle Gate 五项', '真跑输出 / 改动文件语法 / 真实入口可达 / 修复前失败输出 / 逐字符证据锚点，缺一打回。', { source: S('~/.workbuddy/skills/maxloop-overlord/SKILL.md', '3.1 Oracle Gate', '放行判据必须来自模型之外（外部判据 + 逐字符证据锚点）', '单测全绿 ≠ 用户实际路径可达，是 v2.2 最贵教训。') }),
+      N('c8c', '版本 8 处一致', 'package.json / VERSION / README / CHANGELOG 等 8 处常量由脚本同步与核查。', { source: S('scripts/check-versions.mjs', 'check-versions', '', '本静态站不改版本号。') }),
+      N('c8d', '凭据扫描', 'key/token/密码/会话态不入文件、不入 git；push 前扫暂存区。', { source: S('AGENTS.md（工作区协作指令）', '六、安全铁律 1 / 3', '绝不写凭据：key / token / cookie / 密码 / 会话态不入文件、不入描述。', '发现已入库 → git rm --cached + 平台侧轮换。') }),
+      N('c8e', '形态漂移检测', '仓库 wrapper 与本机已安装位置逐个比对，不一致就报「跑 forms:sync」。', { source: S('scripts/check-forms.mjs', 'check-forms', '', '当前本机 9 处既有漂移，未擅自同步。') }),
+      N('c8f', 'GitHub Pages 静态站', 'workflow 把纯静态 renderer/ 与 demo/book.json 打包上传；本页放进 renderer/ 即被自动带走。', { source: S('.github/workflows/pages.yml', 'name: Deploy Pages 预览站', '只读展示站：把纯静态的 renderer/ 与示例数据 demo/book.json 打包成 GitHub Pages。', '当前线上返回 404 Site not found：站点源未启用/未发布，需在仓库 Settings → Pages 选 GitHub Actions。') })
+    ]})
+  ]
+});
+
+/* 资料清单：本仓库真实文件，nodeId 用于「在导图中定位」 */
+const DOCS = [
+  { name:'统一核心 · 整体分析', path:'core/analyze.js', node:'c2a', note:'一次 API 整本分析；引用锚定、长文均衡覆盖、normalizeNode 五层归一、validateGeneration 契约校验。' },
+  { name:'统一核心 · 书库数据层', path:'core/bookStore.js', node:'c1c', note:'每书独立目录，book.json / analysis.json / practice.json / files/ 各有独立路径方法与原子写。' },
+  { name:'统一核心 · 练习逻辑', path:'core/practice.js', node:'c5c', note:'flatten / findQuestion / attempt / rate / dueKeys / summarize；题目内容哈希、判分、排程全在这里。' },
+  { name:'统一核心 · 门面', path:'core/index.js', node:'c7a', note:'Core 类对上暴露全部业务方法，是所有形态的唯一入口。' },
+  { name:'统一核心 · 路由分派', path:'core/request.js', node:'c7b', note:'canonical HTTP-like dispatch；assertSafeId 挡低权限渲染进程传来的危险 id。' },
+  { name:'统一核心 · 能力清单', path:'core/capabilities.js', node:'c7c', note:'十项能力单一真源，CLI / DSH 运行时读同一份，杜绝手写清单漂移。' },
+  { name:'排程算法', path:'lib/srs.js', node:'c6a', note:'Leitner 盒子 + lapse/leech + previewNext 四档透明预览，纯函数、无 store 依赖。' },
+  { name:'导图布局与导出', path:'renderer/js/mindmap-layout.js', node:'c3b', note:'三布局、搜索、SVG/MD/OPML 导出；UMD 纯函数，浏览器与 Node 同源。本页内联的是它的原文。' },
+  { name:'统一核心界面', path:'renderer/js/core-ui.js', node:'c3c', note:'书架、资料、导图画布、题型索引、练习 tab、缩放平移与五种导出。' },
+  { name:'今日复习刷题流', path:'renderer/js/review-ui.js', node:'c6e', note:'全屏 Anki 式刷题：进度条、四档下次间隔预览、空格揭示、1-4 评分。' },
+  { name:'专家形态 CLI', path:'plugins/review-analysis/bin/driver.js', node:'c7e', note:'--project 引用唯一核心，不复制引擎；十个 action 全部只做协议转换。' },
+  { name:'DSH 插件入口', path:'plugins/dsh-review-analysis/index.js', node:'c7e', note:'createRequire 加载主项目 core；tool schema 的 action enum 由能力清单驱动。' },
+  { name:'跨入口契约测试', path:'test/core-capability-sync.test.js', node:'c7f', note:'15 条判据，三入口同源；旧版 11 红 → 新版 15 绿。' },
+  { name:'Pages 部署配置', path:'.github/workflows/pages.yml', node:'c8f', note:'cp -r renderer/* _site/ + demo/book.json → upload-pages-artifact → deploy-pages。' }
+];
+
+/* ============ 视图状态 ============ */
+const ML = window.MindmapLayout;
+const svg = document.getElementById('mm');
+const vp = document.getElementById('vp');
+const view = { mode:'right', scale:1, tx:0, ty:0, collapsed:new Set(), selected:null, hits:[], hitIndex:-1, layout:null, byId:{} };
+const MODE_LABEL = { right:'右向逻辑图', both:'双侧导图', org:'组织结构图' };
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._tm); t._tm = setTimeout(() => t.classList.remove('show'), 1800); }
+
+/* 折叠态树：保留原 id 与全部字段，只裁 children */
+function pruned(node) {
+  const out = Object.assign({}, node);
+  out.children = view.collapsed.has(node.id) ? [] : (node.children || []).map(pruned);
+  return out;
+}
+function activeTree() { return pruned(TREE); }
+
+/* 一级分支配色：按分支索引取色，后代继承，连线同色 */
+function recolor(layout) {
+  const colors = ML.BRANCH_COLORS;
+  const tops = layout.nodes.filter(n => n.depth === 1);
+  const idx = {};
+  tops.forEach((t, i) => { idx[t.id] = i % colors.length; });
+  const topOf = {};
+  layout.nodes.forEach(n => { if (n.depth === 0) topOf[n.id] = null; });
+  // parentId 链上溯到一级节点
+  function branchOf(n) {
+    let cur = n, guard = 0;
+    while (cur && cur.depth > 1 && guard++ < 20) cur = view.byId[cur.parentId];
+    return cur && cur.depth === 1 ? cur.id : null;
+  }
+  layout.nodes.forEach(n => {
+    if (n.depth === 0) { n.color = '#3b5bdb'; return; }
+    const b = branchOf(n);
+    n.color = b && idx[b] != null ? colors[idx[b]] : colors[0];
+  });
+  layout.edges.forEach(e => { const n = view.byId[e.to]; if (n) e.color = n.color; });
+}
+
+function compute() {
+  const tree = activeTree();
+  const layout = ML.layoutTree(tree, view.mode);
+  view.byId = {};
+  layout.nodes.forEach(n => { view.byId[n.id] = n; });
+  recolor(layout);
+  view.layout = layout;
+  view.tree = tree;
+  return layout;
+}
+
+/* ============ 渲染 ============ */
+function edgePath(a, b) {
+  if (view.mode === 'org') {
+    const x1 = a.x + a.w / 2, y1 = a.y + a.h, x2 = b.x + b.w / 2, y2 = b.y;
+    return 'M' + x1 + ' ' + y1 + ' C' + x1 + ' ' + (y1 + y2) / 2 + ' ' + x2 + ' ' + (y1 + y2) / 2 + ' ' + x2 + ' ' + y2;
+  }
+  const x1 = a.x + a.w, y1 = a.y + a.h / 2, x2 = b.x, y2 = b.y + b.h / 2;
+  if (x2 < x1) { // 双侧导图左半边：从父左边出、到子右边
+    const lx1 = a.x, lx2 = b.x + b.w, mx = (lx1 + lx2) / 2;
+    return 'M' + lx1 + ' ' + y1 + ' C' + mx + ' ' + y1 + ' ' + mx + ' ' + y2 + ' ' + lx2 + ' ' + y2;
+  }
+  const mx = (x1 + x2) / 2;
+  return 'M' + x1 + ' ' + y1 + ' C' + mx + ' ' + y1 + ' ' + mx + ' ' + y2 + ' ' + x2 + ' ' + y2;
+}
+function shortText(s, n) { s = String(s == null ? '' : s); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
+
+function render() {
+  const L = compute();
+  const surface = cssVar('--surface-1'), ink = cssVar('--ink'), faint = cssVar('--ink-faint');
+  const light = document.documentElement.getAttribute('data-theme') !== 'dark';
+  const nodeFill = light ? '#ffffff' : '#232c3b';
+  let html = '';
+  (L.edges || []).forEach(e => {
+    const a = view.byId[e.from], b = view.byId[e.to];
+    if (!a || !b) return;
+    html += '<path class="edge" d="' + edgePath(a, b) + '" stroke="' + e.color + '"/>';
+  });
+  L.nodes.forEach(n => {
+    const isRoot = n.depth === 0;
+    const fill = isRoot ? n.color : nodeFill;
+    const tc = isRoot ? '#ffffff' : ink;
+    const hasKids = !!(TREE && (findRaw(n.id) || {}).children || []).length;
+    const isCol = view.collapsed.has(n.id);
+    const cls = 'node' + (view.selected === n.id ? ' sel' : '');
+    html += '<g class="' + cls + '" data-id="' + esc(n.id) + '">';
+    html += '<rect x="' + n.x + '" y="' + n.y + '" width="' + n.w + '" height="' + n.h + '" fill="' + fill + '" stroke="' + n.color + '"/>';
+    html += '<text class="t" x="' + (n.x + 11) + '" y="' + (n.y + n.h / 2 + 1) + '" fill="' + tc + '">' + esc(shortText(n.title, 15)) + '</text>';
+    if (n.questionTypes && n.questionTypes.length) {
+      html += '<circle class="badge-dot" cx="' + (n.x + n.w - 11) + '" cy="' + (n.y + 10) + '" r="4" fill="' + n.color + '"/>';
+    }
+    const src = (findRaw(n.id) || {}).source;
+    if (src) html += '<circle class="badge-dot" cx="' + (n.x + n.w - 11) + '" cy="' + (n.y + n.h - 9) + '" r="3" fill="#f2994a"/>';
+    if (hasKids) {
+      html += '<g class="tw" data-toggle="' + esc(n.id) + '"><circle cx="' + (n.x + n.w + 9) + '" cy="' + (n.y + n.h / 2) + '" r="9" fill="' + surface + '" stroke="' + n.color + '" stroke-width="1.2"/>' +
+        '<text x="' + (n.x + n.w + 9) + '" y="' + (n.y + n.h / 2 + 4) + '" text-anchor="middle" font-size="12" fill="' + n.color + '" pointer-events="none">' + (isCol ? '+' : '−') + '</text></g>';
+    }
+    html += '</g>';
+  });
+  vp.innerHTML = html;
+  applyView();
+  applyHighlight();
+  $('stNodes').textContent = L.nodes.length + ' / ' + countRaw();
+  $('stMode').textContent = MODE_LABEL[view.mode];
+}
+
+function countRaw() { let n = 0; (function w(x){ n++; (x.children||[]).forEach(w); })(TREE); return n; }
+function findRaw(id) { let hit = null; (function w(x){ if (hit) return; if (x.id === id) { hit = x; return; } (x.children||[]).forEach(w); })(TREE); return hit; }
+function parentRaw(id) { let hit = null; (function w(x,p){ if (hit) return; if (x.id === id) { hit = p; return; } (x.children||[]).forEach(c => w(c, x)); })(TREE, null); return hit; }
+
+function applyView() {
+  vp.setAttribute('transform', 'translate(' + view.tx + ',' + view.ty + ') scale(' + view.scale + ')');
+  const pct = Math.round(view.scale * 100) + '%';
+  $('zoomLabel').textContent = pct; $('stZoom').textContent = pct;
+}
+function zoomBy(f, cx, cy) {
+  const r = svg.getBoundingClientRect();
+  const mx = cx == null ? r.width / 2 : cx - r.left;
+  const my = cy == null ? r.height / 2 : cy - r.top;
+  const ns = Math.max(0.25, Math.min(2.5, view.scale * f));
+  view.tx = mx - (mx - view.tx) * ns / view.scale;
+  view.ty = my - (my - view.ty) * ns / view.scale;
+  view.scale = ns;
+  applyView();
+}
+function fit() {
+  if (!view.layout) return;
+  const r = svg.getBoundingClientRect();
+  const L = view.layout;
+  // 节点少时允许放大到 1.35，让主链路首屏更醒目；节点多时由宽/高自动压回可读范围。
+  const s = Math.min(r.width / L.width, r.height / L.height, 1.35) * 0.94;
+  view.scale = Math.max(0.25, Math.min(2.5, s));
+  view.tx = (r.width - L.width * view.scale) / 2;
+  view.ty = (r.height - L.height * view.scale) / 2;
+  applyView();
+}
+function reset() { view.scale = 1; view.tx = 0; view.ty = 0; applyView(); }
+
+/* ============ 选中 / 详情 ============ */
+function selectNode(id) {
+  view.selected = id;
+  vp.querySelectorAll('.node.sel').forEach(g => g.classList.remove('sel'));
+  const g = vp.querySelector('.node[data-id="' + id + '"]');
+  if (g) g.classList.add('sel');
+  showDetail(id);
+  switchPane('detail');
+}
+function chainOf(id) {
+  const out = []; let cur = findRaw(id), guard = 0;
+  while (cur && guard++ < 20) { out.unshift(cur.title); cur = parentRaw(cur.id); }
+  return out;
+}
+function showDetail(id) {
+  const n = findRaw(id);
+  if (!n) return;
+  let h = '<div class="d-title">' + esc(n.title) + '</div>';
+  const chain = chainOf(id);
+  h += '<div><span class="tag gray">第 ' + (chain.length - 1) + ' 层</span>';
+  (n.questionTypes || []).forEach(q => { h += '<span class="tag q">' + esc(q) + '</span>'; });
+  if (n.source) h += '<span class="tag">有资料定位</span>';
+  h += '</div>';
+  h += '<div class="sec">链路位置</div><div class="desc">' + chain.map(esc).join(' <span style="color:var(--accent-ink)">›</span> ') + '</div>';
+  h += '<div class="sec">说明</div><div class="desc">' + esc(n.desc || '（暂无说明）') + '</div>';
+  if (n.source) {
+    const s = n.source;
+    h += '<div class="sec">来源文件</div><div class="src"><div class="f">' + esc(s.file) + '</div><div class="a">锚点：' + esc(s.anchor) + '</div>';
+    if (s.quote) h += '<div class="q">' + esc(s.quote) + '</div>';
+    if (s.note) h += '<div class="q">' + esc(s.note) + '</div>';
+    h += '</div>';
+  }
+  const kids = n.children || [];
+  if (kids.length) {
+    h += '<div class="sec">下级节点（' + kids.length + '）</div>';
+    kids.forEach(k => { h += '<button class="mini" data-goto="' + esc(k.id) + '">↳ ' + esc(k.title) + '</button>'; });
+  }
+  const p = parentRaw(id);
+  if (p) h += '<div class="sec">上级</div><button class="mini" data-goto="' + esc(p.id) + '">↰ ' + esc(p.title) + '</button>';
+  $('pane-detail').innerHTML = h;
+  $('pane-detail').querySelectorAll('[data-goto]').forEach(b => b.onclick = () => { selectNode(b.dataset.goto); focusNode(b.dataset.goto); });
+}
+function focusNode(id) {
+  const n = view.byId[id]; if (!n || !view.layout) return;
+  const r = svg.getBoundingClientRect();
+  view.tx = r.width / 2 - (n.x + n.w / 2) * view.scale;
+  view.ty = r.height / 2 - (n.y + n.h / 2) * view.scale;
+  applyView();
+}
+function switchPane(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.pane === name));
+  document.querySelectorAll('.pane').forEach(p => p.classList.toggle('on', p.id === 'pane-' + name));
+}
+function renderDocs() {
+  let h = '<div class="desc" style="margin-bottom:14px">下面 ' + DOCS.length + ' 份都是本仓库真实存在的文件。点「在导图中定位」跳到对应节点。</div>';
+  DOCS.forEach(d => {
+    h += '<div class="doc"><div class="dn">' + esc(d.name) + '</div><div class="dp">' + esc(d.path) + '</div><div class="dd">' + esc(d.note) + '</div>' +
+      '<button class="dl" data-doc="' + esc(d.node) + '">在导图中定位 →</button></div>';
+  });
+  $('pane-docs').innerHTML = h;
+  $('pane-docs').querySelectorAll('[data-doc]').forEach(b => b.onclick = () => { selectNode(b.dataset.doc); focusNode(b.dataset.doc); });
+}
+
+/* ============ 搜索 ============ */
+function applyHighlight() {
+  const set = new Set(view.hits);
+  vp.querySelectorAll('.node').forEach(g => {
+    g.classList.remove('dim', 'hit', 'locate');
+    if (!view.hits.length) return;
+    if (set.has(g.dataset.id)) g.classList.add('hit'); else g.classList.add('dim');
+  });
+}
+function doSearch(kw) {
+  view.hitIndex = -1;
+  if (!view.layout) return;
+  view.hits = ML.searchNodes(view.layout.nodes, kw);
+  $('hitCount').textContent = kw ? view.hits.length + ' 个命中' : '';
+  $('stHits').textContent = view.hits.length;
+  applyHighlight();
+}
+function nextHit(step) {
+  if (!view.hits.length) return;
+  view.hitIndex = (view.hitIndex + step + view.hits.length) % view.hits.length;
+  const id = view.hits[view.hitIndex];
+  vp.querySelectorAll('.node.locate').forEach(g => g.classList.remove('locate'));
+  const g = vp.querySelector('.node[data-id="' + id + '"]');
+  if (g) { g.classList.add('locate'); focusNode(id); selectNode(id); }
+}
+
+/* ============ 导出（与画布同一份坐标 / 同一棵树） ============ */
+function download(blob, name) {
+  const url = URL.createObjectURL(blob), a = document.createElement('a');
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+function themeOpts() {
+  const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+  return { background: cssVar('--surface-1'), nodeFill: dark ? '#232c3b' : '#ffffff',
+    textColor: cssVar('--ink'), metaColor: cssVar('--ink-faint'), rootTextColor: '#ffffff' };
+}
+function exportAs(kind) {
+  const L = view.layout, tree = view.tree || activeTree();
+  if (!L) return;
+  if (kind === 'svg') { download(new Blob([ML.toSvg(L, themeOpts())], { type:'image/svg+xml' }), 'full-chain.svg'); toast('SVG 已导出（画布同一份坐标）'); }
+  else if (kind === 'png') {
+    const s = ML.toSvg(L, themeOpts());
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas'); c.width = L.width * 2; c.height = L.height * 2;
+      const g = c.getContext('2d'); g.scale(2, 2); g.drawImage(img, 0, 0);
+      c.toBlob(b => { if (b) { download(b, 'full-chain.png'); toast('PNG 已导出'); } else toast('PNG 生成失败'); }, 'image/png');
+    };
+    img.onerror = () => toast('PNG 生成失败');
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(s);
+  }
+  else if (kind === 'md') { download(new Blob([ML.toMarkdown(tree)], { type:'text/markdown' }), 'full-chain.md'); toast('Markdown 大纲已导出'); }
+  else if (kind === 'opml') { download(new Blob([ML.toOpml(tree)], { type:'text/x-opml' }), 'full-chain.opml'); toast('OPML 已导出（可进 Xmind）'); }
+  else if (kind === 'json') { download(new Blob([JSON.stringify(TREE, null, 2)], { type:'application/json' }), 'full-chain.json'); toast('导图数据已导出'); }
+}
+
+/* ============ 事件 ============ */
+document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => {
+  view.mode = b.dataset.mode;
+  document.querySelectorAll('[data-mode]').forEach(x => x.classList.toggle('on', x === b));
+  render(); fit();
+});
+document.querySelectorAll('[data-exp]').forEach(b => b.onclick = () => exportAs(b.dataset.exp));
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => switchPane(t.dataset.pane));
+$('zoomIn').onclick = () => zoomBy(1.2);
+$('zoomOut').onclick = () => zoomBy(1 / 1.2);
+$('zoomLabel').onclick = reset;
+$('fitBtn').onclick = fit;
+$('expandAll').onclick = () => { view.collapsed.clear(); render(); fit(); toast('已全部展开'); };
+$('collapseAll').onclick = () => { (TREE.children || []).forEach(c => view.collapsed.add(c.id)); render(); fit(); toast('已收起到一级分支'); };
+$('searchInput').oninput = e => doSearch(e.target.value);
+$('nextHit').onclick = () => nextHit(1);
+$('prevHit').onclick = () => nextHit(-1);
+$('themeBtn').onclick = () => {
+  const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+  document.documentElement.setAttribute('data-theme', dark ? 'light' : 'dark');
+  try { localStorage.setItem('rl-fullchain-theme', dark ? 'light' : 'dark'); } catch (e) {}
+  render();
+};
+
+vp.addEventListener('click', e => {
+  const tw = e.target.closest('[data-toggle]');
+  if (tw) {
+    e.stopPropagation();
+    const id = tw.dataset.toggle;
+    if (view.collapsed.has(id)) view.collapsed.delete(id); else view.collapsed.add(id);
+    render(); return;
+  }
+  const g = e.target.closest('.node');
+  if (g) selectNode(g.dataset.id);
+});
+vp.addEventListener('dblclick', e => {
+  const g = e.target.closest('.node'); if (!g) return;
+  const id = g.dataset.id;
+  if (view.collapsed.has(id)) view.collapsed.delete(id); else view.collapsed.add(id);
+  render();
+});
+svg.addEventListener('wheel', e => { e.preventDefault(); zoomBy(e.deltaY < 0 ? 1.12 : 1 / 1.12, e.clientX, e.clientY); }, { passive:false });
+let drag = null;
+svg.addEventListener('pointerdown', e => {
+  if (e.target.closest('.node')) return;
+  drag = { x:e.clientX, y:e.clientY, tx:view.tx, ty:view.ty };
+  svg.classList.add('dragging'); svg.setPointerCapture(e.pointerId);
+});
+svg.addEventListener('pointermove', e => { if (!drag) return; view.tx = drag.tx + e.clientX - drag.x; view.ty = drag.ty + e.clientY - drag.y; applyView(); });
+svg.addEventListener('pointerup', e => { drag = null; svg.classList.remove('dragging'); try { svg.releasePointerCapture(e.pointerId); } catch (err) {} });
+document.addEventListener('keydown', e => {
+  const tag = (e.target && e.target.tagName) || '';
+  if (/INPUT|TEXTAREA/.test(tag)) { if (e.key === 'Escape') { e.target.value = ''; doSearch(''); e.target.blur(); } return; }
+  if (e.key === '/' ) { e.preventDefault(); $('searchInput').focus(); }
+  else if (e.key === '+' || e.key === '=') zoomBy(1.2);
+  else if (e.key === '-') zoomBy(1 / 1.2);
+  else if (e.key === '0') reset();
+  else if (e.key === 'f') fit();
+  else if (e.key === 'ArrowRight' && view.hits.length) nextHit(1);
+  else if (e.key === 'ArrowLeft' && view.hits.length) nextHit(-1);
+  else if (e.key === 'Escape') { $('searchInput').value = ''; doSearch(''); }
+});
+window.addEventListener('resize', () => { if (view.layout) fit(); });
+
+/* ============ 启动 ============ */
+(function init() {
+  try { const t = localStorage.getItem('rl-fullchain-theme'); if (t === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); } catch (e) {}
+  renderDocs();
+  // 48 节点全展开会被 fit() 压到 39% 字不可读；默认收起到 8 条主链路（约 100% 缩放）。
+  // 用户可点节点旁的 ± 逐级展开，或点「全部展开」看完整大链路。
+  (TREE.children || []).forEach(c => view.collapsed.add(c.id));
+  render();
+  fit();
+  selectNode('root');
+  // 同步 init 时 flex 容器尺寸可能尚未稳定，首帧后再按真实尺寸归位一次；
+  // load 事件再兜一次，保证 file:// 与 Pages 两种入口都居中。
+  requestAnimationFrame(() => requestAnimationFrame(fit));
+  window.addEventListener('load', fit);
+})();
+
+/* ============ 内置自检（访问 ?selftest=1）：真点按钮 / 真切布局 / 真跑导出 ============
+   结果写进 #selftest，可用无头浏览器 --dump-dom 直接读，不靠「我觉得能点」。 */
+function selfTest() {
+  const r = [];
+  const t = (name, cond, extra) => r.push((cond ? 'PASS' : 'FAIL') + ' | ' + name + (extra ? ' | ' + extra : ''));
+  const count = () => vp.querySelectorAll('.node').length;
+  t('首屏默认收起到 9 节点', count() === 9, 'got=' + count());
+  $('expandAll').click();
+  t('点「全部展开」→ 48 节点', count() === 48, 'got=' + count());
+  $('collapseAll').click();
+  t('点「收起分支」→ 9 节点', count() === 9, 'got=' + count());
+  document.querySelector('[data-mode="both"]').click();
+  t('切「双侧导图」并重排坐标', view.mode === 'both' && count() === 9, 'mode=' + view.mode);
+  document.querySelector('[data-mode="org"]').click();
+  t('切「组织结构图」并重排坐标', view.mode === 'org' && count() === 9, 'mode=' + view.mode);
+  document.querySelector('[data-mode="right"]').click();
+  const si = $('searchInput'); si.value = '排程'; si.dispatchEvent(new Event('input'));
+  t('搜索「排程」命中并高亮', view.hits.length > 0 && vp.querySelectorAll('.node.hit').length > 0, 'hits=' + view.hits.length);
+  selectNode('c6b');
+  t('点节点渲染资料详情', /d-title/.test($('pane-detail').innerHTML) && /来源文件/.test($('pane-detail').innerHTML));
+  t('SVG 导出真产出矢量', ML.toSvg(view.layout, themeOpts()).indexOf('<svg') === 0);
+  t('Markdown 大纲导出可用', ML.toMarkdown(view.tree).indexOf('# ') === 0);
+  t('OPML 导出可用', ML.toOpml(view.tree).indexOf('<?xml') === 0);
+  t('14 份资料清单已渲染', document.querySelectorAll('[data-doc]').length >= 14);
+  const pre = document.createElement('pre'); pre.id = 'selftest';
+  const pass = r.filter(x => x.indexOf('PASS') === 0).length;
+  pre.textContent = r.join('\n') + '\nTOTAL ' + pass + '/' + r.length;
+  document.body.appendChild(pre);
+  document.title = 'SELFTEST ' + pass + '/' + r.length;
+}
+if (String(location.search).indexOf('selftest=1') >= 0) setTimeout(selfTest, 80);
+</script>
+</body>
+</html>
