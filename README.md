@@ -16,9 +16,30 @@
 - **真落盘、可增删**：成百上千份资料真实存到磁盘，随时查看 / 新增 / 删除 / 分类；删除进回收站可恢复或彻底删除。
 - **零外链、离线优先**：前端所有解析库落本地 `renderer/vendor/`；顶层 CSP 的 `connect-src 'self'` 从浏览器层面禁止直连外部域名。想用云端模型时，也只由本地服务/Electron 主进程转发，前端永远只打同源 `/api`。
 
-## 统一工作台（整合入口，2026-11-14）
+## 统一应用 workbench（默认首页，2026-11-14）
 
-双击 `启动.bat` 打开的就是 `http://localhost:5178`（`server.js` 默认首页已指向 `renderer/portal.html`）。工作台左侧按能力域列出全部功能，右侧用**同源 iframe 加载既有真页面**，每个入口点进去都是真后端、真数据，不是示意按钮：
+双击 `启动.bat` 打开的就是 `http://localhost:5178/workbench/`（`server.js` 默认首页已指向它）。这**不是单文件网页，而是一个应用工程**：
+
+- **壳**：标题栏（品牌 / 面包屑 / 命令面板 / 安装按钮 / 连接状态）、左侧按域分组导航、右侧视图区、底部状态栏（真实书数、能力数、协议版本）。
+- **多文件模块化**：`workbench/src/` 下 `host / state / router / ui / views / shell` 各司其职；`index.html` 只是挂载点，逻辑不塞进 HTML。
+- **能力清单运行时拉取**：导航项 13 个视图、10 个 action 全部来自 `GET /api/app/manifest`（源头 `core/capabilities.js`），前端不手写第二份清单。
+- **可安装**：`manifest.webmanifest` + `sw.js` + 图标，支持 PWA 安装与离线壳；`?selftest=1` 逐个真加载自检。
+
+**一个应用、五种形态**（同一份协议 `core/app-host.js`，不是各带一份引擎）：
+
+| 形态 | 入口 | 怎么接同一核心 |
+|---|---|---|
+| 本应用（内置浏览器 / PWA） | `workbench/` | 同源 `POST /api/app/action` → `core/app-host.js` |
+| 桌面端 Electron | `app/main.js` | `ipcMain` `workbench:*` → 同一 `app-host` |
+| DSH 插件 | `plugins/dsh-review-analysis/` | `/review-analysis/api/app/*` → 同一 `app-host`；侧栏「应用」页签内嵌同一 `workbench/` |
+| WorkBuddy 专家 / CLI | `plugins/review-analysis/bin/driver.js` | 运行时 `require` 同一份 `core/capabilities.js` |
+| HTTP | `server.js` | `/api/core/*` → `core/request.js`（同一 Core 实例） |
+
+真浏览器验收（本机 Edge + playwright-core）：应用验收 **30/30**、一体形态契约 **25/25**、全量 `npm test` **24/24**、零未捕获 JS 报错；截图在 `PROCESS/workbench-verify/`。书详情里的思维导图复用 `renderer/js/mindmap-layout.js`（同一份纯函数，屏幕与导出坐标同源；DSH 宿主也托管该文件，载不到时诚实降级为大纲）。
+
+## 统一工作台 portal（兼容入口，2026-11-14）
+
+portal 作为兼容入口保留在 `http://localhost:5178/portal.html`。它左侧按能力域列出全部功能，右侧用**同源 iframe 加载既有真页面**，每个入口点进去都是真后端、真数据，不是示意按钮：
 
 - **统一核心**（`core.html`，`/api/core/*` + `core/`）：书架与导入、交互式思维导图、题型分类索引、练习与今日复习、概览与导出、模型设置。
 - **全功能工作台**（`index.html`，`/api/books` + `lib/store.js`）：书架与资料管理、全局搜索、跨书今日复习、学习报告、设置与整库备份、书内五页签。
@@ -27,7 +48,7 @@
 
 顶部状态灯实测 `GET /api/books`；离线时明确提示启动命令，不会假装功能可用。带 `?selftest=1` 可逐个真加载全部入口并输出 PASS/FAIL。
 
-实现边界（改动很小，不重构、不迁移）：新增 `renderer/portal.html` 与 `renderer/js/deeplink.js`（读 URL hash 后模拟点击页面原有按钮，无 hash 时零影响）；`index.html` / `core.html` 各加一行 script 引入；`server.js` 改默认首页并加单文件白名单映射 `/demo/mindmap-preview.html`。**两套书库刻意不合并**——`core/` 与 `lib/store.js` 元数据格式不同、共用 `library/books/`，混放会误列误删（见 CHANGELOG P0-1），工作台把它们分成两组导航并在首页如实标注。
+实现边界（改动很小，不重构、不迁移）：新增 `renderer/portal.html` 与 `renderer/js/deeplink.js`（读 URL hash 后模拟点击页面原有按钮，无 hash 时零影响）；`index.html` / `core.html` 各加一行 script 引入；`server.js` 加 portal 路由与单文件白名单映射 `/demo/mindmap-preview.html`。**两套书库刻意不合并**——`core/` 与 `lib/store.js` 元数据格式不同、共用 `library/books/`，混放会误列误删（见 CHANGELOG P0-1），工作台把它们分成两组导航并在首页如实标注。
 
 真浏览器验收（本机 Edge + playwright-core）：外部脚本 32/32、内置自检 14/14、在线 15/15、离线 14/14、零未捕获 JS 报错；截图在 `PROCESS/portal-verify/`。离线（静态副本 / 服务未启动）时真功能入口会显式标注「需启动服务」并拒绝加载，只读件仍可打开，不假装功能可用。
 

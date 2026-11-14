@@ -72,5 +72,12 @@ contextBridge.exposeInMainWorld('api', {
   },
   // 统一核心：把 /api/core/* 风格的请求交主进程映射到 Core 类（与 server.js 共用 core/request.js）。
   coreRequest: (pathArg, method, body) => ipcRenderer.invoke('core:request', pathArg, method, body),
+  // 统一应用协议：与 HTTP / DSH 共用 core/app-host.js；workbench 据此判断宿主。
+  workbench: {
+    isElectron: true,
+    manifest: () => ipcRenderer.invoke('workbench:manifest'),
+    state: () => ipcRenderer.invoke('workbench:state'),
+    action: (action, payload) => ipcRenderer.invoke('workbench:action', action, payload || {})
+  },
   dialog: { openFiles: () => ipcRenderer.invoke('dialog:openFiles') }
 });

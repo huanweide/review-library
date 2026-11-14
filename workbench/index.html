@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#3457d5" />
+<title>天道书阁 · Workbench</title>
+<link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
+<link rel="shortcut icon" href="../favicon.svg" type="image/svg+xml" />
+<link rel="manifest" href="./manifest.webmanifest" />
+<link rel="stylesheet" href="./src/style.css" />
+<!-- 宿主可选注入：DSH 面板 / 任意嵌入方在加载本模块前设置 window.__WORKBENCH_BASE__。
+     不设则按 host.js 的探测顺序走 Electron IPC 或同源 /api/app。 -->
+</head>
+<body data-theme="light">
+  <div id="app">
+    <div class="boot" style="display:grid;place-items:center;height:100vh;color:#8793a8;font:14px sans-serif">
+      正在启动应用…
+    </div>
+  </div>
+  <noscript>本应用需要 JavaScript（离线运行，不请求任何外部域名）。</noscript>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

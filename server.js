@@ -19,6 +19,7 @@ const reviewLib = require('./lib/review');
 const mindmapLib = require('./lib/mindmap');
 const { Core } = require('./core');
 const requestLib = require('./core/request');
+const appHost = require('./core/app-host');
 
 const ROOT = process.env.LIBRARY_ROOT || path.join(__dirname, 'library');
 const PORT = parseInt(process.env.PORT, 10) || 5178;
@@ -29,7 +30,7 @@ const core = new Core(ROOT);
 // 旧版 80MB 会让一份 65MB 扫描件连「显式跳过」都做不到，直接静默不进备份。
 const MAX_BODY = 260 * 1024 * 1024;
 
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json', '.webmanifest+json': 'application/manifest+json' };
 
 function send(res, code, obj) {
   const body = JSON.stringify(obj);
@@ -70,6 +71,18 @@ async function handleApi(req, res, u) {
     if (parts[1] === 'llm' && parts[2] === 'probe-vision' && method === 'POST') {
       const m = JSON.parse(await readBody(req));
       return send(res, 200, await llm.probeVision(m.cfg || {}, llm.chat));
+    }
+    // ===== 统一应用协议（APP / 内置浏览器 / 任意宿主） =====
+    // 与 Electron IPC、DSH webServer 共用 core/app-host.js，能力清单不复制第二份。
+    if (parts[1] === 'app' && parts[2] === 'manifest' && method === 'GET') {
+      return send(res, 200, appHost.manifest('http', { version: require('./package.json').version, coreVersion: require('./core').CORE_VERSION }));
+    }
+    if (parts[1] === 'app' && parts[2] === 'state' && method === 'GET') {
+      return send(res, 200, appHost.state(core, 'http', { version: require('./package.json').version, coreVersion: require('./core').CORE_VERSION }));
+    }
+    if (parts[1] === 'app' && parts[2] === 'action' && method === 'POST') {
+      const m = JSON.parse(await readBody(req) || '{}');
+      return send(res, 200, await appHost.invoke(core, m.action, m.payload || {}, { cfg: m.cfg || {} }));
     }
     // ===== 统一核心 API（新架构）：建书 / 加文件 / 整体分析 =====
     // cfg（API 地址/密钥/模型）只在本次请求内存里，不落盘、不写日志。
@@ -295,9 +308,32 @@ function serveStatic(req, res, u) {
   let p;
   try { p = decodeURIComponent(u.pathname); }
   catch (e) { res.writeHead(400); return res.end('bad request'); }
-  // 统一工作台是默认首页：双击「启动.bat」进入的就是整合后的全部功能入口。
+  // 默认首页 = 统一应用（workbench）。portal.html 保留为兼容入口。
   // 现有 e2e / 判别测试均显式 goto /index.html、/core.html，不受默认首页改动影响。
-  if (p === '/' || p === '') p = '/portal.html';
+  if (p === '/' || p === '') p = '/workbench/index.html';
+  if (p === '/favicon.ico') {
+    return fs.readFile(path.join(__dirname, 'renderer', 'favicon.svg'), (err, data) => {
+      if (err) { res.writeHead(404); return res.end('not found'); }
+      res.writeHead(200, { 'Content-Type': 'image/svg+xml' });
+      res.end(data);
+    });
+  }
+  // workbench/ 是独立应用工程（多文件 ES module + PWA），位于项目根，
+  // 用目录级白名单映射过去；路径规范化 + startsWith 双重校验，不放宽穿越防护。
+  if (p === '/workbench' || p === '/workbench/') p = '/workbench/index.html';
+  if (p.startsWith('/workbench/')) {
+    const wbRoot = path.join(__dirname, 'workbench');
+    const rel = path.normalize(p.slice('/workbench/'.length)).replace(/^(\.\.[\/\\])+/, '');
+    const file = path.join(wbRoot, rel);
+    if (!file.startsWith(wbRoot)) { res.writeHead(403); return res.end('forbidden'); }
+    return fs.readFile(file, (err, data) => {
+      if (err) { res.writeHead(404); return res.end('not found'); }
+      const ext = path.extname(file).toLowerCase();
+      const mime = MIME[ext] || (ext === '.webmanifest' ? 'application/manifest+json' : 'application/octet-stream');
+      res.writeHead(200, { 'Content-Type': mime });
+      res.end(data);
+    });
+  }
   // 工作台里的只读研究件位于项目根 demo/，而服务默认只托管 renderer/。
   // 用单文件精确白名单映射，不开通配、不放宽下面的目录穿越校验。
   if (p === '/demo/mindmap-preview.html') {

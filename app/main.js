@@ -3,6 +3,7 @@
 const { app, BrowserWindow, ipcMain, dialog, shell, Menu, nativeTheme } = require('electron');
 const { Core } = require('../core');
 const requestLib = require('../core/request');
+const appHost = require('../core/app-host');
 const path = require('path');
 const { Store } = require('../lib/store');
 const insight = require('../lib/insight');
@@ -47,6 +48,16 @@ ipcMain.handle('core:request', (e, pathArg, method, body) => {
   if (!CORE_METHODS.has(m)) return { status: 405, data: { error: '不支持的请求方法：' + m } };
   if (body != null && typeof body !== 'object') return { status: 400, data: { error: '非法请求体' } };
   return requestLib.dispatch(core, pathArg, m, body);
+});
+
+// 统一应用协议：与 server.js / DSH 共用 core/app-host.js，Electron 只做 ipc 适配。
+const APP_META = { version: require('../package.json').version, coreVersion: require('../core').CORE_VERSION };
+ipcMain.handle('workbench:manifest', () => appHost.manifest('electron', APP_META));
+ipcMain.handle('workbench:state', () => appHost.state(core, 'electron', APP_META));
+ipcMain.handle('workbench:action', (e, action, payload) => {
+  if (typeof action !== 'string' || !action.trim()) return { ok: false, error: '非法 action' };
+  if (payload != null && typeof payload !== 'object') return { ok: false, error: '非法请求体' };
+  return appHost.invoke(core, action, payload || {}, {});
 });
 
 // 让界面/验证脚本能查到「数据到底存在哪」，避免 portable 版落点成了黑盒。

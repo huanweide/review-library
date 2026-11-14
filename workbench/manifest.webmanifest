@@ -1,0 +1,19 @@
+{
+  "id": "/workbench/",
+  "name": "天道书阁 · Workbench",
+  "short_name": "天道书阁",
+  "description": "统一复习项目的应用形态：一个核心，五种入口（APP / 桌面端 / DSH 插件 / Skills·CLI / HTTP）。",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "background_color": "#eef1f7",
+  "theme_color": "#3457d5",
+  "orientation": "any",
+  "lang": "zh-CN",
+  "categories": ["education", "productivity"],
+  "icons": [
+    { "src": "./icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "./icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

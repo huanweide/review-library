@@ -28,6 +28,28 @@ export const name = 'dsh-review-analysis';
 export const inject = ['tools', 'webServer'];
 
 const API_STATE = '/review-analysis/api/state';
+// 统一应用协议：与 server.js / Electron / CLI 共用 core/app-host.js。
+// DSH 只是第 4 个宿主，能力清单不复制第二份。
+const API_APP_MANIFEST = '/review-analysis/api/app/manifest';
+const API_APP_STATE = '/review-analysis/api/app/state';
+const API_APP_ACTION = '/review-analysis/api/app/action';
+// DSH 侧栏面板内嵌同一个 workbench 应用：静态资源经 webServer 同源托管。
+// 只用已验证的 kind:'exact' 逐文件注册，不用未验证的 prefix/wildcard；
+// 文件清单固定，路径经 path.resolve + startsWith 双重校验，防目录穿越。
+const APP_PREFIX = '/review-analysis/app/';
+// APP 复用的共用纯函数（思维导图布局）：与 core.html / HTTP 形态读的是同一份源码，
+// 不复制算法，避免「屏幕与导出坐标不一致」。路径按 ../js/ 相对 app 根解析。
+const APP_SHARED_MINDMAP = '/review-analysis/js/mindmap-layout.js';
+const APP_FILES = [
+  'index.html', 'manifest.webmanifest', 'sw.js', 'icons/icon.svg',
+  'src/main.js', 'src/host.js', 'src/state.js', 'src/router.js',
+  'src/ui.js', 'src/views.js', 'src/shell.js', 'src/style.css',
+];
+const APP_MIME = {
+  '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml',
+  '.webmanifest': 'application/manifest+json',
+};
 const MAX_TREE_PREVIEW = 40;
 
 function sendJson(res, status, payload) {
@@ -68,6 +90,24 @@ function coreLoader(config) {
     if (!mod || typeof mod.Core !== 'function') throw new Error('统一核心入口未导出 Core 类：' + entry);
     const dataRoot = String((config && config.library) || '').trim() || path.resolve(root, 'library');
     cached = { core: new mod.Core(path.resolve(dataRoot)), version: mod.CORE_VERSION || '', root, entry };
+    return cached;
+  };
+}
+
+// 统一应用协议单一实现：与 server.js / Electron / CLI 共用主项目 core/app-host.js。
+// 惰性加载，缺文件提前大声失败（而不是等界面调用了才发现形态漂移）。
+function appHostLoader(config) {
+  let cached = null;
+  return function getAppHost() {
+    if (cached) return cached;
+    const root = String((config && config.projectRoot) || process.env.DSH_REVIEW_PROJECT_ROOT || '').trim();
+    if (!root) throw new Error('未配置统一核心目录：config.projectRoot');
+    const p = path.resolve(root, 'core', 'app-host.js');
+    if (!fs.existsSync(p)) throw new Error('找不到统一应用协议：' + p);
+    cached = require(p);
+    if (!cached || typeof cached.manifest !== 'function' || typeof cached.invoke !== 'function') {
+      throw new Error('统一应用协议格式不正确：' + p);
+    }
     return cached;
   };
 }
@@ -181,6 +221,7 @@ const OUTPUT_SCHEMA = {
 
 export function apply(ctx, config) {
   const getCore = coreLoader(config);
+  const getAppHost = appHostLoader(config);
   const CAPS = loadCapabilities(config);
   const ACTIONS = CAPS.ACTIONS;
 
@@ -323,5 +364,116 @@ export function apply(ctx, config) {
       },
     }),
     'dsh-review-analysis: GET ' + API_STATE,
+  );
+
+  // ===== 统一应用协议（第 4 个宿主：DSH 侧栏面板 / APP） =====
+  // 与 server.js 的 /api/app/*、Electron 的 workbench:* 共用 core/app-host.js。
+  // APP 跑在 DSH 里时，能力清单、action 语义、书库数据与其余形态完全一致。
+  const meta = () => {
+    const loaded = getCore();
+    return { version: loaded.version || '', coreVersion: loaded.version || '' };
+  };
+
+  ctx.effect(
+    () => ctx.webServer.register({
+      kind: 'exact',
+      path: API_APP_MANIFEST,
+      handler: async (req, res) => {
+        if (!admitted(ctx, req)) return sendJson(res, 403, { ok: false, error: 'forbidden' });
+        if (req.method !== 'GET') return sendJson(res, 405, { ok: false, error: 'method not allowed' });
+        try { return sendJson(res, 200, getAppHost().manifest('dsh', meta())); }
+        catch (error) { return sendJson(res, 200, { ok: false, error: errorText(error) }); }
+      },
+    }),
+    'dsh-review-analysis: GET ' + API_APP_MANIFEST,
+  );
+
+  ctx.effect(
+    () => ctx.webServer.register({
+      kind: 'exact',
+      path: API_APP_STATE,
+      handler: async (req, res) => {
+        if (!admitted(ctx, req)) return sendJson(res, 403, { ok: false, error: 'forbidden' });
+        if (req.method !== 'GET') return sendJson(res, 405, { ok: false, error: 'method not allowed' });
+        try { return sendJson(res, 200, getAppHost().state(getCore().core, 'dsh', meta())); }
+        catch (error) { return sendJson(res, 200, { ok: false, error: errorText(error) }); }
+      },
+    }),
+    'dsh-review-analysis: GET ' + API_APP_STATE,
+  );
+
+  // 同一个 APP 在 DSH 侧栏里打开：逐文件 exact 托管 workbench 静态资源。
+  // 应用通过 ?base=/review-analysis/api/app 自动把协议端点指回本插件，
+  // 因此 DSH 里的 APP 与内置浏览器 / Electron 里的 APP 是同一份代码、同一份数据。
+  const appRoot = path.resolve(String((config && config.projectRoot) || process.env.DSH_REVIEW_PROJECT_ROOT || ''), 'workbench');
+  APP_FILES.forEach(rel => {
+    ctx.effect(
+      () => ctx.webServer.register({
+        kind: 'exact',
+        path: APP_PREFIX + rel,
+        handler: async (req, res) => {
+          if (!admitted(ctx, req)) { res.statusCode = 403; return res.end('forbidden'); }
+          if (req.method !== 'GET') { res.statusCode = 405; return res.end('method not allowed'); }
+          const file = path.resolve(appRoot, rel);
+          if (!file.startsWith(appRoot)) { res.statusCode = 403; return res.end('forbidden'); }
+          try {
+            const buf = fs.readFileSync(file);
+            res.statusCode = 200;
+            res.setHeader('content-type', APP_MIME[path.extname(file).toLowerCase()] || 'application/octet-stream');
+            res.setHeader('cache-control', 'no-store');
+            res.setHeader('content-length', String(buf.length));
+            return res.end(buf);
+          } catch (e) { res.statusCode = 404; return res.end('not found'); }
+        },
+      }),
+      'dsh-review-analysis: APP asset ' + rel,
+    );
+  });
+
+  // 共用导图布局模块：APP 以 ../js/mindmap-layout.js 相对路径加载，
+  // 在 DSH 宿主下映射到同一份 renderer/js/mindmap-layout.js（唯一源码，不复制）。
+  const sharedMindmapFile = path.resolve(String((config && config.projectRoot) || process.env.DSH_REVIEW_PROJECT_ROOT || ''), 'renderer', 'js', 'mindmap-layout.js');
+  ctx.effect(
+    () => ctx.webServer.register({
+      kind: 'exact',
+      path: APP_SHARED_MINDMAP,
+      handler: async (req, res) => {
+        if (!admitted(ctx, req)) { res.statusCode = 403; return res.end('forbidden'); }
+        if (req.method !== 'GET') { res.statusCode = 405; return res.end('method not allowed'); }
+        try {
+          const buf = fs.readFileSync(sharedMindmapFile);
+          res.statusCode = 200;
+          res.setHeader('content-type', 'text/javascript; charset=utf-8');
+          res.setHeader('cache-control', 'no-store');
+          res.setHeader('content-length', String(buf.length));
+          return res.end(buf);
+        } catch (e) { res.statusCode = 404; return res.end('not found'); }
+      },
+    }),
+    'dsh-review-analysis: APP shared mindmap-layout',
+  );
+
+  ctx.effect(
+    () => ctx.webServer.register({
+      kind: 'exact',
+      path: API_APP_ACTION,
+      handler: async (req, res) => {
+        if (!admitted(ctx, req)) return sendJson(res, 403, { ok: false, error: 'forbidden' });
+        if (req.method !== 'POST') return sendJson(res, 405, { ok: false, error: 'method not allowed' });
+        try {
+          // 只接受 JSON 对象，不回显 body（可能含 cfg.apiKey）。
+          const chunks = [];
+          for await (const c of req) chunks.push(c);
+          const raw = Buffer.concat(chunks).toString('utf8');
+          const m = JSON.parse(raw || '{}');
+          if (!m || typeof m !== 'object' || typeof m.action !== 'string') {
+            return sendJson(res, 200, { ok: false, error: '需要 action 字符串' });
+          }
+          const r = await getAppHost().invoke(getCore().core, m.action, m.payload || {}, { cfg: m.cfg || {} });
+          return sendJson(res, 200, r);
+        } catch (error) { return sendJson(res, 200, { ok: false, error: errorText(error) }); }
+      },
+    }),
+    'dsh-review-analysis: POST ' + API_APP_ACTION,
   );
 }

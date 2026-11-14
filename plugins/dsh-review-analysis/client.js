@@ -174,11 +174,15 @@ window.__ModuleLoader__.load({
       const t = (key) => text(rootCtx, key);
       const { state, load } = useView();
       const data = state.data;
+      const [tab, setTab] = useState('app');
       const stats = data && data.ok !== false ? [
         { value: data.bookCount, label: t('books') },
         { value: data.analyzedCount, label: t('analyzed') },
         { value: data.questionTypeCount, label: t('qtypes') },
       ] : [];
+      // 「应用」页签内嵌的正是 workbench 同一个应用工程，协议端点经 ?base 指回本插件。
+      // 因此 DSH 里的 APP 与内置浏览器 / Electron 里的 APP 是同一份代码、同一份数据。
+      const appSrc = '/review-analysis/app/index.html?base=/review-analysis/api/app';
       return h('div', { className: 'dsra-root', 'data-dsh-review-analysis': '' },
         h('header', { className: 'dsra-head' },
           h('div', null, h('h1', { className: 'dsra-title' }, t('title')), h('p', { className: 'dsra-sub' }, t('subtitle'))),
@@ -186,16 +190,25 @@ window.__ModuleLoader__.load({
             h('button', { type: 'button', className: 'dsra-btn', onClick: () => void load(), disabled: state.status === 'loading' }, t('refresh')),
           ),
         ),
-        h('div', { className: 'dsra-banner' }, t('hintAnalyze')),
-        state.status === 'loading' ? h('p', { className: 'dsra-loading' }, t('loading')) : null,
-        state.error ? h('p', { className: 'dsra-error' }, t('failed') + '：' + state.error) : null,
-        h('div', { className: 'dsra-content' },
-          stats.length ? h('div', { className: 'dsra-stats' }, stats.map((s, i) =>
-            h('div', { className: 'dsra-stat', key: i }, h('strong', null, s.value == null ? '—' : s.value), h('span', null, s.label)))) : null,
-          data && data.books && data.books.length
-            ? h('div', { className: 'dsra-books' }, data.books.map((b, i) => h(BookCard, { key: b.id, book: b, t, defaultOpen: i === 0 })))
-            : (state.status !== 'loading' && !state.error ? h('p', { className: 'dsra-empty' }, t('empty')) : null),
-        ),
+        h('div', { className: 'dsra-pagetabs' }, [
+          ['app', '应用'], ['state', '状态'],
+        ].map(([k, label]) => h('button', { type: 'button', key: k,
+          className: 'dsra-ptab' + (tab === k ? ' is-active' : ''), onClick: () => setTab(k) }, label))),
+        tab === 'app'
+          ? h('iframe', { className: 'dsra-appframe', src: appSrc, title: '天道书阁 Workbench',
+              allow: 'clipboard-write', loading: 'lazy' })
+          : h('div', { className: 'dsra-statepane' }, [
+              h('div', { className: 'dsra-banner' }, t('hintAnalyze')),
+              state.status === 'loading' ? h('p', { className: 'dsra-loading' }, t('loading')) : null,
+              state.error ? h('p', { className: 'dsra-error' }, t('failed') + '：' + state.error) : null,
+              h('div', { className: 'dsra-content' },
+                stats.length ? h('div', { className: 'dsra-stats' }, stats.map((s, i) =>
+                  h('div', { className: 'dsra-stat', key: i }, h('strong', null, s.value == null ? '—' : s.value), h('span', null, s.label)))) : null,
+                data && data.books && data.books.length
+                  ? h('div', { className: 'dsra-books' }, data.books.map((b, i) => h(BookCard, { key: b.id, book: b, t, defaultOpen: i === 0 })))
+                  : (state.status !== 'loading' && !state.error ? h('p', { className: 'dsra-empty' }, t('empty')) : null),
+              ),
+            ]),
       );
     }
 
@@ -206,6 +219,11 @@ window.__ModuleLoader__.load({
       '.dsra-actions{display:flex;gap:8px}.dsra-btn{appearance:none;font:inherit;font-size:12.5px;padding:6px 14px;border-radius:8px;border:1px solid var(--dsw-alias-border-l1,rgba(127,127,127,.22));background:transparent;color:inherit;cursor:pointer}',
       '.dsra-btn:hover{background:var(--dsw-alias-bg-layer-2,rgba(127,127,127,.06))}',
       '.dsra-banner{margin:0 28px 14px;padding:8px 12px;border-radius:8px;font-size:12.5px;background:color-mix(in srgb,var(--dsw-alias-brand-primary,#2563eb) 10%,transparent);color:var(--dsw-alias-label-secondary,#6b7280);flex:none}',
+      '.dsra-pagetabs{display:flex;gap:4px;padding:0 28px;border-bottom:1px solid var(--dsw-alias-border-l1,rgba(127,127,127,.16));flex:none}',
+      '.dsra-ptab{appearance:none;font:inherit;font-size:13px;padding:8px 14px;margin-bottom:-1px;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--dsw-alias-label-secondary,#6b7280);cursor:pointer}',
+      '.dsra-ptab.is-active{color:var(--dsw-alias-label-primary,#1f2328);border-bottom-color:var(--dsw-alias-brand-primary,#2563eb);font-weight:600}',
+      '.dsra-appframe{flex:1;min-height:0;width:100%;border:0;background:transparent}',
+      '.dsra-statepane{flex:1;min-height:0;display:flex;flex-direction:column}',
       '.dsra-content{flex:1;min-height:0;overflow:auto;padding:0 28px 40px}',
       '.dsra-stats{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}',
       '.dsra-stat{display:flex;flex-direction:column;gap:2px;min-width:88px;padding:10px 14px;border:1px solid var(--dsw-alias-border-l1,rgba(127,127,127,.18));border-radius:10px;background:var(--dsw-alias-bg-layer-1,rgba(127,127,127,.02))}',
