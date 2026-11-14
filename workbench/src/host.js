@@ -72,6 +72,13 @@ export const host = {
       body: JSON.stringify({ action, payload: payload || {} }),
     });
   },
+
+  /** 资料原图直显 URL（2026-11-14）。Electron 形态返回 null（调用方降级不显示缩略图）。 */
+  rawFileUrl(bookId, fileId) {
+    if (info.kind === 'electron') return null;
+    return info.base + '/file?bookId=' + encodeURIComponent(String(bookId || ''))
+      + '&fileId=' + encodeURIComponent(String(fileId || ''));
+  },
 };
 
 export default host;

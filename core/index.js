@@ -12,9 +12,10 @@ const { BookStore } = require('./bookStore');
 const extract = require('./extract');
 const analyzeLib = require('./analyze');
 const practiceLib = require('./practice');
+const documentsLib = require('./documents');
 
 // 版本号唯一真源 = 根 package.json 的 version；本常量由 scripts/sync-versions.mjs 机械同步，禁止手改。
-const CORE_VERSION = '1.6.0';
+const CORE_VERSION = '1.6.1';
 
 class Core {
   constructor(root) {
@@ -74,6 +75,38 @@ class Core {
   }
 
   getAnalysis(id) { return this.store.getAnalysis(id); }
+
+  // 资料重点标注：用户不手动分层，语义说明哪个文件是重点（分析时注入提示词）。
+  markFile(id, fileId, patchArg) { return this.store.setFileMeta(id, fileId, patchArg); }
+
+  // 整理文档：kind = digest（考点大全）/ syllabus（考纲）。已生成即返回缓存（refresh=true 强制重生成）。
+  // 只走大模型：文档的「不落下」是模型职责，本地规则引擎不产出文档，避免假完整。
+  async composeDocument(id, kind, opts) {
+    const o = opts || {};
+    const k = String(kind || '');
+    if (!['digest', 'syllabus'].includes(k)) {
+      throw new Error('未知文档类型：' + kind + '（可用 digest=考点大全 / syllabus=考纲）');
+    }
+    if (!o.refresh) {
+      const cached = this.store.getDocument(id, k);
+      if (cached) return cached;
+    }
+    const book = this.store.getBook(id);
+    if (!book) throw new Error('书不存在：' + id);
+    const cfg = o.cfg || {};
+    if (!cfg.baseURL || !cfg.model) throw new Error('生成整理文档需要模型配置（API 地址 + 模型名）');
+    const text = this.getBookText(id);
+    const files = (book.files || []).map(f => ({ name: f.name, isImage: !!f.isImage, focus: !!f.focus, note: String(f.note || '') }));
+    const doc = await documentsLib.compose({
+      title: book.title, fullText: text, files, kind: k, cfg,
+      maxTokens: o.maxTokens, timeoutMs: o.timeoutMs,
+    });
+    this.store.saveDocument(id, k, doc);
+    return doc;
+  }
+
+  // 已生成的整理文档（只读，不触发生成）。
+  getDocument(id, kind) { return this.store.getDocument(id, kind); }
 
   // ---------- 学习闭环（2026-11-11）：门面方法，DSH / 专家形态直接调这里 ----------
   // 边界（2026-11-11 订正，勿再写「数据层真隐藏」）：getQuiz 返回**脱敏题目**

@@ -18,6 +18,8 @@ const TABS = [
   { id: 'map', label: '思维导图' },
   { id: 'outline', label: '提纲讲解' },
   { id: 'types', label: '题型' },
+  { id: 'digest', label: '考点大全' },
+  { id: 'syllabus', label: '考纲' },
   { id: 'about', label: '概览' },
 ];
 
@@ -128,6 +130,9 @@ export async function mountBookspace(root, bookId, params) {
     importing: false,
     railOpen: true,
     step: 1,            // 讲解面板已展开到第几步
+    digest: null,       // 考点大全文档状态 {loading,busy,err,data,tried}
+    syllabus: null,     // 考纲文档状态
+    editingFile: '',    // 正在编辑说明的资料 id
   };
 
   document.body.classList.add('bs-focus');
@@ -230,11 +235,53 @@ export async function mountBookspace(root, bookId, params) {
       el('span', { class: 'count', text: String(files.length) }),
     ]);
     filesBox.appendChild(filesHead);
-    const fileList = el('div', { class: 'bs-list' }, files.length ? files.map((f) => el('div', { class: 'bs-file', title: f.name }, [
-      el('span', { class: 'bs-ext', text: fileIcon(f.ext) }),
-      el('span', { class: 'bs-file-name', text: f.name }),
-      el('span', { class: 'bs-file-size', text: humanSize(f.size) }),
-    ])) : [el('div', { class: 'bs-hint', text: '还没有资料，拖一份进来试试' })]);
+    // 语义重点（2026-11-14）：★ 一键标重点、✎ 一句话说明为什么重要——
+    // 用户不手动分层，分析时模型按这份说明决定侧重。
+    const fileList = el('div', { class: 'bs-list' }, files.length ? files.map((f) => {
+      if (S.editingFile === f.id) {
+        const inp = el('input', { class: 'bs-note-input', value: f.note || '', placeholder: '一句话说明它为什么重要（分析会优先参考）' });
+        const box = el('div', { class: 'bs-file editing', title: f.name }, [
+          el('div', { class: 'bs-file-row' }, [
+            el('span', { class: 'bs-ext', text: fileIcon(f.ext) }),
+            el('span', { class: 'bs-file-name', text: f.name }),
+          ]),
+          inp,
+          el('div', { class: 'bs-note-acts' }, [
+            btn('保存', async () => {
+              const r = await host.action('mark', { bookId: S.id, fileId: f.id, note: inp.value });
+              if (!r || r.ok === false) return toast((r && r.error) || '保存失败', 'bad');
+              f.note = inp.value; S.editingFile = '';
+              toast('已保存说明，分析与整理会优先参考', 'ok');
+              render();
+            }, 'primary sm'),
+            btn('取消', () => { S.editingFile = ''; render(); }, 'ghost sm'),
+          ]),
+        ]);
+        setTimeout(() => { try { inp.focus(); } catch (e) { /* 忽略 */ } }, 0);
+        return box;
+      }
+      return el('div', { class: 'bs-file' + (f.focus ? ' focus' : ''), title: f.name }, [
+        el('div', { class: 'bs-file-row' }, [
+          el('span', { class: 'bs-ext', text: fileIcon(f.ext) }),
+          (f.isImage && host.rawFileUrl(S.id, f.id))
+            ? el('img', { class: 'bs-thumb', src: host.rawFileUrl(S.id, f.id), alt: f.name, loading: 'lazy' }) : null,
+          el('span', { class: 'bs-file-name', text: f.name }),
+          el('span', { class: 'bs-file-size', text: humanSize(f.size) }),
+          el('button', { class: 'bs-star' + (f.focus ? ' on' : ''), text: f.focus ? '★' : '☆',
+            title: f.focus ? '取消重点' : '标为考试重点',
+            onclick: async () => {
+              const r = await host.action('mark', { bookId: S.id, fileId: f.id, focus: !f.focus });
+              if (!r || r.ok === false) return toast((r && r.error) || '标记失败', 'bad');
+              f.focus = !f.focus;
+              toast(f.focus ? '已标为重点：分析与整理会优先围绕它' : '已取消重点', 'ok');
+              render();
+            } }),
+          el('button', { class: 'bs-editnote', text: '✎', title: '说明它为什么重要',
+            onclick: () => { S.editingFile = f.id; render(); } }),
+        ]),
+        f.note ? el('div', { class: 'bs-file-note', text: '↳ ' + f.note }) : null,
+      ]);
+    }) : [el('div', { class: 'bs-hint', text: '还没有资料，拖一份进来试试' })]);
     filesBox.appendChild(fileList);
     railEl.appendChild(filesBox);
 
@@ -287,6 +334,8 @@ export async function mountBookspace(root, bookId, params) {
     if (S.tab === 'map') return renderMap(body);
     if (S.tab === 'outline') return renderOutline(body);
     if (S.tab === 'types') return renderTypes(body);
+    if (S.tab === 'digest') return renderDoc(body, 'digest');
+    if (S.tab === 'syllabus') return renderDoc(body, 'syllabus');
     return renderAbout(body);
   }
 
@@ -433,6 +482,97 @@ export async function mountBookspace(root, bookId, params) {
         ]))),
       ]));
     }
+  }
+
+  /* ---------------- 整理文档：考点大全 / 考纲（2026-11-14） ---------------- */
+  function docState(kind) {
+    if (!S[kind]) S[kind] = { loading: false, busy: false, err: '', data: null, tried: false };
+    return S[kind];
+  }
+
+  async function genDoc(kind, refresh) {
+    const st = docState(kind);
+    let cfg = {};
+    try { cfg = JSON.parse(localStorage.getItem('wb-llm') || '{}'); } catch (e) { cfg = {}; }
+    if (!cfg.baseURL || !cfg.model) {
+      toast('还没有模型配置：先「开始分析」填一次 API 地址与模型（会自动记住），再来生成', 'info');
+      return;
+    }
+    st.busy = true; st.err = ''; render();
+    try {
+      const r = await host.action('compose', { bookId: S.id, kind, cfg, refresh: !!refresh });
+      st.busy = false;
+      if (!r || r.ok === false) { st.err = (r && r.error) || '生成失败'; render(); return; }
+      st.data = r.data;
+      const n = (r.data && r.data.stats && r.data.stats.points) || 0;
+      toast((r.data && r.data.label || '文档') + '已生成：' + n + ' 个条目', 'ok');
+      render();
+    } catch (e) {
+      st.busy = false; st.err = String(e.message || e); render();
+    }
+  }
+
+  function renderDoc(body, kind) {
+    const st = docState(kind);
+    const label = kind === 'digest' ? '考点大全' : '考纲';
+    const desc = kind === 'digest'
+      ? '囊括全部考点的知识点汇总：能用原话就用原话（逐字引用，标注是否命中原文），一字不落。'
+      : '按考试重要性从高到低排布的速通手册：重点在前，出题与知识点混杂，含自编例题与做法步骤。';
+    // 打开页签时先静默试一次缓存（compose 已生成即返回；没有就停在空态，不打扰）
+    if (!st.data && !st.tried && !st.busy) {
+      st.tried = true;
+      host.action('compose', { bookId: S.id, kind }).then((r) => {
+        if (r && r.ok !== false && r.data) { st.data = r.data; render(); }
+      }).catch(() => { /* 无缓存/无配置：保持空态 */ });
+    }
+    body.appendChild(el('div', { class: 'bs-doc-head' }, [
+      el('div', {}, [el('h3', { text: label }), el('p', { class: 'bs-sub', text: desc })]),
+      el('div', { class: 'bs-doc-acts' }, [
+        st.data ? btn('重新生成', () => genDoc(kind, true), 'ghost sm') : null,
+      ]),
+    ]));
+    if (st.busy) return body.appendChild(el('div', { class: 'bs-loading', text: '正在整理' + label + '…模型要把整本书读一遍，可能要一两分钟，不要关页面。' }));
+    if (st.err) body.appendChild(el('div', { class: 'bs-doc-err', text: st.err }));
+    if (!st.data) {
+      return body.appendChild(el('div', { class: 'bs-doc-empty' }, [
+        el('div', { class: 'bs-cta-art', text: kind === 'digest' ? '▤' : '◈' }),
+        el('h3', { text: '还没有' + label }),
+        el('p', { text: '生成与分析共用同一份模型配置。' + (kind === 'syllabus' ? '考纲会按重要性排序、给必背要点并自编例题说明做法。' : '生成后每个考点都尽量带逐字原文引用。') }),
+        el('div', { class: 'bs-cta-acts' }, [btn('生成' + label, () => genDoc(kind, false), 'primary')]),
+      ]));
+    }
+    const stats = st.data.stats || {};
+    body.appendChild(el('p', { class: 'bs-hint', text: '共 ' + st.data.sections.length + ' 章 · ' + (stats.points || 0) + ' 个条目 · 原文逐字命中 ' + (stats.quoteVerified || 0) + '/' + (stats.quoteTotal || 0) + (stats.placeholderHits ? ' · 警告：模型输出含占位词 ' + stats.placeholderHits + ' 处' : '') + ' · 生成于 ' + String(st.data.generatedAt || '').slice(0, 16).replace('T', ' ') }));
+    st.data.sections.forEach((sec) => {
+      const box = el('div', { class: 'bs-doc-sec' });
+      box.appendChild(el('div', { class: 'bs-doc-chapter' }, [
+        el('strong', { text: sec.chapter || '未分章' }),
+        (kind === 'syllabus' && sec.rank) ? badge('重要性 #' + sec.rank, 'accent') : null,
+        sec.why ? el('span', { class: 'bs-sub', text: sec.why }) : null,
+      ]));
+      (sec.points || []).forEach((pt, i) => {
+        box.appendChild(el('div', { class: 'bs-doc-point' }, [
+          el('div', { class: 'bs-doc-pt-head' }, [
+            el('strong', { text: (i + 1) + '. ' + (pt.title || '') }),
+            pt.importance ? badge(pt.importance, 'plain') : null,
+            pt.quoteVerified ? badge('原文已核', 'accent') : (pt.quote ? badge('引文未逐字命中', 'plain') : null),
+            pt.source ? el('span', { class: 'bs-src', text: pt.source }) : null,
+          ]),
+          pt.must ? el('div', { class: 'bs-doc-must', text: '必背：' + pt.must }) : null,
+          el('div', { class: 'bs-doc-detail', text: pt.detail || '' }),
+          (pt.formulas || []).length ? el('div', { class: 'bs-chips' }, pt.formulas.map((f) => badge(f, 'accent'))) : null,
+          pt.quote ? el('blockquote', { class: 'bs-doc-quote' + (pt.quoteVerified ? ' ok' : ''), text: '「' + pt.quote + '」' }) : null,
+          pt.question ? el('div', { class: 'bs-doc-q' }, [
+            el('div', { class: 'bs-doc-q-tag', text: '自编例题' }),
+            el('div', { class: 'bs-q-stem', text: pt.question.stem || '' }),
+            el('div', { class: 'bs-ans-line', text: '答案：' + (pt.question.answer || '—') }),
+            (pt.question.steps || []).map((s) => el('div', { class: 'bs-step', text: s })),
+          ]) : null,
+        ]));
+      });
+      body.appendChild(box);
+    });
+    body.appendChild(el('p', { class: 'bs-hint', text: '列表无上限：有多少条渲染多少条，不折叠、不省略。' }));
   }
 
   /* ---------------- 右侧：一步一步讲 ---------------- */

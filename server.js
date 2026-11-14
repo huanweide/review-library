@@ -84,6 +84,26 @@ async function handleApi(req, res, u) {
       const m = JSON.parse(await readBody(req) || '{}');
       return send(res, 200, await appHost.invoke(core, m.action, m.payload || {}, { cfg: m.cfg || {} }));
     }
+    // 资料原图回读（2026-11-14 图片直显）：只回读已登记文件字节，fileId 校验在 getFileBuffer 内。
+    if (parts[1] === 'app' && parts[2] === 'file' && method === 'GET') {
+      const q = u.searchParams;
+      const bookId = String(q.get('bookId') || '');
+      const fileId = String(q.get('fileId') || '');
+      if (!bookId || !fileId) return send(res, 400, { error: '需要 bookId 与 fileId' });
+      const book = core.getBook(bookId);
+      const rec = book && (book.files || []).find((f) => f.id === fileId);
+      if (!rec) return send(res, 404, { error: '文件不存在' });
+      const buf = core.getFileBuffer(bookId, fileId);
+      if (!buf) return send(res, 404, { error: '文件字节不可读' });
+      const ext = String(rec.ext || '').toLowerCase();
+      const imgMime = {
+        '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+        '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp',
+        '.tif': 'image/tiff', '.tiff': 'image/tiff', '.pdf': 'application/pdf',
+      }[ext] || 'application/octet-stream';
+      res.writeHead(200, { 'Content-Type': imgMime, 'Cache-Control': 'private, max-age=60' });
+      return res.end(buf);
+    }
     // ===== 统一核心 API（新架构）：建书 / 加文件 / 整体分析 =====
     // cfg（API 地址/密钥/模型）只在本次请求内存里，不落盘、不写日志。
     if (parts[1] === 'core') {

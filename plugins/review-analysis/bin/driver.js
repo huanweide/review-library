@@ -31,6 +31,12 @@ function parseArgs(argv) {
     else if (x === '--key') a.key = argv[++i];
     else if (x === '--given') a.given = argv[++i];
     else if (x === '--rating') a.rating = parseInt(argv[++i], 10);
+    // 语义重点 / 整理文档入参（2026-11-14）
+    else if (x === '--fileId') a.fileId = argv[++i];
+    else if (x === '--focus') a.focus = argv[++i];
+    else if (x === '--note') a.note = argv[++i];
+    else if (x === '--kind') a.kind = argv[++i];
+    else if (x === '--refresh') a.refresh = argv[++i];
   }
   return a;
 }
@@ -122,6 +128,25 @@ async function main() {
       data = core.rateCard(id, { key: a.key, rating });
     }
     out = { ok: true, action, bookId: id, data };
+  } else if (action === 'mark') {
+    // 语义重点：不手动分层，标「哪个文件是重点 + 为什么」，分析时注入提示词。
+    if (!a.bookId || !a.fileId) throw new Error('mark 需要 --bookId 与 --fileId');
+    const patchArg = { note: a.note == null ? '' : String(a.note) };
+    if (a.focus != null) patchArg.focus = a.focus === 'true' || a.focus === '1';
+    out = { ok: true, action, bookId: a.bookId, file: core.markFile(a.bookId, a.fileId, patchArg) };
+  } else if (action === 'compose') {
+    // 整理文档：kind=digest（考点大全）/ syllabus（考纲）。只走大模型，密钥走环境变量。
+    if (!a.bookId) throw new Error('compose 需要 --bookId');
+    const cfg = cfgFromEnv();
+    const missing = ['baseURL', 'model', 'apiKey'].filter((k) => !cfg[k]);
+    if (missing.length) {
+      const envNames = { baseURL: 'REVIEW_LLM_BASE_URL', model: 'REVIEW_LLM_MODEL', apiKey: 'REVIEW_LLM_API_KEY' };
+      throw new Error('compose 需要模型配置，缺少环境变量：' + missing.map((k) => envNames[k]).join(' / '));
+    }
+    const d = await core.composeDocument(a.bookId, a.kind || 'digest', {
+      cfg, maxTokens: a.maxTokens, timeoutMs: a.timeoutMs, refresh: a.refresh === 'true',
+    });
+    out = { ok: true, action, bookId: a.bookId, kind: d.kind, stats: d.stats };
   } else {
     throw new Error(caps.unsupported(action));
   }

@@ -52,7 +52,7 @@ function makeAnalysis() {
 
   // ① 唯一真源
   const canonical = CAPS.ACTIONS.slice();
-  ok(canonical.length === 10, '唯一真源 capabilities.js 有 10 个 action', '实际 ' + canonical.length);
+  ok(canonical.length === 12, '唯一真源 capabilities.js 有 12 个 action', '实际 ' + canonical.length);
 
   // ② APP 协议 manifest（HTTP / Electron / DSH 三宿主都返回同一份）
   const mHttp = HOST.manifest('http', { version: '1.5.2' });
@@ -102,7 +102,7 @@ function makeAnalysis() {
     ok(false, 'DSH 真 ESM 加载', e.message.slice(0, 120));
   }
 
-  // ⑤ dispatch（HTTP/Electron 传输层）能力覆盖：10 个 action 都能经 Core 门面走通
+  // ⑤ dispatch（HTTP/Electron 传输层）能力覆盖：全部 action 都能经 Core 门面走通
   const { Core } = require(path.join(ROOT, 'core', 'index.js'));
   const core = new Core(TMP);
   const book = core.createBook('一体形态验证书');
@@ -137,7 +137,7 @@ function makeAnalysis() {
     if (r.ok || r.skipped) return false;
     return /应用协议未适配|缺少门面方法|不支持的 action/.test(r.error || '');
   });
-  ok(protocolFail.length === 0, '10 个 action 全部到达 Core 门面（业务拒绝不算协议失败）',
+  ok(protocolFail.length === 0, '12 个 action 全部到达 Core 门面（业务拒绝不算协议失败）',
     '协议缺席: ' + protocolFail.join(','));
   ok(/尚无分析结果|没有这道练习记录|题目不存在/.test(invokeResults.attempt.error || ''),
     'attempt 命中真实业务校验（非协议层拦截）', invokeResults.attempt.error);

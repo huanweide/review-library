@@ -254,8 +254,13 @@ export function apply(ctx, config) {
           type: 'object',
           description: 'analyze 时的大模型配置 {baseURL, model, apiKey}；也可用 DSH_LLM_* 环境变量，密钥不落盘',
         },
-        maxTokens: { type: 'integer', description: 'analyze 的最大输出 token（可选）' },
-        timeoutMs: { type: 'integer', description: 'analyze 超时毫秒（可选）' },
+        maxTokens: { type: 'integer', description: 'analyze/compose 的最大输出 token（可选）' },
+        timeoutMs: { type: 'integer', description: 'analyze/compose 超时毫秒（可选）' },
+        fileId: { type: 'string', description: 'mark 的资料 id（取自 get/list 返回的 files）' },
+        focus: { type: 'boolean', description: 'mark：是否标为用户重点（语义分层，无需手动整理层级）' },
+        note: { type: 'string', description: 'mark：一句话说明这份资料为什么重要' },
+        kind: { type: 'string', description: 'compose 的文档类型：digest=考点大全 / syllabus=考纲' },
+        refresh: { type: 'boolean', description: 'compose：true 时忽略缓存强制重生成' },
       },
       required: ['action'],
     },
@@ -342,6 +347,30 @@ export function apply(ctx, config) {
             data = core.rateCard(id, { key, rating });
           }
           return Object.assign(base, { bookId: id, data, coreVersion: loaded.version });
+        }
+        if (action === 'mark') {
+          // 语义重点：只做协议转换，委托 Core 门面（与 CLI / 网页端同源）。
+          const id = String((args && args.bookId) || '');
+          const fid = String((args && args.fileId) || '');
+          if (!id || !fid) throw new Error('mark 需要 bookId 与 fileId');
+          const patchArg = { note: String((args && args.note) || '') };
+          if (args && typeof args.focus === 'boolean') patchArg.focus = args.focus;
+          const rec = core.markFile(id, fid, patchArg);
+          return Object.assign(base, { bookId: id, data: rec, coreVersion: loaded.version });
+        }
+        if (action === 'compose') {
+          // 整理文档（考点大全 / 考纲）：委托 Core 门面；密钥经 cfg，不落盘。
+          const id = String((args && args.bookId) || '');
+          if (!id) throw new Error('compose 需要 bookId');
+          const cfg = cfgFrom(args);
+          requireCfg(cfg);
+          const d = await core.composeDocument(id, String((args && args.kind) || 'digest'), {
+            cfg,
+            maxTokens: (args && args.maxTokens) || undefined,
+            timeoutMs: (args && args.timeoutMs) || undefined,
+            refresh: !!(args && args.refresh),
+          });
+          return Object.assign(base, { bookId: id, kind: d.kind, stats: d.stats, coreVersion: loaded.version });
         }
         throw new Error('不支持的 action：' + action + '（可用 ' + ACTIONS.join('/') + '）');
       } catch (error) {

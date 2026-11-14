@@ -76,6 +76,22 @@ async function dispatch(core, path, method, body) {
       const r = await core.analyze(id, { cfg: b.cfg || {}, maxTokens: b.maxTokens, timeoutMs: b.timeoutMs });
       return { status: 200, data: r };
     }
+    // 语义重点标注（2026-11-14）：body 携带 focus/note。
+    if (parts[2] === 'mark' && parts.length === 3 && m === 'POST') {
+      if (!b.fileId) return { status: 400, data: { error: '需要 fileId' } };
+      assertSafeId(b.fileId, '文件 id');
+      return { status: 200, data: core.markFile(id, b.fileId, { focus: b.focus, note: b.note }) };
+    }
+    // 整理文档生成（走 LLM，可能较慢）：已生成则直接返回缓存，refresh=true 强制重生成。
+    if (parts[2] === 'compose' && parts.length === 3 && m === 'POST') {
+      const d = await core.composeDocument(id, b.kind, { cfg: b.cfg || {}, maxTokens: b.maxTokens, timeoutMs: b.timeoutMs, refresh: !!b.refresh });
+      return { status: 200, data: d };
+    }
+    // 已生成文档只读。
+    if (parts[2] === 'documents' && parts.length === 4 && m === 'GET') {
+      const d = core.getDocument(id, parts[3]);
+      return d ? { status: 200, data: d } : { status: 404, data: { error: '文档未生成' } };
+    }
     if (parts[2] === 'analysis' && parts.length === 3 && m === 'GET') {
       const a = core.getAnalysis(id);
       return a ? { status: 200, data: a } : { status: 404, data: { error: '尚未分析' } };

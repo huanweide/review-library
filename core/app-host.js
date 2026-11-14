@@ -54,6 +54,8 @@ const ACTION_UI = {
   due:      { label: '今日到期',   hint: '今天该复习的卡',             needsBook: true  },
   attempt:  { label: '提交作答',   hint: '提交并判分',                 needsBook: true  },
   rate:     { label: '四档自评',   hint: '重排下次复习时间',           needsBook: true  },
+  mark:     { label: '标注重点',   hint: '语义标记资料重点，不手动分层', needsBook: true  },
+  compose:  { label: '生成整理文档', hint: '考点大全 / 考纲',           needsBook: true  },
 };
 
 let warned = false;
@@ -188,6 +190,28 @@ async function invoke(core, action, payload, ctx) {
         if (!key) throw new Error('rate 需要 key');
         if (!Number.isInteger(rating) || rating < 1 || rating > 4) throw new Error('rate 需要 rating 1-4');
         data = core.rateCard(id, { key, rating });
+        break;
+      }
+      case 'mark': {
+        const id = String(p.bookId || '');
+        const fid = String(p.fileId || '');
+        if (!id) throw new Error('mark 需要 bookId');
+        if (!fid) throw new Error('mark 需要 fileId');
+        const patchArg = {};
+        if (typeof p.focus === 'boolean') patchArg.focus = p.focus;
+        if (typeof p.note === 'string') patchArg.note = p.note;
+        data = core.markFile(id, fid, patchArg);
+        break;
+      }
+      case 'compose': {
+        const id = String(p.bookId || '');
+        if (!id) throw new Error('compose 需要 bookId');
+        data = await core.composeDocument(id, String(p.kind || 'digest'), {
+          cfg: p.cfg || c.cfg || {},
+          maxTokens: p.maxTokens,
+          timeoutMs: p.timeoutMs,
+          refresh: !!p.refresh,
+        });
         break;
       }
       default:

@@ -108,7 +108,7 @@ const SYSTEM_PROMPT = `你是一位严谨的学科分析与出题专家。用户
 - **整个回复只允许出现一个 JSON 对象：最后一个 } 之后立即停止，禁止重复输出第二份 JSON、禁止追加任何总结或说明。**（重复输出会被判为无效结果）
 - 严禁 path / pointPath / source.file 指向不存在的内容。
 
-【资料文件清单】（source.file 只能从这里选）
+【资料文件清单】（source.file 只能从这里选；标【用户重点★】的资料是用户指定的核心，请优先围绕它们组织分析与出题）
 {{FILE_LIST}}
 
 全书内容按【文件】与【P.N】/【块N】锚点组织；长书会跨文件均衡取样，每个文件的锚点都真实可引用。
@@ -118,8 +118,28 @@ const SYSTEM_PROMPT = `你是一位严谨的学科分析与出题专家。用户
 // 归一化标题用于匹配：去空白 + 小写。
 function titleKey(s) { return String(s || '').replace(/\s+/g, '').toLowerCase(); }
 
+// 换行常量：JS 字面量拼接用（避免在生成代码里写转义）。
+const JOIN_NL = String.fromCharCode(10);
+
 // 文件名清单注入提示词：模型只能引用真实存在的文件，来源才可回溯。
+// 2026-11-14：附带宽 focus/note（语义重点）——用户不手动分层，只说哪个文件是重点、为什么，
+// 模型按这份说明决定分析侧重（【用户重点★】= 核心）。
 function fileListBlock(files) {
+  const arr = (Array.isArray(files) ? files : []).slice(0, 40);
+  const lines = arr.map((f) => {
+    const n = String((f && f.name) || '').trim();
+    if (!n) return null;
+    let line = '- ' + n;
+    if (f && f.isImage) line += '（图片资料，正文不含其内容）';
+    if (f && f.focus) line += '【用户重点★】';
+    if (f && f.note) line += '（用户说明：' + String(f.note).slice(0, 120) + '）';
+    return line;
+  }).filter(Boolean);
+  return lines.length ? lines.join(JOIN_NL) : '- （未登记文件名；source.file 请填「未知」，page 填 0）';
+}
+
+// （旧实现弃用保留，勿调用）
+function fileListBlockLegacy(files) {
   const names = (Array.isArray(files) ? files : [])
     .map(f => String((f && f.name) || '').trim()).filter(Boolean).slice(0, 40);
   return names.length

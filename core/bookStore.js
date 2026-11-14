@@ -73,6 +73,7 @@ class BookStore {
   _analysisFile(id) { return path.join(this._bookDir(id), 'analysis.json'); }
   _practiceFile(id) { return path.join(this._bookDir(id), 'practice.json'); }
   _filesDir(id) { return path.join(this._bookDir(id), 'files'); }
+  _documentFile(id, kind) { return path.join(this._bookDir(id), 'documents', kind + '.json'); }
 
   // 建书：必须先建书，才有 id 可加文件。
   createBook(title, opts) {
@@ -224,6 +225,39 @@ class BookStore {
     return book ? book.analysisMeta : null;
   }
 
+  // ---------- 资料重点标注（2026-11-14 语义重点） ----------
+  // 用户不手动分层：只标「哪个文件是重点 + 一句话为什么」，分析时注入提示词。
+  setFileMeta(id, fileId, patchArg) {
+    const book = this.getBook(id);
+    if (!book) throw new Error('书不存在：' + id);
+    assertSafeId(fileId, '文件 id');
+    const rec = (book.files || []).find(f => f.id === fileId);
+    if (!rec) throw new Error('资料不存在：' + fileId);
+    const p = patchArg || {};
+    if (typeof p.focus === 'boolean') rec.focus = p.focus;
+    if (typeof p.note === 'string') rec.note = p.note.slice(0, 300);
+    book.updatedAt = nowIso();
+    this._saveBook(book);
+    return rec;
+  }
+
+  // ---------- 整理文档（考点大全 digest / 考纲 syllabus，2026-11-14） ----------
+  // 独立文件 documents/<kind>.json：大文档不塞 analysis.json；kind 经 docKind 白名单后再拼路径。
+  saveDocument(id, kind, doc) {
+    const k = docKind(kind);
+    const dir = path.join(this._bookDir(id), 'documents');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, k + '.json'), JSON.stringify(doc, null, 2), 'utf8');
+    return doc;
+  }
+
+  getDocument(id, kind) {
+    const k = docKind(kind);
+    const f = this._documentFile(id, k);
+    if (!fs.existsSync(f)) return null;
+    try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch (e) { return null; }
+  }
+
   // ---------- 学习过程数据（2026-11-11 新增，独立文件 / 零迁移） ----------
   // 只读自己这个文件，绝不触碰 book.json：老书没有 practice.json 时返回空状态，
   // 新书写了也不改任何既有字段。删掉 practice.json 即完全回到未启用状态。
@@ -262,6 +296,15 @@ class BookStore {
     fs.rmSync(d, { recursive: true, force: true });
     return true;
   }
+}
+
+// 文档类型白名单：只允许 digest / syllabus，杜绝任意字符串拼路径。
+function docKind(kind) {
+  const k = String(kind || '');
+  if (!['digest', 'syllabus'].includes(k)) {
+    throw new Error('未知文档类型：' + kind + '（可用 digest=考点大全 / syllabus=考纲）');
+  }
+  return k;
 }
 
 module.exports = { BookStore, sanitizeName, genId, assertSafeId, isImageExt, IMAGE_EXT };

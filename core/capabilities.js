@@ -24,6 +24,8 @@ const ACTIONS = [
   'list', 'create', 'add', 'analyze', 'get',
   // 学习闭环（2026-11-11 F1 落地，本轮同步到全部入口）
   'practice', 'quiz', 'due', 'attempt', 'rate',
+  // 语义重点标注 + 整理文档（2026-11-14：mark / compose=考点大全+考纲）
+  'mark', 'compose',
 ];
 
 const PRACTICE_ACTIONS = ['practice', 'quiz', 'due', 'attempt', 'rate'];
@@ -36,6 +38,8 @@ const CAPABILITIES = [
   { action: 'add',       method: 'addFile',       needsBook: true,  group: 'library' },
   { action: 'analyze',   method: 'analyze',       needsBook: true,  group: 'library' },
   { action: 'get',       method: 'getAnalysis',   needsBook: true,  group: 'library' },
+  { action: 'mark',      method: 'markFile',      needsBook: true,  group: 'library' },
+  { action: 'compose',   method: 'composeDocument', needsBook: true, group: 'library' },
   { action: 'practice',  method: 'getPractice',   needsBook: true,  group: 'practice' },
   { action: 'quiz',      method: 'getQuiz',       needsBook: true,  group: 'practice' },
   { action: 'due',       method: 'getDue',        needsBook: true,  group: 'practice' },
