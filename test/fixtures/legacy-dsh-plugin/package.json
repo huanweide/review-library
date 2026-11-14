@@ -1,0 +1,41 @@
+{
+  "name": "dsh-review-analysis",
+  "version": "1.0.0",
+  "description": "DeepSeek Harness 插件：离线复习资料分析引擎。读取复习资料库，生成考纲大纲、规则版思维导图（全展开）与 Markdown 总报告；零外部依赖、不联网。",
+  "type": "module",
+  "main": "index.js",
+  "files": [
+    "index.js",
+    "engine/**/*.js",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --experimental-loader ./engine/test/_loader.mjs --test engine/test/"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "deepseek",
+    "harness",
+    "dsh",
+    "cordis",
+    "plugin",
+    "review",
+    "analysis",
+    "study",
+    "mindmap",
+    "offline"
+  ],
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-tools": "^0.1.0-rc.5"
+  },
+  "license": "MIT"
+}

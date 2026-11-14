@@ -295,7 +295,19 @@ function serveStatic(req, res, u) {
   let p;
   try { p = decodeURIComponent(u.pathname); }
   catch (e) { res.writeHead(400); return res.end('bad request'); }
-  if (p === '/' || p === '') p = '/index.html';
+  // 统一工作台是默认首页：双击「启动.bat」进入的就是整合后的全部功能入口。
+  // 现有 e2e / 判别测试均显式 goto /index.html、/core.html，不受默认首页改动影响。
+  if (p === '/' || p === '') p = '/portal.html';
+  // 工作台里的只读研究件位于项目根 demo/，而服务默认只托管 renderer/。
+  // 用单文件精确白名单映射，不开通配、不放宽下面的目录穿越校验。
+  if (p === '/demo/mindmap-preview.html') {
+    const demoFile = path.join(__dirname, 'demo', 'mindmap-preview.html');
+    return fs.readFile(demoFile, (err, data) => {
+      if (err) { res.writeHead(404); return res.end('not found'); }
+      res.writeHead(200, { 'Content-Type': MIME['.html'] });
+      res.end(data);
+    });
+  }
   const file = path.join(__dirname, 'renderer', path.normalize(p).replace(/^(\.\.[\/\\])+/, ''));
   if (!file.startsWith(path.join(__dirname, 'renderer'))) { res.writeHead(403); return res.end('forbidden'); }
   fs.readFile(file, (err, data) => {

@@ -11,7 +11,10 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PLUGIN = path.resolve(HERE, '..');
 const ROOT = path.resolve(PLUGIN, '..', '..');
 const NEW = path.join(PLUGIN, 'index.js');
-const OLD = path.join(ROOT, '_backup', '2026-11-08-forms', 'dsh-review-analysis', 'index.js');
+// baseline 旧版插件：从 git 历史 60b039c（「离线复习资料分析插件」）逐字导出。
+// 原先放在 _backup/2026-11-08-forms/，但该目录被 .gitignore 忽略，clone 后测试必红；
+// 2026-11-14 迁到 test/fixtures/ 作为正式判别夹具入库。断言一字未改。
+const OLD = path.join(ROOT, 'test', 'fixtures', 'legacy-dsh-plugin', 'index.js');
 
 let passed = 0, failed = 0;
 function ok(cond, msg) { if (cond) { passed++; console.log('  ✓ ' + msg); } else { failed++; console.error('  ✗ ' + msg); } }

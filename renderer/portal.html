@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<!-- 同源约束与项目一致：只连本地 /api，iframe 只嵌同源页面。 -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; frame-src 'self'; connect-src 'self'; font-src 'self' data:; object-src 'none'; base-uri 'none'">
+<title>天道书阁 · 统一工作台</title>
+<style>
+  :root{
+    --bg:#f5f7fb; --panel:#ffffff; --panel-2:#fafbfe; --ink:#1c2434; --ink-2:#4a5568; --muted:#8792a6;
+    --line:#e2e8f2; --line-2:#cfd8e8; --accent:#3457d5; --accent-soft:#eaf0ff; --accent-ink:#2444b8;
+    --ok:#1a9d6b; --ok-soft:#e6f7ef; --warn:#c2791a; --warn-soft:#fff3df; --bad:#d0453b; --bad-soft:#fdeceb;
+    --radius:10px; --shadow:0 1px 2px rgba(20,32,60,.05),0 8px 24px rgba(20,32,60,.06);
+    --sans:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  }
+  [data-theme="dark"]{
+    --bg:#141922; --panel:#1c2330; --panel-2:#222b3a; --ink:#e9eef7; --ink-2:#b8c3d4; --muted:#8794a9;
+    --line:#2b3648; --line-2:#3a475e; --accent:#7d9dff; --accent-soft:#26345c; --accent-ink:#a9bfff;
+    --ok:#4fd1a1; --ok-soft:#1d3b31; --warn:#e8b260; --warn-soft:#3b3020; --bad:#f08078; --bad-soft:#402624;
+    --shadow:0 1px 2px rgba(0,0,0,.2),0 8px 24px rgba(0,0,0,.22);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;font:14px/1.6 var(--sans);background:var(--bg);color:var(--ink);overflow:hidden}
+  button{font:inherit;cursor:pointer}
+  .app{display:flex;flex-direction:column;height:100vh}
+
+  /* 顶栏 */
+  .top{display:flex;align-items:center;gap:14px;padding:0 18px;height:58px;flex:0 0 58px;
+       background:var(--panel);border-bottom:1px solid var(--line);z-index:5}
+  .brand{display:flex;align-items:baseline;gap:10px;min-width:0}
+  .brand b{font-size:17px;letter-spacing:.3px;white-space:nowrap}
+  .brand span{font-size:12px;color:var(--muted);white-space:nowrap}
+  .ver{font-size:11px;color:var(--accent-ink);background:var(--accent-soft);border:1px solid var(--line);
+       padding:2px 8px;border-radius:20px;white-space:nowrap}
+  .top .spacer{flex:1}
+  .status{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-2);
+          background:var(--panel-2);border:1px solid var(--line);border-radius:20px;padding:5px 11px;white-space:nowrap}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:0 0 8px}
+  .dot.ok{background:var(--ok);box-shadow:0 0 0 3px var(--ok-soft)}
+  .dot.bad{background:var(--bad);box-shadow:0 0 0 3px var(--bad-soft)}
+  .tbtn{border:1px solid var(--line);background:var(--panel);color:var(--ink-2);border-radius:7px;
+        padding:5px 11px;font-size:12px;white-space:nowrap}
+  .tbtn:hover{border-color:var(--accent);color:var(--accent-ink)}
+  .tbtn.on{background:var(--accent-soft);color:var(--accent-ink);border-color:var(--accent)}
+
+  .body{display:flex;flex:1;min-height:0}
+
+  /* 左侧导航 */
+  .side{width:268px;flex:0 0 268px;background:var(--panel);border-right:1px solid var(--line);
+        display:flex;flex-direction:column;min-height:0}
+  .filter{padding:12px 12px 8px}
+  .filter input{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:7px;
+                background:var(--panel-2);color:var(--ink);font-size:12px;outline:none}
+  .filter input:focus{border-color:var(--accent)}
+  .navlist{overflow:auto;padding:0 8px 18px;flex:1}
+  .grp{margin:12px 0 4px;padding:0 8px;font-size:11px;font-weight:600;letter-spacing:.6px;
+       color:var(--muted);text-transform:uppercase}
+  .grp .note{display:block;font-weight:400;letter-spacing:0;text-transform:none;font-size:11px;
+             color:var(--muted);margin-top:2px;line-height:1.45}
+  .item{display:flex;align-items:flex-start;gap:9px;width:100%;text-align:left;border:1px solid transparent;
+        background:transparent;color:var(--ink);border-radius:8px;padding:8px 9px;margin:1px 0}
+  .item:hover{background:var(--panel-2)}
+  .item.on{background:var(--accent-soft);border-color:var(--line-2);color:var(--accent-ink)}
+  .item .ic{flex:0 0 18px;text-align:center;font-size:12px;color:var(--muted);line-height:1.7}
+  .item.on .ic{color:var(--accent-ink)}
+  .item .tx{min-width:0;flex:1}
+  .item .nm{display:block;font-size:13px;font-weight:600;line-height:1.4}
+  .item .ds{display:block;font-size:11px;color:var(--muted);line-height:1.45;margin-top:2px}
+  .item.on .ds{color:var(--ink-2)}
+  .item.off{opacity:.5}
+  .item.off:hover{background:transparent;cursor:not-allowed}
+  .tag{display:inline-block;font-size:10px;padding:0 5px;border-radius:4px;margin-left:5px;
+       border:1px solid var(--line-2);color:var(--muted);vertical-align:1px}
+  .tag.live{color:var(--ok);border-color:var(--ok);background:var(--ok-soft)}
+  .tag.ro{color:var(--warn);border-color:var(--warn);background:var(--warn-soft)}
+  .side-foot{padding:9px 12px;border-top:1px solid var(--line);font-size:11px;color:var(--muted)}
+
+  /* 右主区 */
+  .main{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0}
+  .crumbs{display:flex;align-items:center;gap:10px;padding:9px 16px;background:var(--panel);
+          border-bottom:1px solid var(--line);font-size:12px;color:var(--ink-2);flex:0 0 auto}
+  .crumbs .path{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .crumbs b{color:var(--ink);font-weight:600}
+  .stage{flex:1;position:relative;min-height:0;background:var(--panel-2)}
+  iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:var(--panel)}
+  .home{position:absolute;inset:0;overflow:auto;padding:22px 26px 40px}
+  .home.hidden,.stage iframe.hidden{display:none}
+
+  .hero{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+        padding:20px 22px;box-shadow:var(--shadow);margin-bottom:16px}
+  .hero h1{margin:0 0 6px;font-size:20px}
+  .hero p{margin:0;color:var(--ink-2);font-size:13px;max-width:820px;line-height:1.75}
+  .hero .kicker{font-size:11px;color:var(--accent-ink);font-weight:600;letter-spacing:.8px;margin-bottom:8px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;margin-bottom:16px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:15px 16px;box-shadow:var(--shadow)}
+  .card h3{margin:0 0 8px;font-size:14px}
+  .card p{margin:0 0 10px;font-size:12px;color:var(--ink-2);line-height:1.65}
+  .card .kv{font-size:12px;color:var(--ink-2);line-height:1.9}
+  .card .kv b{color:var(--ink)}
+  .mini{font-size:11px;color:var(--muted);margin-top:8px;line-height:1.6}
+  .go{border:1px solid var(--line);background:var(--panel-2);color:var(--accent-ink);
+      border-radius:6px;padding:5px 10px;font-size:12px}
+  .go:hover{border-color:var(--accent)}
+  .sect{font-size:13px;font-weight:600;margin:20px 0 10px;color:var(--ink)}
+  table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);
+        border-radius:var(--radius);overflow:hidden;font-size:12px}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:var(--panel-2);color:var(--muted);font-weight:600;font-size:11px;letter-spacing:.4px}
+  tr:last-child td{border-bottom:0}
+  td code{font-family:ui-monospace,Consolas,monospace;font-size:11px;background:var(--panel-2);
+          padding:1px 5px;border-radius:4px;color:var(--accent-ink)}
+  .notice{background:var(--warn-soft);border:1px solid var(--warn);color:var(--ink);
+          border-radius:var(--radius);padding:12px 15px;font-size:12px;line-height:1.75;margin-bottom:16px}
+  .notice b{color:var(--warn)}
+  .notice code{font-family:ui-monospace,Consolas,monospace;background:var(--panel);padding:1px 5px;border-radius:4px}
+  #selftest{display:none;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+            padding:12px 15px;font:12px/1.7 ui-monospace,Consolas,monospace;white-space:pre-wrap;margin-bottom:16px}
+  .offline-note{display:none}
+  @media (max-width:900px){.side{width:210px;flex-basis:210px}.brand span{display:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand"><b>天道书阁 · 统一工作台</b><span>Tiandao Library · 一个地址打开全部功能</span></div>
+    <span class="ver" id="ver">v1.5.2</span>
+    <div class="spacer"></div>
+    <div class="status" title="实测 GET /api/books 的结果"><span class="dot" id="dot"></span><span id="statusText">正在检测本地服务…</span></div>
+    <button class="tbtn" id="btnCheck" title="重新探测后端与全部入口">重新检测</button>
+    <button class="tbtn" id="btnImmerse" title="收起内层页面自带的品牌头，减少双层标题">沉浸模式</button>
+    <button class="tbtn" id="btnTheme" title="切换明暗主题">深色</button>
+  </header>
+
+  <div class="body">
+    <aside class="side">
+      <div class="filter"><input id="q" type="search" placeholder="筛选功能（名称 / 说明）" autocomplete="off" /></div>
+      <div class="navlist" id="navlist"></div>
+      <div class="side-foot">左侧每项加载的都是项目真实页面与真实后端；<br/>只读件与其它形态在首页单独标注。</div>
+    </aside>
+
+    <main class="main">
+      <div class="crumbs">
+        <span>当前</span><span class="path"><b id="curName">工作台首页</b> <span id="curDesc"></span></span>
+        <button class="tbtn" id="btnReload" title="重新加载当前页面">刷新</button>
+        <button class="tbtn" id="btnNew" title="在新标签页打开当前功能">新窗口打开</button>
+      </div>
+      <div class="stage">
+        <iframe id="frame" class="hidden" title="功能页面"></iframe>
+        <div class="home" id="home"></div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* 统一工作台（2026-11-14）。
+   设计：本页不重新实现任何业务功能，只做「整合」——左侧列出项目全部真实能力，
+   右侧用同源 iframe 加载既有真页面（index.html / core.html / 静态展示件）。
+   因此每个入口点进去都是真后端、真数据，不是示意按钮。
+   两套书库（/api/books 的 lib/store.js 与 /api/core/* 的 core/）刻意不合并，
+   CHANGELOG 记过混放会误列误删，这里如实标注而不假装是同一个库。
+   新增入口：在 GROUPS 加一项；若该项要直达子 tab，同时更新 js/deeplink.js 的 hash 契约。 */
+(function(){
+  var $ = function(s){ return document.querySelector(s); };
+  var frame = $('#frame'), home = $('#home');
+  var currentBase = '', currentItem = null, immerse = true, frameLoading = false;
+
+  // kind: home=本页概览 | live=需后端真功能 | readonly=纯静态只读件
+  // clickSel：同一页面内切 tab 时，直接点 iframe 里真实按钮（避免整页重载丢状态）
+  // activeSel：?selftest=1 时用来验证深链真的切过去了（非默认 tab 才有意义）
+  var GROUPS = [
+    { name:'总览', items:[
+      { id:'home', kind:'home', ic:'◎', nm:'工作台首页', ds:'项目全貌 / 能力地图 / 运行状态 / 形态说明' }
+    ]},
+    { name:'统一核心 · core.html', note:'新版 · /api/core/* + core/ · 独立书库，需在此新建书（与下方旧版书库不互通）', items:[
+      { id:'c-books',   kind:'live', ic:'▤', nm:'书架与导入', ds:'建书 / 加文件 / 大模型整体分析', target:'core.html', probe:'#bookList' },
+      { id:'c-mindmap', kind:'live', ic:'⌘', nm:'交互式思维导图', ds:'知识树·题型树 / 三种布局 / 缩放聚焦 / 五种导出', target:'core.html', hash:'mindmap', probe:'#tab-mindmap', clickSel:'.tab[data-tab="mindmap"]' },
+      { id:'c-quest',   kind:'live', ic:'▦', nm:'题型分类索引', ds:'题型根→题型→子题型→题目三级链路与题目详情', target:'core.html', hash:'questions', probe:'#tab-questions', clickSel:'.tab[data-tab="questions"]', activeSel:'#tab-questions.active' },
+      { id:'c-practice',kind:'live', ic:'✎', nm:'练习与今日复习', ds:'先答后揭 / 四档自评 / SRS 排程 / 到期队列', target:'core.html', hash:'practice', probe:'#tab-practice', clickSel:'.tab[data-tab="practice"]', activeSel:'#tab-practice.active' },
+      { id:'c-summary', kind:'live', ic:'▧', nm:'概览与导出', ds:'章 / 知识点 / 题型统计 · JSON·SVG·PNG·MD·OPML', target:'core.html', hash:'summary', probe:'#tab-summary', clickSel:'.tab[data-tab="summary"]', activeSel:'#tab-summary.active' },
+      { id:'c-settings',kind:'live', ic:'⚙', nm:'模型设置', ds:'API 地址 / 密钥 / 模型名 · 测试连接', target:'core.html', hash:'settings', probe:'#openSettings', clickSel:'#openSettings' }
+    ]},
+    { name:'全功能工作台 · index.html', note:'旧版全功能 · /api/books + lib/store.js · 分层资料体系', items:[
+      { id:'i-shelf',   kind:'live', ic:'▤', nm:'书架与资料管理', ds:'收录 / 分层导入 / 组合检索 / 预览 / 回收站', target:'index.html', hash:'shelf', probe:'#nav-shelf', clickSel:'#nav-shelf' },
+      { id:'i-search',  kind:'live', ic:'⌕', nm:'全局搜索', ds:'跨书搜资料正文 / 知识点 / 题目 / 错题', target:'index.html', hash:'search', probe:'#nav-search', clickSel:'#nav-search', activeSel:'#nav-search.on' },
+      { id:'i-review',  kind:'live', ic:'◷', nm:'跨书今日复习', ds:'全部书今天到期的卡汇成一队，先揭示再自评', target:'index.html', hash:'review', probe:'#nav-review', clickSel:'#nav-review', activeSel:'#nav-review.on' },
+      { id:'i-report',  kind:'live', ic:'▥', nm:'学习报告', ds:'正确率趋势 / 每日复习量 / 薄弱点演化（本地 SVG）', target:'index.html', hash:'report', probe:'#nav-report', clickSel:'#nav-report', activeSel:'#nav-report.on' },
+      { id:'i-settings',kind:'live', ic:'⚙', nm:'设置与整库备份', ds:'双引擎 / 密钥分层 / 出题参数 / 导出恢复备份', target:'index.html', hash:'settings', probe:'#nav-settings', clickSel:'#nav-settings', activeSel:'#nav-settings.on' },
+      { id:'i-book',    kind:'live', ic:'▣', nm:'书内工作台', ds:'进书架点开一本书 → 资料 / 考纲 / 分析 / 练习 / 薄弱 五个页签', target:'index.html', probe:'#pane-materials' }
+    ]},
+    { name:'知识与成果展示件', note:'静态页面，无后端也能看；只读，不写书库', items:[
+      { id:'s-chain', kind:'readonly', ic:'◇', nm:'全链路大导图', ds:'8 段主链路 / 48 节点 / 14 份资料 · 三布局与导出', target:'full-chain.html', probe:'body' },
+      { id:'s-compare',kind:'readonly',ic:'◇', nm:'导图方案对比', ds:'v0.8 现状 vs 提案详细版（研究期对比件）', target:'demo/mindmap-preview.html', probe:'body' }
+    ]}
+  ];
+
+  var ITEMS = [];
+  GROUPS.forEach(function(g){ g.items.forEach(function(it){ it.grp=g.name; ITEMS.push(it); }); });
+  function find(id){ for(var i=0;i<ITEMS.length;i++) if(ITEMS[i].id===id) return ITEMS[i]; return null; }
+
+  /* ---------- 首页：把「整理过的项目全貌」直接放进工作台 ---------- */
+  function renderHome(online){
+    var live = ITEMS.filter(function(x){return x.kind==='live';}).length;
+    var ro = ITEMS.filter(function(x){return x.kind==='readonly';}).length;
+    var startCmd = '双击 启动.bat（或项目根目录执行 node server.js）';
+    var html = ''
+      + (online ? '' :
+        '<div class="notice"><b>本地服务未启动，真功能暂时打不开。</b><br/>'
+        + '本工作台的每个功能都连本地后端 <code>server.js</code> 与本地书库，纯静态网页无法承载导入、分析、练习、备份这些动作。'
+        + '请 ' + startCmd + '，然后回到本页点「重新检测」。<br/>'
+        + '下面的「知识与成果展示件」是静态只读页，不依赖后端，仍可直接打开。</div>')
+      + '<div class="hero"><div class="kicker">TIANDAO LIBRARY · INTEGRATED WORKBENCH</div>'
+      + '<h1>一个地址，打开项目做过的全部功能</h1>'
+      + '<p>这不是展示页。左侧 <b>' + live + '</b> 个功能入口加载的都是项目里真实运行的页面，连的是本机 '
+      + '<code>server.js</code> 的 <code>/api</code> 与本地书库；右侧看到的即桌面端、HTTP 端在用的同一套代码。'
+      + '另有 <b>' + ro + '</b> 个只读展示件。版本 v1.5.2。</p></div>'
+
+      + '<div class="grid">'
+      + '<div class="card"><h3>统一核心</h3><p>导入资料 → 建书 → 大模型整本整体分析 → 可层层展开的思维导图与题型索引。桌面端 / HTTP / DSH 插件 / 专家共用这一套 <code>core/</code>。</p>'
+      + '<div class="kv"><b>能力清单</b>：list · create · add · analyze · get · practice · quiz · due · attempt · rate</div>'
+      + '<button class="go" data-go="c-mindmap">打开思维导图 →</button></div>'
+      + '<div class="card"><h3>全功能工作台</h3><p>分层资料体系、组合检索、Office 预览、分析与出题闭环、批改巩固卷、跨书今日复习、学习报告、整库备份。</p>'
+      + '<div class="kv"><b>后端</b>：<code>/api/books</code> · <code>/api/study/*</code> · <code>/api/mindmap/*</code></div>'
+      + '<button class="go" data-go="i-shelf">打开书架 →</button></div>'
+      + '<div class="card"><h3>质量门禁与发布</h3><p>21 个单测套件、真浏览器 e2e 207 项、判别测试锁死不变量、版本 8 处与形态 18 处漂移检测。</p>'
+      + '<div class="kv"><b>发布</b>：GitHub Actions 云端构建安装器 + 免安装版 + 自动更新</div>'
+      + '<div class="mini">完整成果盘点见仓库根《项目成果全景总览.md》。</div></div>'
+      + '</div>'
+
+      + '<div class="sect">两套书库的边界（不假装成一套）</div>'
+      + '<div class="notice" style="background:var(--panel);border-color:var(--line)">'
+      + '统一核心（<code>core/</code>）与全功能工作台（<code>lib/store.js</code>）是两代实现，元数据格式不同，'
+      + '但共用同一个 <code>library/books/</code> 目录。CHANGELOG 记过「混放会误列误删」，项目里已用只读格式判别隔离，'
+      + '<b>刻意不合并两套 store</b>。所以本工作台把它们分成两组导航：在任一组里建的书，请在同一组里继续用。</div>'
+
+      + '<div class="sect">其它运行形态（不是网页，不设假按钮）</div>'
+      + '<table><thead><tr><th style="width:150px">形态</th><th style="width:200px">位置 / 启动</th><th>说明</th></tr></thead><tbody>'
+      + '<tr><td>桌面端 Electron</td><td><code>启动桌面版.bat</code></td><td>主进程直接 require <code>core/</code>，经 preload 暴露 <code>window.api</code>；数据放 exe 同级 <code>library/</code>。</td></tr>'
+      + '<tr><td>DeepSeek Harness 插件</td><td><code>plugins/dsh-review-analysis/</code></td><td>安装到 <code>~/.dsh/local-plugins/</code>，<code>cordis.patch.yml</code> 的 projectRoot 指回本项目，运行时加载 <code>core/index.js</code>。</td></tr>'
+      + '<tr><td>WorkBuddy / CodeBuddy 专家</td><td><code>plugins/review-analysis/</code></td><td>安装到 <code>~/.workbuddy/.../plugins/</code>，<code>bin/driver.js --project</code> 指向本项目根。</td></tr>'
+      + '<tr><td>CLI 驱动</td><td><code>bin/driver.js --action ...</code></td><td>10 个 action 与 DSH / HTTP 同一份 <code>core/capabilities.js</code> 能力清单，由契约测试锁死一致。</td></tr>'
+      + '<tr><td>GitHub Pages 静态站</td><td><code>huanweide.github.io/review-library/</code></td><td>只读演示，<code>api-client.js</code> 探测不到后端会回退到内置示例数据，所有写操作禁用。</td></tr>'
+      + '</tbody></table>'
+
+      + '<div class="sect">启动与排障</div>'
+      + '<div class="card"><div class="kv">'
+      + '<b>启动</b>：<code>' + startCmd + '</code><br/>'
+      + '<b>地址</b>：<code>http://localhost:5178/portal.html</code>（本工作台已是默认首页，<code>/</code> 也会到这里）<br/>'
+      + '<b>状态灯</b>：实测 <code>GET /api/books</code>；变红说明服务没起或端口被占。<br/>'
+      + '<b>数据目录</b>：默认项目内 <code>library/</code>，可用环境变量 <code>LIBRARY_ROOT</code> 指定。'
+      + '</div></div>';
+    home.innerHTML = html;
+    Array.prototype.forEach.call(home.querySelectorAll('[data-go]'), function(b){
+      b.onclick = function(){ open(find(b.getAttribute('data-go'))); };
+    });
+  }
+
+  /* ---------- 导航渲染 ---------- */
+  function renderNav(filter){
+    var f = (filter||'').trim().toLowerCase();
+    var out = '';
+    GROUPS.forEach(function(g){
+      var list = g.items.filter(function(it){
+        return !f || (it.nm+' '+it.ds+' '+g.name).toLowerCase().indexOf(f)>=0;
+      });
+      if(!list.length) return;
+      out += '<div class="grp">' + g.name + (g.note ? '<span class="note">'+g.note+'</span>' : '') + '</div>';
+      list.forEach(function(it){
+        var off = !online && it.kind==='live';
+        var tag = it.kind==='readonly' ? '<span class="tag ro">只读</span>'
+          : (it.kind==='live' ? (off ? '<span class="tag" style="color:var(--warn);border-color:var(--warn)">需启动服务</span>' : '<span class="tag live">真功能</span>') : '');
+        out += '<button class="item'+(currentItem && currentItem.id===it.id?' on':'')+(off?' off':'')+'"'
+             + (off?' title="本地服务未启动，此功能需先运行 启动.bat"':'') + ' data-id="'+it.id+'">'
+             + '<span class="ic">'+it.ic+'</span><span class="tx"><span class="nm">'+it.nm+tag+'</span>'
+             + '<span class="ds">'+it.ds+'</span></span></button>';
+      });
+    });
+    if(!out) out = '<div class="grp" style="padding:16px 8px">没有匹配的功能</div>';
+    $('#navlist').innerHTML = out;
+    Array.prototype.forEach.call($('#navlist').querySelectorAll('.item'), function(b){
+      b.onclick = function(){ open(find(b.getAttribute('data-id'))); };
+    });
+  }
+
+  /* ---------- 打开功能 ---------- */
+  function urlOf(it){ return it.target + (it.hash ? '#v='+it.hash : ''); }
+  // 工作台内切换用带唯一标记的整页重载：hash 与当前项严格一致，deeplink 只会切到
+  // 同一个目标，不存在「旧 hash 的延迟点击翻回去」的竞态。deeplink 保留给直接访问 /
+  // 新窗口打开（那时没有工作台，需要页面自己按 hash 落位）。
+  function navUrl(it){ return it.target + '?nav=' + it.id + (it.hash ? '#v=' + it.hash : ''); }
+  function open(it){
+    if(!it) return;
+    // 静态副本 / 服务未启动时，真功能入口不假装能点：直接回首页看提示。
+    // 只读件不依赖后端，仍允许打开。
+    if(!online && it.kind==='live'){
+      currentItem=find('home');
+      frame.className='hidden'; home.className='home'; currentBase='';
+      frameLoading=true; frame.src='about:blank';
+      renderNav($('#q').value);
+      $('#curName').textContent='工作台首页';
+      $('#curDesc').textContent='· 本地服务未启动，真功能已停用';
+      renderHome(false);
+      return;
+    }
+    if(currentItem && currentItem.id===it.id && it.kind!=='home') return;
+    currentItem = it;
+    renderNav($('#q').value);
+    $('#curName').textContent = it.nm;
+    $('#curDesc').textContent = '· ' + it.ds;
+    if(it.kind==='home'){
+      frame.className='hidden'; home.className='home'; currentBase='';
+      frameLoading = true; frame.src='about:blank';
+      return;
+    }
+    home.className='home hidden'; frame.className='';
+    frameLoading = true;
+    frame.src = navUrl(it);
+    currentBase = it.target;
+  }
+
+  /* ---------- iframe 加载后：沉浸模式（只收起内层品牌头，不动任何功能按钮） ---------- */
+  frame.addEventListener('load', function(){
+    frameLoading = false;
+    if(!immerse) return;
+    try{
+      var d = frame.contentDocument;
+      if(!d || !d.head || d.getElementById('__portal_immerse__')) return;
+      var s = d.createElement('style');
+      s.id='__portal_immerse__';
+      s.textContent = '.topbar .brand-wrap,.topbar > .brand{display:none!important}'
+        + '.topbar{min-height:40px!important;padding:4px 12px!important}'
+        + '.demo-banner{display:none!important}';
+      d.head.appendChild(s);
+    }catch(e){ /* 跨域或非 HTML 页面，静默跳过 */ }
+  });
+
+  /* ---------- 后端状态灯（真探测，不猜） ---------- */
+  var online = false;
+  function checkBackend(){
+    $('#statusText').textContent='正在检测本地服务…';
+    $('#dot').className='dot';
+    var t = setTimeout(function(){ finish(false,'检测超时'); }, 4000);
+    fetch('api/books',{cache:'no-store'}).then(function(r){
+      return r.ok ? r.json() : Promise.reject(new Error('HTTP '+r.status));
+    }).then(function(data){
+      clearTimeout(t);
+      finish(true, Array.isArray(data) ? ('服务在线 · '+data.length+' 本书') : '服务在线');
+    }).catch(function(e){ clearTimeout(t); finish(false,'服务未启动 / 不可达'); });
+  }
+  function finish(ok,msg){
+    online=ok;
+    $('#dot').className='dot '+(ok?'ok':'bad');
+    $('#statusText').textContent=msg;
+    renderHome(online);
+    renderNav($('#q').value);   // 状态变化时同步刷新「真功能 / 需启动服务」标签
+  }
+
+  /* ---------- 顶栏按钮 ---------- */
+  $('#btnCheck').onclick=function(){
+    checkBackend();
+    if(currentItem && currentItem.kind!=='home'){ frameLoading=true; frame.src=navUrl(currentItem); }
+  };
+  $('#btnReload').onclick=function(){
+    if(currentItem && currentItem.kind!=='home'){ frameLoading=true; frame.src=navUrl(currentItem); }
+  };
+  $('#btnNew').onclick=function(){ if(currentItem && currentItem.kind!=='home') window.open(urlOf(currentItem),'_blank'); };
+  $('#btnImmerse').onclick=function(){
+    immerse=!immerse;
+    $('#btnImmerse').className='tbtn'+(immerse?' on':'');
+    if(currentItem && currentItem.kind!=='home'){ frameLoading=true; frame.src=navUrl(currentItem); }
+  };
+  $('#btnTheme').onclick=function(){
+    var dark=document.documentElement.getAttribute('data-theme')==='dark';
+    document.documentElement.setAttribute('data-theme',dark?'light':'dark');
+    $('#btnTheme').textContent=dark?'深色':'浅色';
+    try{ localStorage.setItem('portal-theme',dark?'light':'dark'); }catch(e){}
+  };
+  $('#q').oninput=function(){ renderNav(this.value); };
+  try{
+    if(localStorage.getItem('portal-theme')==='dark'){
+      document.documentElement.setAttribute('data-theme','dark'); $('#btnTheme').textContent='浅色';
+    }
+  }catch(e){}
+  $('#btnImmerse').className='tbtn on';
+
+  /* ---------- ?selftest=1：真加载每个入口，验证页面与深链都到位 ---------- */
+  function selftest(){
+    var lines=['统一工作台自检 · '+(online?'后端在线':'后端离线')];
+    var pass=0, fail=0, idx=0, finished=false;
+    var list=ITEMS.filter(function(x){return x.kind==='live'||x.kind==='readonly';});
+    var wait=function(ms){return new Promise(function(r){setTimeout(r,ms);});};
+    // 后端探测是异步的，finish() 会调用 renderHome() 重建 #home 的 innerHTML。
+    // 所以自检面板按需自建、把全文缓存在 lines 里重绘，节点被冲掉也能恢复。
+    function paint(){
+      var b=$('#selftest');
+      if(!b){
+        b=document.createElement('div'); b.id='selftest';
+        home.insertBefore(b,home.firstChild);
+      }
+      b.style.display='block';
+      b.textContent=lines.join('\n');
+      if(finished) b.setAttribute('data-done','1');
+    }
+    // 连续两项只差 hash 时浏览器不触发 iframe load，加唯一 query 强制真重载。
+    function probeUrl(it){ return it.target + '?st=' + it.id + (it.hash ? '#v='+it.hash : ''); }
+    function next(){
+      if(idx>=list.length){
+        lines.push('----'); lines.push('PASS '+pass+' / FAIL '+fail+' / 共 '+(pass+fail));
+        finished=true; paint(); return;
+      }
+      var it=list[idx++];
+      var p=new Promise(function(resolve){
+        var done=false;
+        function conclude(msg,ok){ if(done)return; done=true; clearTimeout(timer); resolve({msg:msg,ok:ok}); }
+        var timer=setTimeout(function(){conclude('加载超时',false);},6000);
+        frame.onload=function(){
+          if(frame.getAttribute('data-st')!==it.id) return;
+          setTimeout(function(){
+            try{
+              var d=frame.contentDocument;
+              if(!d||!d.body) return conclude('iframe 无文档',false);
+              var probe=d.querySelector(it.probe||'body');
+              if(!probe) return conclude('缺关键元素 '+(it.probe||'body'),false);
+              if(it.activeSel){
+                wait(450).then(function(){
+                  var act=d.querySelector(it.activeSel);
+                  conclude('页面OK + 深链'+(act?'已切到目标 tab':'未生效'),!!act);
+                });
+                return;
+              }
+              conclude('页面OK',true);
+            }catch(e){ conclude('异常 '+e.message,false); }
+          },160);
+        };
+        frame.setAttribute('data-st',it.id);
+        frame.src=probeUrl(it);
+      });
+      p.then(function(r){
+        (r.ok?pass++:fail++);
+        lines.push((r.ok?'[PASS] ':'[FAIL] ')+it.nm+' → '+it.target+' '+(r.msg||''));
+        paint();
+        next();
+      });
+    }
+    paint();
+    next();
+  }
+
+  renderHome(false);
+  renderNav('');
+  checkBackend();
+  currentItem=find('home'); renderNav('');
+  if(/[?&]selftest=1/.test(location.search)) setTimeout(selftest,600);
+  // 供自动化读取当前状态（不造假，只是把已算出的值暴露出来）
+  window.__portal = {
+    items: ITEMS.map(function(x){return {id:x.id,nm:x.nm,kind:x.kind,target:x.target};}),
+    state: function(){ return {online:online,current:currentItem&&currentItem.id,count:ITEMS.length}; }
+  };
+})();
+</script>
+</body>
+</html>

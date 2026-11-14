@@ -113,7 +113,10 @@ async function run() {
   // 2) 加 md / docx / pdf / 图片
   const mdRec = await core.addFile(book.id, Buffer.from('# 标题\n这是一段 markdown 内容。', 'utf8'), { name: '笔记.md' });
   const docxRec = await core.addFile(book.id, makeDocx('文档里有重要的定义和定理。'), { name: '讲义.docx' });
-  const pdfBuf = fs.readFileSync('node_modules/pdf-parse/test/data/01-valid.pdf');
+  // 夹具自包含（2026-11-14）：原先直接读 node_modules/pdf-parse/test/data/01-valid.pdf，
+  // 该路径随依赖重装 / 换版本就会消失（本机曾整包缺失导致本套件红）。
+  // 现改为仓库自带字节级副本（同一份真 14 页 PDF），断言一字未改。
+  const pdfBuf = fs.readFileSync(path.join(__dirname, '..', '..', 'test', 'fixtures', 'core-14page.pdf'));
   const pdfRec = await core.addFile(book.id, pdfBuf, { name: '教材.pdf' });
   const imgRec = await core.addFile(book.id, Buffer.from([0x89, 0x50, 0x4e, 0x47]), { name: '图1.png' });
   ok('加 4 个文件', book && core.getBook(book.id).files.length === 4);

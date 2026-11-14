@@ -16,6 +16,23 @@
 - **真落盘、可增删**：成百上千份资料真实存到磁盘，随时查看 / 新增 / 删除 / 分类；删除进回收站可恢复或彻底删除。
 - **零外链、离线优先**：前端所有解析库落本地 `renderer/vendor/`；顶层 CSP 的 `connect-src 'self'` 从浏览器层面禁止直连外部域名。想用云端模型时，也只由本地服务/Electron 主进程转发，前端永远只打同源 `/api`。
 
+## 统一工作台（整合入口，2026-11-14）
+
+双击 `启动.bat` 打开的就是 `http://localhost:5178`（`server.js` 默认首页已指向 `renderer/portal.html`）。工作台左侧按能力域列出全部功能，右侧用**同源 iframe 加载既有真页面**，每个入口点进去都是真后端、真数据，不是示意按钮：
+
+- **统一核心**（`core.html`，`/api/core/*` + `core/`）：书架与导入、交互式思维导图、题型分类索引、练习与今日复习、概览与导出、模型设置。
+- **全功能工作台**（`index.html`，`/api/books` + `lib/store.js`）：书架与资料管理、全局搜索、跨书今日复习、学习报告、设置与整库备份、书内五页签。
+- **只读展示件**：`full-chain.html` 全链路大导图、`demo/mindmap-preview.html` 导图方案对比（无后端也能看）。
+- **其它形态**（桌面版 / DSH 插件 / WorkBuddy 专家 / CLI / GitHub Pages）在工作台首页列出位置与启动方式，不设假按钮。
+
+顶部状态灯实测 `GET /api/books`；离线时明确提示启动命令，不会假装功能可用。带 `?selftest=1` 可逐个真加载全部入口并输出 PASS/FAIL。
+
+实现边界（改动很小，不重构、不迁移）：新增 `renderer/portal.html` 与 `renderer/js/deeplink.js`（读 URL hash 后模拟点击页面原有按钮，无 hash 时零影响）；`index.html` / `core.html` 各加一行 script 引入；`server.js` 改默认首页并加单文件白名单映射 `/demo/mindmap-preview.html`。**两套书库刻意不合并**——`core/` 与 `lib/store.js` 元数据格式不同、共用 `library/books/`，混放会误列误删（见 CHANGELOG P0-1），工作台把它们分成两组导航并在首页如实标注。
+
+真浏览器验收（本机 Edge + playwright-core）：外部脚本 32/32、内置自检 14/14、在线 15/15、离线 14/14、零未捕获 JS 报错；截图在 `PROCESS/portal-verify/`。离线（静态副本 / 服务未启动）时真功能入口会显式标注「需启动服务」并拒绝加载，只读件仍可打开，不假装功能可用。
+
+**测试夹具自包含（2026-11-14）**：本机曾因 `pdf-parse` 整包缺失、`core.test.js` 读包内 `test/data/01-valid.pdf`、判别测试 baseline 放在被 `.gitignore` 忽略的 `_backup/` 导致 `npm test` 停在 20/23。已修成零环境依赖：补装声明好的 `pdf-parse@1.1.1`；把真 14 页 PDF 复制为 `test/fixtures/core-14page.pdf` 并让 `core.test.js` 读它；把 git 历史 `60b039c` 的真实旧版离线插件逐字导出到 `test/fixtures/legacy-dsh-plugin/` 作判别 baseline（去 CR 后哈希与历史一致）。**所有断言一字未改**，现 `npm test` 23/23 全绿，clone 后即可复现。
+
 ## 四种运行方式
 
 | 方式 | 怎么启动 | 数据放哪 |
