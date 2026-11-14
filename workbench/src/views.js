@@ -59,6 +59,19 @@ function viewHome(root) {
   root.appendChild(el('div', { class: 'stats' }, stats.map(x =>
     el('div', { class: 'stat' }, [el('strong', { text: String(x.n) }), el('span', { text: x.l })]))));
 
+  // 最近的书：打开应用第一屏就能继续读，不用先点书架再找
+  const hd = $view('home');
+  const recent = ((hd.data && hd.data.data && hd.data.data.books) || []).slice(0, 4);
+  if (recent.length) {
+    root.appendChild(el('div', { class: 'section-title', text: '继续' }));
+    root.appendChild(el('div', { class: 'grid' }, recent.map((b) =>
+      el('button', { class: 'tile', onclick: () => go('book', { id: b.id }) }, [
+        el('div', { class: 'tile-title', text: b.title || b.id }),
+        el('div', { class: 'tile-desc', text: (b.analyzed ? '已分析' : '未分析') + ' · ' + (b.fileCount == null ? 0 : b.fileCount) + ' 份资料' }),
+        el('div', { class: 'tile-arrow', text: '→' }),
+      ]))));
+  }
+
   root.appendChild(el('div', { class: 'section-title', text: '快速开始' }));
   const quick = [
     { v: 'library', t: '打开书架', d: '看全部书，建新书、导入资料' },
@@ -507,6 +520,7 @@ const RENDERERS = {
 // 否则 renderView 内发起请求 -> setViewData -> 订阅重绘 -> 又 renderView，
 // 且「已有 data 就不拉」会让切回视图时永远显示旧数据（实测真 bug）。
 const AUTO_LOAD = {
+  home: { action: 'list', payload: () => ({}) },
   library: { action: 'list', payload: () => ({}) },
   // book 自己负责取数（书内工作区要 get + quiz + practice + list 四路并发）：
   // 这里再挂一个 get 会多打一次请求，失败时还会弹「该书尚无分析结果」的红条（实测）。
