@@ -12,4 +12,4 @@
       name: 'dsh-review-analysis'
       inject: ['tools', 'webServer']
       config:
-        projectRoot: 'C:/Users/Administrator/Desktop/rlbuild'
+        projectRoot: 'C:/Users/Administrator/Desktop/agent program/复习资料图书馆'

@@ -84,6 +84,8 @@ async function boot() {
     refreshShell();
     const v = currentView();
     const params = get().routeParams;
+    // 书内工作区是沉浸式：进入时隐藏全局侧栏，离开时恢复（否则左侧会叠两层导航）
+    if (!v || v.id !== 'book') document.body.classList.remove('bs-focus');
     renderView(viewRoot(), v, params);
     // 数据加载只由路由变化触发：每次进视图都拿后端当前真数据，
     // 不因已缓存旧 data 而跳过（否则切回书架看不到刚建的书）。

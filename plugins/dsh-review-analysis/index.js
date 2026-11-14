@@ -44,6 +44,7 @@ const APP_FILES = [
   'index.html', 'manifest.webmanifest', 'sw.js', 'icons/icon.svg',
   'src/main.js', 'src/host.js', 'src/state.js', 'src/router.js',
   'src/ui.js', 'src/views.js', 'src/shell.js', 'src/style.css',
+  'src/bookspace.js', 'src/mindmap.js',
 ];
 const APP_MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',

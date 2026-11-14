@@ -32,6 +32,15 @@ dsh plugin --profile web add <本目录绝对路径>
 
 装好后**重启一次** DeepSeek Harness 桌面应用。仓库根 `npm run forms:sync` 会把本目录同步到已安装位置（不重启宿主）。
 
+### 装完自检 / 改了配置怎么生效
+
+```
+plugin_manager list_plugins            # 找到 include:review-analysis
+```
+- `fiberPhase: "active"` = Host 半边装载成功；侧栏图标会在 **Client 半边**单独出现，所以「图标在但工具/接口没有」通常意味着 Host 半边 `failed`。
+- `fiberPhase: "failed"` + `diagnostic` 会明确指出缺什么（最常见：`projectRoot` 指错，报「找不到统一核心能力清单」）。
+- 改完 `cordis.patch.yml` 里的 `projectRoot` 后，`plugin_manager(set_plugin, target=include:review-analysis, enabled=false→true)` 会重读 bundle patch 并重新 apply，**不必重启整个应用**；若仍失败再重启桌面应用。
+
 ---
 
 ## 配置
@@ -75,13 +84,12 @@ DSH_LLM_API_KEY=...        # 只在进程内存，不落盘
 
 ## 面板
 
-左侧栏「复习分析」→ 主面板。三页：
+左侧栏「复习分析」→ 主面板，两个页签：
 
-- **思维导图**：按 root → 章 → 节 → 知识点 → 子点层层展开，可全部展开/收起。
-- **题型索引**：按题型分组，每项带知识点标题与面包屑路径。
-- **概览**：全书摘要 + 章/节/知识点/子点/题型统计 + 模型与资料数。
+- **应用**（默认）：内嵌的就是根目录 `workbench/` 这个应用工程（同一个 `index.html` + `src/*`，不是另写一版）。面板以 `/review-analysis/app/index.html?base=/review-analysis/api/app` 加载，应用通过 `?base` 把协议端点指回插件，因此 DSH 里的 APP 与内置浏览器 / Electron / PWA 是**同一份代码、同一份数据**。
+- **状态**：插件自己的只读视图（`GET /review-analysis/api/state`，同源校验）。按 root → 章 → 节 → 知识点 → 子点层层展开，另有题型索引与概览；要重新分析，在对话里调用 `review_analysis` 工具（面板不接收模型密钥、不落盘）。
 
-面板是**只读视图**：`GET /review-analysis/api/state`（同源校验）。要重新分析，在对话里调用 `review_analysis` 工具；模型密钥不进面板、不落盘。
+静态托管：`index.html / manifest.webmanifest / sw.js / icons/icon.svg / src/*.js / src/style.css` 逐文件 `kind:'exact'` 注册（固定清单 + `path.resolve` 双重校验，防目录穿越）；思维导图布局另托一份 `renderer/js/mindmap-layout.js`（唯一源码，不复制算法）。
 
 ---
 

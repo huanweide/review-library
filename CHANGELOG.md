@@ -5,6 +5,22 @@
 DSH 插件与 WorkBuddy 专家的 manifest，以及 README 顶部定位行；`scripts/check-versions.mjs`
 挂在 `pretest` 上做漂移检测。发版 tag 必须与 `package.json` 严格一致（如 `v1.5.0`）。
 
+## v1.5.2 — 2026-11-14（未发布）
+
+**统一应用 workbench**：项目从「单文件页面 + portal 套 iframe」升级成多文件应用工程（`workbench/`：`host/state/router/ui/views/shell` 各司其职，`index.html` 只做挂载点），默认首页指向它，可安装为 PWA。
+
+- **一个东西、五种形态**：`core/app-host.js` 一次实现 manifest/state/invoke；`core/capabilities.js` 一次定义 10 个 action；内置浏览器（`/api/app/*`）、Electron（`ipcMain workbench:*`）、DSH 插件（`/review-analysis/api/app/*`）、Skills/CLI、HTTP 全部读同一份 core。前端 13 个视图运行时从后端清单拉，不在前端写第二份。
+- **DSH 插件新增「应用」页签**：侧栏「复习分析」→ 面板分「应用 / 状态」两页；应用页内嵌的就是 `workbench/` 同一份工程（`/review-analysis/app/index.html?base=/review-analysis/api/app`），静态资源逐文件 `exact` 托管，思维导图布局复用 `renderer/js/mindmap-layout.js` 唯一源码。
+- **书详情**：真 SVG 思维导图（右向/双侧/组织三种布局）、题型索引；题目页选项可点、就地判分、四档自评写回 SRS；练习页真统计与卡片列表。
+- **示例书**：`数据结构示例书（内置演示 · 可删）` 走 `create → addFile → analyze` 真管线生成（模型用本地 mock），不是手写 JSON；旧版 `lib/store.js` 的书按红线不合并、不迁移。
+
+**本轮修复**
+
+- **默认首页 404**：`server.js` 原先把 `/` 直接吐 `workbench/index.html` 内容，相对路径被解析成 `/src/...` 而全部 404（页面只剩「正在启动应用…」）。改为 `302 → /workbench/`，由目录 URL 承载相对路径。
+- **DSH 插件 Host 半边 failed**：`cordis.patch.yml` 的 `projectRoot` 仍指向旧目录 `Desktop/rlbuild`（无 `workbench/`，核心已迁走），报「找不到统一核心能力清单」。改为本仓库绝对路径即可；改完用 `plugin_manager` 对 `include:review-analysis` 关→开一次热重载，不必重启整个应用。
+
+**验收**：真浏览器（Chromium 1440×900）走查 8 页（启动台/书架/书详情/题目/练习/今日到期/设置深色/关于），控制台 **0 错误**；DSH 真实窗口截图见 `PROCESS/workbench-verify/run-20261114-1130/`；`npm test` 23/24 套件，唯一失败 `core-practice` 的 28 条断言全过、是进程退出时 Node/libuv 在 Windows 上的崩溃（`async.c:76`，与本轮改动无关，单跑复现同款环境问题）。
+
 ## v1.5.1 — 2026-11-11（已发布，安全补丁）
 
 安全补丁：默认窗口 `core.html` 的 API 密钥不再驻留 `localStorage`。

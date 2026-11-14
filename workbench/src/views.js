@@ -7,6 +7,7 @@ import { get, set, setViewData, toast, setTheme, setDensity } from './state.js';
 import host from './host.js';
 import { go } from './router.js';
 import { el, h, clear, card, kv, badge, empty, loading, errorBox, btn, field, input } from './ui.js';
+import { mountBookspace } from './bookspace.js';
 
 function $view(id) { return (get().views && get().views[id]) || {}; }
 
@@ -108,127 +109,50 @@ function viewLibrary(root, view) {
 
   const books = (d.data && d.data.data && d.data.data.books) || (d.data && d.data.books) || [];
   if (!books.length) {
-    return root.appendChild(empty('统一核心书库还是空的',
-      '点「新建书」，或在 DSH / 桌面端统一核心 / Skills 里建的书会自动出现在这里'));
+    const box = el('div', { class: 'library-empty' }, [
+      el('div', { class: 'bs-cta-art', text: '▤' }),
+      el('h3', { text: '书架是空的' }),
+      el('p', { text: '建一本书、把资料拖进去，模型会把整本书读一遍，生成思维导图、提纲和题型分类。' }),
+      el('div', { class: 'bs-cta-acts' }, [
+        btn('＋ 新建第一本书', () => go('create'), 'primary'),
+        btn('看示例书怎么用', () => go('about'), 'ghost'),
+      ]),
+    ]);
+    return root.appendChild(box);
   }
   root.appendChild(el('div', { class: 'book-grid' }, books.map(b =>
     el('div', { class: 'book-card', onclick: () => go('book', { id: b.id }) }, [
       el('div', { class: 'book-cover' }, [el('span', { text: String(b.title || '未命名').slice(0, 1) })]),
       el('div', { class: 'book-info' }, [
         el('div', { class: 'book-title', text: b.title || b.id }),
-        el('div', { class: 'book-id', text: b.id }),
+        el('div', { class: 'book-meta' }, [
+          badge(b.analyzed ? '已分析' : '未分析', b.analyzed ? 'accent' : 'plain'),
+          el('span', { class: 'sub', text: (b.fileCount == null ? 0 : b.fileCount) + ' 份资料' }),
+        ]),
       ]),
       el('div', { class: 'book-actions' }, [
-        btn('详情', () => go('book', { id: b.id }), 'ghost sm'),
-        btn('练习', () => go('quiz', { id: b.id }), 'ghost sm'),
+        btn('打开', () => go('book', { id: b.id }), 'primary sm'),
       ]),
     ]))));
-}
-
-/* ---------------- 思维导图（复用共用布局模块，不复制算法） ---------------- */
-// 与 core.html / 静态站读同一份 renderer/js/mindmap-layout.js：
-// 布局是纯函数，屏幕坐标与导出坐标必须同源，所以这里绝不另写一套排版。
-let layoutPromise = null;
-function loadLayout() {
-  if (window.MindmapLayout) return Promise.resolve(window.MindmapLayout);
-  if (layoutPromise) return layoutPromise;
-  layoutPromise = new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-    s.src = '../js/mindmap-layout.js';
-    s.onload = () => (window.MindmapLayout ? resolve(window.MindmapLayout) : reject(new Error('模块未挂载')));
-    s.onerror = () => reject(new Error('布局模块加载失败'));
-    document.head.appendChild(s);
-  });
-  return layoutPromise;
-}
-function themeColors() {
-  const cs = getComputedStyle(document.body);
-  const v = (k, d) => (cs.getPropertyValue(k) || '').trim() || d;
-  return {
-    background: 'transparent',
-    nodeFill: v('--surface', '#ffffff'),
-    textColor: v('--ink', '#1f2733'),
-    metaColor: v('--muted', '#6b7688'),
-    rootTextColor: '#ffffff',
-  };
-}
-function mountMindmap(holder, tree) {
-  const state = { mode: 'right' };
-  const bar = el('div', { class: 'mm-bar' });
-  const canvas = el('div', { class: 'mm-canvas' });
-  holder.appendChild(bar); holder.appendChild(canvas);
-  const paint = (ML) => {
-    try {
-      const layout = ML.layoutTree(tree, state.mode);
-      canvas.innerHTML = ML.toSvg(layout, themeColors());
-      const svg = canvas.querySelector('svg');
-      if (svg) { svg.removeAttribute('width'); svg.removeAttribute('height'); }
-    } catch (e) {
-      canvas.innerHTML = '';
-      canvas.appendChild(el('p', { class: 'sub', text: '导图渲染失败：' + String(e.message || e) }));
-    }
-  };
-  [['右向', 'right'], ['双侧', 'both'], ['组织', 'org']].forEach(([label, mode], i) => {
-    const b = btn(label, () => {
-      state.mode = mode;
-      Array.from(bar.children).forEach((x) => x.classList.remove('on'));
-      b.classList.add('on');
-      loadLayout().then(paint).catch(() => {});
-    }, 'ghost sm' + (i === 0 ? ' on' : ''));
-    bar.appendChild(b);
-  });
-  canvas.appendChild(loading('渲染导图…'));
-  loadLayout().then(paint).catch((e) => {
-    canvas.innerHTML = '';
-    // 宿主没托管共用模块时的诚实降级：画大纲，而不是假装导图
-    const walk = (n, depth) => {
-      const li = el('div', { class: 'mm-outline-row', style: { paddingLeft: (depth * 16) + 'px' } }, [
-        el('span', { class: 'dot', style: { background: n.color || 'var(--brand)' } }),
-        el('span', { text: (n.title || '未命名') + (n.desc ? ' · ' + n.desc : '') }),
-      ]);
-      const kids = (n.children || []).map((c) => walk(c, depth + 1));
-      return el('div', {}, [li].concat(kids));
-    };
-    canvas.appendChild(el('p', { class: 'sub', text: '导图模块不可用（' + String(e.message || e) + '），已降级为大纲：' }));
-    if (tree) canvas.appendChild(walk(tree, 0));
-  });
 }
 
 function viewBook(root, view, params) {
   const id = params.id || $view('book').bookId || get().lastBookId || '';
   if (id) rememberBook(id);
-  const d = $view('book');
-  root.appendChild(el('div', { class: 'view-head' }, [
-    el('div', {}, [el('h2', { text: '书详情' }), el('p', { class: 'sub', text: id ? '书 id：' + id : '未选择书' })]),
-    btn('← 返回书架', () => go('library'), 'ghost'),
-  ]));
-  if (!id) return root.appendChild(empty('先选一本书', '从书架点「详情」进来'));
-  if (d.loading) return root.appendChild(loading('读取分析结果…'));
-  if (d.error) return root.appendChild(errorBox(d.error, () => call('get', { bookId: id }, 'book')));
-  const a = d.data && d.data.data;
-  if (!a) return root.appendChild(empty('尚未分析', '这本书还没有分析结果，请在统一核心里做整体分析'));
-  root.appendChild(el('div', { class: 'grid' }, [
-    card('概览', kv([
-      ['章', a.stats && a.stats.chapters], ['知识点', a.stats && a.stats.points],
-      ['题型', a.stats && a.stats.questionTypes], ['题目数', a.stats && a.stats.questionCount],
-      ['模型', a.model || '—'],
-    ])),
-    card('摘要', [el('p', { class: 'para', text: a.summary || '（无摘要）' })]),
-  ]));
-  root.appendChild(el('div', { class: 'section-title', text: '思维导图（真分析结果 · 与 core.html 同一套布局算法）' }));
-  const mm = el('div', { class: 'mm-wrap' });
-  root.appendChild(mm);
-  if (a.tree) mountMindmap(mm, a.tree);
-  else root.appendChild(empty('没有导图数据', '这份分析结果里没有 tree'));
-
-  root.appendChild(el('div', { class: 'section-title', text: '题型索引' }));
-  root.appendChild(el('div', { class: 'chip-row' }, (a.questionIndex || []).map(g =>
-    badge(g.type + ' · ' + ((g.items || []).length) + ' 项', 'accent'))));
-  const det = el('details', { class: 'raw-box' }, [
-    el('summary', { text: '原始分析结果（JSON，排查用）' }),
-    dataBlock(a),
-  ]);
-  root.appendChild(det);
+  if (!id) {
+    root.appendChild(empty('先选一本书', '从书架点一本书进来'));
+    root.appendChild(el('div', { class: 'center' }, [btn('去书架', () => go('library'), 'primary')]));
+    return;
+  }
+  // 书内工作区：左栏资料/题型、中间导图|提纲|题型、右侧逐步讲解。
+  // 挂载是异步的（要拉 get/quiz/practice），这里不 await，避免阻塞路由渲染。
+  mountBookspace(root, id, params).catch((e) => {
+    root.appendChild(el('div', { class: 'bs-cta' }, [
+      el('h3', { text: '打开这本书失败' }),
+      el('p', { text: String((e && e.message) || e) }),
+        el('div', { class: 'bs-cta-acts' }, [btn('重试', () => location.reload(), 'primary')]),
+    ]));
+  });
 }
 
 /* ---------------- 学习闭环 ---------------- */
@@ -584,7 +508,9 @@ const RENDERERS = {
 // 且「已有 data 就不拉」会让切回视图时永远显示旧数据（实测真 bug）。
 const AUTO_LOAD = {
   library: { action: 'list', payload: () => ({}) },
-  book: { action: 'get', payload: p => ({ bookId: p.id }), needsId: true },
+  // book 自己负责取数（书内工作区要 get + quiz + practice + list 四路并发）：
+  // 这里再挂一个 get 会多打一次请求，失败时还会弹「该书尚无分析结果」的红条（实测）。
+
   quiz: { action: 'quiz', payload: p => ({ bookId: p.id }), needsId: true },
   due: { action: 'due', payload: p => ({ bookId: p.id }), needsId: true },
   practice: { action: 'practice', payload: p => ({ bookId: p.id }), needsId: true },

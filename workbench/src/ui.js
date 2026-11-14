@@ -14,10 +14,14 @@ export function el(tag, attrs, children) {
     else if (k === 'dataset') Object.assign(n.dataset, v);
     else n.setAttribute(k, v === true ? '' : String(v));
   });
-  (Array.isArray(children) ? children : children != null ? [children] : []).forEach(c => {
+  // 子节点支持嵌套数组（视图里常用 map 生成后再拼条件节点），逐层摊平；
+  // 不摊平会直接抛 "appendChild: parameter 1 is not of type 'Node'"（实测踩过）。
+  const put = (c) => {
     if (c == null || c === false) return;
+    if (Array.isArray(c)) { c.forEach(put); return; }
     n.appendChild(typeof c === 'string' || typeof c === 'number' ? document.createTextNode(String(c)) : c);
-  });
+  };
+  (Array.isArray(children) ? children : children != null ? [children] : []).forEach(put);
   return n;
 }
 

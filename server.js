@@ -309,8 +309,13 @@ function serveStatic(req, res, u) {
   try { p = decodeURIComponent(u.pathname); }
   catch (e) { res.writeHead(400); return res.end('bad request'); }
   // 默认首页 = 统一应用（workbench）。portal.html 保留为兼容入口。
-  // 现有 e2e / 判别测试均显式 goto /index.html、/core.html，不受默认首页改动影响。
-  if (p === '/' || p === '') p = '/workbench/index.html';
+  // 注意：必须重定向到目录形态 `/workbench/` 而不是直接把 index.html 内容吐在 `/`，
+  // 否则 index.html 里的相对路径（./src/main.js、./manifest.webmanifest、./icons/icon.svg）
+  // 会按根路径解析成 /src/...，全部 404 —— 页面只剩「正在启动应用…」的空壳（2026-11-14 实测）。
+  if (p === '/' || p === '') {
+    res.writeHead(302, { Location: '/workbench/' });
+    return res.end();
+  }
   if (p === '/favicon.ico') {
     return fs.readFile(path.join(__dirname, 'renderer', 'favicon.svg'), (err, data) => {
       if (err) { res.writeHead(404); return res.end('not found'); }

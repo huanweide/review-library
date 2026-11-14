@@ -110,9 +110,18 @@ async function invoke(core, action, payload, ctx) {
   try {
     let data;
     switch (a) {
-      case 'list':
-        data = { books: core.listBooks() || [] };
+      case 'list': {
+        // 每本附带资料清单（文件名/大小）：书内左栏要画「存放结构」，
+        // 未分析的书没有 get 结果可用，只能从这里拿。只加字段，不改 list 的既有语义。
+        const books = core.listBooks() || [];
+        data = { books: books.map((b) => {
+          try {
+            const full = core.getBook(b.id);
+            return full ? Object.assign({}, b, { files: full.files || [] }) : b;
+          } catch (e) { return b; }
+        }) };
         break;
+      }
       case 'create':
         data = core.createBook(String(p.title || '未命名书'), { description: String(p.description || '') });
         break;
@@ -148,7 +157,12 @@ async function invoke(core, action, payload, ctx) {
         if (!id) throw new Error('get 需要 bookId');
         const a2 = core.getAnalysis(id);
         if (!a2 || !a2.tree) return { ok: false, action: a, bookId: id, error: '该书尚无分析结果，请先整体分析' };
-        data = a2;
+        // 附带书元数据（标题/资料清单）：书内工作区要画「存放结构」与资料树，
+        // 又不能为此新增一个 action（能力清单必须与 DSH/CLI 保持一致）。
+        // 只加字段、不改判据，旧调用方读 a.tree / a.questionIndex 不受影响。
+        let book = null;
+        try { book = core.getBook(id); } catch (e) { book = null; }
+        data = book ? Object.assign({}, a2, { book }) : a2;
         break;
       }
       case 'practice':
