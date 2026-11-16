@@ -1,0 +1,49 @@
+{
+  "_说明": "文件清单来自书馆真实 book.json；focus/note 为演示标注（真实示例书未标重点），仅用于展示语义重点能力，不冒充用户标注。重跑 build_book.js 可复现。",
+  "files": [
+    {
+      "id": "c257fccde91c9ec5",
+      "name": "示例讲义.txt",
+      "file": "refs/示例讲义.txt",
+      "ext": ".txt",
+      "type": "txt",
+      "size": 502,
+      "isImage": false,
+      "focus": true,
+      "note": "核心讲义：线性表的两种存储结构与代价对比，重点掌握"
+    },
+    {
+      "id": "df61de399061521b",
+      "name": "剧情推进Agent-续写要求与字段说明.md",
+      "file": "refs/剧情推进Agent-续写要求与字段说明.md",
+      "ext": ".md",
+      "type": "md",
+      "size": 3490,
+      "isImage": false,
+      "focus": false,
+      "note": ""
+    },
+    {
+      "id": "1b12ad7e4562dfdf",
+      "name": "情感精准提示词.md",
+      "file": "refs/情感精准提示词.md",
+      "ext": ".md",
+      "type": "md",
+      "size": 9431,
+      "isImage": false,
+      "focus": false,
+      "note": ""
+    },
+    {
+      "id": "10c6b8983656bd74",
+      "name": "提示词研究-总目录.md",
+      "file": "refs/提示词研究-总目录.md",
+      "ext": ".md",
+      "type": "md",
+      "size": 54975,
+      "isImage": false,
+      "focus": false,
+      "note": ""
+    }
+  ]
+}

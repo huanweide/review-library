@@ -1,0 +1,14 @@
+# 浏览器驱动临时产物（会话快照、控制台日志、下载缓存）
+.playwright-cli/
+
+# 本机环境临时备份
+hosts.bak-*.txt
+
+# 系统/编辑器
+.DS_Store
+Thumbs.db
+*.log
+node_modules/
+
+# 运行期可能产生的临时文件
+*.tmp

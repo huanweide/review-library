@@ -1,0 +1,1015 @@
+/* 由服务端数据层自动生成，勿手改；真源为 books/ds-demo/data.json。 */
+window.BOOKS = window.BOOKS || {};
+window.BOOKS["ds-demo"] = {
+  "meta": {
+    "id": "ds-demo",
+    "title": "数据结构 · 示例全书",
+    "subject": "期末考试",
+    "coverColor": "#2f6f4f",
+    "accent": "#e8b04b",
+    "syllabus": "示例书：线性表的两种存储结构，以及它们在查找、插入、删除上的代价差异。",
+    "createdAt": "2026-11-16",
+    "source": "天道书阁 · 增量分析",
+    "model": "",
+    "summary": "新增树与二叉树的遍历知识",
+    "focusNotes": [
+      {
+        "name": "示例讲义.txt",
+        "note": "核心讲义：线性表的两种存储结构与代价对比，重点掌握"
+      }
+    ]
+  },
+  "kaogang": [
+    {
+      "id": "1.1.1",
+      "text": "随机访问 — 下标直接定位，O(1)",
+      "title": "随机访问",
+      "desc": "下标直接定位，O(1)",
+      "questionTypes": [
+        "选择题"
+      ],
+      "subs": [],
+      "type": "选择题",
+      "sec": "1.1 顺序存储",
+      "chKey": "1",
+      "chLabel": "第一章 线性表",
+      "hot": true,
+      "hasQuiz": true,
+      "qIds": [
+        "Q-1",
+        "Q-2"
+      ]
+    },
+    {
+      "id": "1.1.2",
+      "text": "插入删除 — 需搬移元素，O(n)",
+      "title": "插入删除",
+      "desc": "需搬移元素，O(n)",
+      "questionTypes": [
+        "选择题",
+        "简答题"
+      ],
+      "subs": [],
+      "type": "选择题 / 简答题",
+      "sec": "1.1 顺序存储",
+      "chKey": "1",
+      "chLabel": "第一章 线性表",
+      "hot": true,
+      "hasQuiz": true,
+      "qIds": [
+        "Q-1",
+        "Q-2"
+      ]
+    },
+    {
+      "id": "1.2.1",
+      "text": "指针串联 — 插入删除 O(1)，查找 O(n)",
+      "title": "指针串联",
+      "desc": "插入删除 O(1)，查找 O(n)",
+      "questionTypes": [
+        "简答题"
+      ],
+      "subs": [],
+      "type": "简答题",
+      "sec": "1.2 链式存储",
+      "chKey": "1",
+      "chLabel": "第一章 线性表",
+      "hot": true,
+      "hasQuiz": true,
+      "qIds": [
+        "Q-3"
+      ]
+    },
+    {
+      "id": "3.1.1",
+      "text": "中序遍历 — 左根右顺序访问结点",
+      "title": "中序遍历",
+      "desc": "左根右顺序访问结点",
+      "questionTypes": [
+        "简答题"
+      ],
+      "subs": [],
+      "type": "简答题",
+      "sec": "3.1 二叉树遍历",
+      "chKey": "3",
+      "chLabel": "第三章 树与二叉树",
+      "hot": false,
+      "hasQuiz": true,
+      "qIds": [
+        "Q-4"
+      ]
+    },
+    {
+      "id": "3.1.2",
+      "text": "先序遍历 — 根左右顺序访问结点",
+      "title": "先序遍历",
+      "desc": "根左右顺序访问结点",
+      "questionTypes": [
+        "简答题"
+      ],
+      "subs": [],
+      "type": "简答题",
+      "sec": "3.1 二叉树遍历",
+      "chKey": "3",
+      "chLabel": "第三章 树与二叉树",
+      "hot": false,
+      "hasQuiz": false,
+      "qIds": []
+    }
+  ],
+  "tiku": [
+    {
+      "id": "Q-1",
+      "ch": "1",
+      "chKey": "1",
+      "chLabel": "第一章 线性表",
+      "sec": "1.1 顺序存储",
+      "kp": "1.1",
+      "type": "选择题",
+      "stem": "长为 10 的顺序表，在第 3 个位置插入一个元素，需要移动多少个元素？",
+      "options": [
+        "A. 7 个",
+        "B. 8 个",
+        "C. 9 个",
+        "D. 10 个"
+      ]
+    },
+    {
+      "id": "Q-2",
+      "ch": "1",
+      "chKey": "1",
+      "chLabel": "第一章 线性表",
+      "sec": "1.1 顺序存储",
+      "kp": "1.1",
+      "type": "选择题",
+      "stem": "顺序表按下标访问第 i 个元素的时间复杂度是？",
+      "options": [
+        "A. O(1)",
+        "B. O(n)",
+        "C. O(log n)"
+      ]
+    },
+    {
+      "id": "Q-3",
+      "ch": "1",
+      "chKey": "1",
+      "chLabel": "第一章 线性表",
+      "sec": "1.2 链式存储",
+      "kp": "1.2",
+      "type": "简答题",
+      "stem": "简述单链表在已知结点 p 之后插入新结点为何是 O(1)，而删除 p 本身是 O(n)。"
+    },
+    {
+      "id": "Q-4",
+      "ch": "3",
+      "chKey": "3",
+      "chLabel": "第三章 树与二叉树",
+      "sec": "3.1 二叉树遍历",
+      "kp": "3.1.1",
+      "type": "简答题",
+      "stem": "简述二叉树中序遍历的访问顺序。"
+    }
+  ],
+  "tikuAns": {
+    "Q-1": {
+      "ans": "B. 8 个 —— 移动次数 n-i+1 = 10-3+1 = 8。",
+      "why": "问的是固定位置的精确次数，不是等概率平均，所以用 n-i+1 而非 n/2；先辨认「精确值 vs 期望值」再选公式。",
+      "src": "示例讲义.txt  p1 · 【块1】｜顺序表采用连续内存，支持下表直接定位",
+      "solution": [
+        "确定 n=10、i=3。",
+        "插入需把第 i 个及之后的元素整体后移。",
+        "移动次数 = n-i+1 = 8。"
+      ],
+      "rationale": "问的是固定位置的精确次数，不是等概率平均，所以用 n-i+1 而非 n/2；先辨认「精确值 vs 期望值」再选公式。",
+      "pitfalls": "把 n-i+1 与 n/2 混淆。",
+      "difficulty": "基础"
+    },
+    "Q-2": {
+      "ans": "A. O(1) —— 地址 = 首地址 + i × 元素大小。",
+      "why": "「按下标」对应随机访问能力，这是顺序存储区别于链式存储的根本特征。",
+      "src": "示例讲义.txt  p1 · 【块1】｜下标访问一次计算即可",
+      "solution": [
+        "顺序表内存连续。",
+        "地址可由首地址与下标直接算出。",
+        "一次计算，故 O(1)。"
+      ],
+      "rationale": "「按下标」对应随机访问能力，这是顺序存储区别于链式存储的根本特征。",
+      "pitfalls": "把顺序表 O(1) 访问与链表 O(n) 查找记反。",
+      "difficulty": "基础"
+    },
+    "Q-3": {
+      "ans": "插入只改指针；删除需先找到前驱，故 O(n)。",
+      "why": "切入点是「单链表只有后继指针」这一结构约束：先看操作需要哪些指针，再看能否直接获得。",
+      "src": "示例讲义.txt  p2 · 【块2】｜单链表插入 O(1)，删除需找前驱",
+      "solution": [
+        "p 后插入：新结点 next 指向 p.next，再改 p.next，常数步。",
+        "删除 p 要改前驱的 next。",
+        "单链表无前驱指针，必须从头遍历，故 O(n)。"
+      ],
+      "rationale": "切入点是「单链表只有后继指针」这一结构约束：先看操作需要哪些指针，再看能否直接获得。",
+      "pitfalls": "误以为删除 p 也 O(1)，忽略前驱不可达。",
+      "difficulty": "进阶"
+    },
+    "Q-4": {
+      "ans": "先左子树，再根结点，最后右子树，即左根右。",
+      "why": "中序遍历按左根右递归访问。先序是根左右，后序是左右根，三者区别在根的位置。",
+      "src": "新增-树与二叉树.txt  p1 · 【块1】｜中序遍历按照左子树、根结点、右子树的顺序访问",
+      "solution": [
+        "第1步：中序的\"中\"指根在中间访问",
+        "第2步：故顺序为左子树→根→右子树。"
+      ],
+      "rationale": "中序遍历按左根右递归访问。先序是根左右，后序是左右根，三者区别在根的位置。",
+      "pitfalls": "把中序与先序的根左右记混。",
+      "difficulty": "基础"
+    }
+  },
+  "refs": [
+    {
+      "name": "示例讲义.txt",
+      "type": "txt",
+      "file": "refs/示例讲义.txt",
+      "focus": true,
+      "note": "核心讲义：线性表的两种存储结构与代价对比，重点掌握",
+      "isImage": false
+    },
+    {
+      "name": "剧情推进Agent-续写要求与字段说明.md",
+      "type": "md",
+      "file": "refs/剧情推进Agent-续写要求与字段说明.md",
+      "focus": false,
+      "note": "",
+      "isImage": false
+    },
+    {
+      "name": "情感精准提示词.md",
+      "type": "md",
+      "file": "refs/情感精准提示词.md",
+      "focus": false,
+      "note": "",
+      "isImage": false
+    },
+    {
+      "name": "提示词研究-总目录.md",
+      "type": "md",
+      "file": "refs/提示词研究-总目录.md",
+      "focus": false,
+      "note": "",
+      "isImage": false
+    },
+    {
+      "name": "新增-图结构.txt",
+      "type": "txt",
+      "file": "refs/新增-图结构.txt",
+      "focus": false,
+      "note": "",
+      "isImage": false
+    },
+    {
+      "name": "新增-树与二叉树.txt",
+      "type": "txt",
+      "file": "refs/新增-树与二叉树.txt",
+      "focus": false,
+      "note": "",
+      "isImage": false
+    }
+  ],
+  "digest": {
+    "sections": [
+      {
+        "chapter": "第一章 线性表",
+        "points": [
+          {
+            "title": "随机访问",
+            "detail": "下标直接定位，O(1)",
+            "quote": "顺序表采用连续内存，支持下表直接定位 ／ 下标访问一次计算即可",
+            "source": "示例讲义.txt p1 ／ 示例讲义.txt p1",
+            "quoteVerified": true
+          },
+          {
+            "title": "插入删除",
+            "detail": "需搬移元素，O(n)",
+            "quote": "顺序表采用连续内存，支持下表直接定位 ／ 下标访问一次计算即可",
+            "source": "示例讲义.txt p1 ／ 示例讲义.txt p1",
+            "quoteVerified": true
+          },
+          {
+            "title": "指针串联",
+            "detail": "插入删除 O(1)，查找 O(n)",
+            "quote": "单链表插入 O(1)，删除需找前驱",
+            "source": "示例讲义.txt p2",
+            "quoteVerified": false
+          }
+        ]
+      },
+      {
+        "chapter": "第二章 复杂度分析",
+        "points": []
+      },
+      {
+        "chapter": "第三章 树与二叉树",
+        "points": [
+          {
+            "title": "中序遍历",
+            "detail": "左根右顺序访问结点",
+            "quote": "",
+            "source": "",
+            "quoteVerified": false
+          },
+          {
+            "title": "先序遍历",
+            "detail": "根左右顺序访问结点",
+            "quote": "",
+            "source": "",
+            "quoteVerified": false
+          }
+        ]
+      }
+    ],
+    "stats": {}
+  },
+  "syllabus": {
+    "sections": [
+      {
+        "rank": 1,
+        "chapter": "第一章 线性表",
+        "why": "含 3 道题覆盖，优先复习",
+        "points": [
+          {
+            "title": "随机访问",
+            "must": "下标直接定位，O(1)",
+            "formulas": [],
+            "importance": "",
+            "question": "",
+            "quote": "顺序表采用连续内存，支持下表直接定位 ／ 下标访问一次计算即可",
+            "source": "示例讲义.txt p1 ／ 示例讲义.txt p1",
+            "quoteVerified": true
+          },
+          {
+            "title": "插入删除",
+            "must": "需搬移元素，O(n)",
+            "formulas": [],
+            "importance": "",
+            "question": "",
+            "quote": "顺序表采用连续内存，支持下表直接定位 ／ 下标访问一次计算即可",
+            "source": "示例讲义.txt p1 ／ 示例讲义.txt p1",
+            "quoteVerified": true
+          },
+          {
+            "title": "指针串联",
+            "must": "插入删除 O(1)，查找 O(n)",
+            "formulas": [],
+            "importance": "",
+            "question": "",
+            "quote": "单链表插入 O(1)，删除需找前驱",
+            "source": "示例讲义.txt p2",
+            "quoteVerified": false
+          }
+        ]
+      },
+      {
+        "rank": 2,
+        "chapter": "第三章 树与二叉树",
+        "why": "含 1 道题覆盖，优先复习",
+        "points": [
+          {
+            "title": "中序遍历",
+            "must": "左根右顺序访问结点",
+            "formulas": [],
+            "importance": "",
+            "question": "",
+            "quote": "",
+            "source": "",
+            "quoteVerified": false
+          },
+          {
+            "title": "先序遍历",
+            "must": "根左右顺序访问结点",
+            "formulas": [],
+            "importance": "",
+            "question": "",
+            "quote": "",
+            "source": "",
+            "quoteVerified": false
+          }
+        ]
+      },
+      {
+        "rank": 3,
+        "chapter": "第二章 复杂度分析",
+        "why": "",
+        "points": []
+      }
+    ],
+    "stats": {}
+  },
+  "mindmap": {
+    "tree": {
+      "id": "n0_0",
+      "type": "root",
+      "title": "数据结构示例全书",
+      "children": [
+        {
+          "id": "n1_1",
+          "type": "chapter",
+          "title": "第一章 线性表",
+          "children": [
+            {
+              "id": "n2_2",
+              "type": "section",
+              "title": "1.1 顺序存储",
+              "children": [
+                {
+                  "id": "n3_3",
+                  "type": "point",
+                  "title": "随机访问",
+                  "children": [],
+                  "desc": "下标直接定位，O(1)",
+                  "questionTypes": [
+                    "选择题"
+                  ]
+                },
+                {
+                  "id": "n3_4",
+                  "type": "point",
+                  "title": "插入删除",
+                  "children": [],
+                  "desc": "需搬移元素，O(n)",
+                  "questionTypes": [
+                    "选择题",
+                    "简答题"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "n2_5",
+              "type": "section",
+              "title": "1.2 链式存储",
+              "children": [
+                {
+                  "id": "n3_6",
+                  "type": "point",
+                  "title": "指针串联",
+                  "children": [],
+                  "desc": "插入删除 O(1)，查找 O(n)",
+                  "questionTypes": [
+                    "简答题"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "n1_7",
+          "type": "chapter",
+          "title": "第二章 复杂度分析",
+          "children": [
+            {
+              "id": "n2_8",
+              "type": "section",
+              "title": "时间代价对比",
+              "children": []
+            }
+          ]
+        },
+        {
+          "id": "ch2_apla80",
+          "type": "chapter",
+          "title": "第三章 树与二叉树",
+          "children": [
+            {
+              "id": "ch2_0_6i9008",
+              "type": "section",
+              "title": "3.1 二叉树遍历",
+              "children": [
+                {
+                  "id": "ch2_0_0_cw51ow",
+                  "type": "point",
+                  "title": "中序遍历",
+                  "children": [],
+                  "desc": "左根右顺序访问结点",
+                  "questionTypes": [
+                    "简答题"
+                  ]
+                },
+                {
+                  "id": "ch2_0_1_wbbd5w",
+                  "type": "point",
+                  "title": "先序遍历",
+                  "children": [],
+                  "desc": "根左右顺序访问结点",
+                  "questionTypes": [
+                    "简答题"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "_trace": {
+    "version": 1,
+    "quoteAudit": {
+      "checked": 1,
+      "hit": 1,
+      "fullHit": 1,
+      "missed": 0,
+      "rate": 1,
+      "details": [
+        {
+          "i": 0,
+          "id": "q0",
+          "anchor": "【块1】",
+          "quote": "中序遍历按照左子树、根结点、右子树的顺序访问",
+          "found": true,
+          "fullHit": true,
+          "reason": "exact-span"
+        }
+      ]
+    },
+    "byQuestion": {
+      "Q-1": {
+        "file": "示例讲义.txt",
+        "page": 1,
+        "anchor": "【块1】",
+        "quote": "顺序表采用连续内存，支持下表直接定位",
+        "quoteVerified": true
+      },
+      "Q-2": {
+        "file": "示例讲义.txt",
+        "page": 1,
+        "anchor": "【块1】",
+        "quote": "下标访问一次计算即可",
+        "quoteVerified": true
+      },
+      "Q-3": {
+        "file": "示例讲义.txt",
+        "page": 2,
+        "anchor": "【块2】",
+        "quote": "单链表插入 O(1)，删除需找前驱",
+        "quoteVerified": false
+      },
+      "Q-4": {
+        "file": "新增-树与二叉树.txt",
+        "page": 1,
+        "anchor": "【块1】",
+        "quote": "中序遍历按照左子树、根结点、右子树的顺序访问",
+        "quoteVerified": true
+      }
+    },
+    "stats": {
+      "chapters": 1,
+      "sections": 1,
+      "points": 2,
+      "subtypes": 0,
+      "questionTypes": 1,
+      "questionTypeCounts": {
+        "简答题": 1
+      },
+      "questionCount": 1,
+      "analyzedAt": "2026-11-16T11:35:09.462Z"
+    },
+    "questionIndex": [
+      {
+        "type": "选择题",
+        "items": [
+          {
+            "title": "顺序存储",
+            "path": [
+              "第一章 线性表",
+              "1.1 顺序存储"
+            ],
+            "pointId": "n2_2",
+            "questions": [
+              {
+                "id": "q0",
+                "stem": "长为 10 的顺序表，在第 3 个位置插入一个元素，需要移动多少个元素？",
+                "options": [
+                  "A. 7 个",
+                  "B. 8 个",
+                  "C. 9 个",
+                  "D. 10 个"
+                ],
+                "answer": "B. 8 个 —— 移动次数 n-i+1 = 10-3+1 = 8。",
+                "solution": [
+                  "确定 n=10、i=3。",
+                  "插入需把第 i 个及之后的元素整体后移。",
+                  "移动次数 = n-i+1 = 8。"
+                ],
+                "rationale": "问的是固定位置的精确次数，不是等概率平均，所以用 n-i+1 而非 n/2；先辨认「精确值 vs 期望值」再选公式。",
+                "pitfalls": "把 n-i+1 与 n/2 混淆。",
+                "difficulty": "基础",
+                "pointPath": [
+                  "第一章 线性表",
+                  "1.1 顺序存储"
+                ],
+                "pointId": "n2_2",
+                "source": {
+                  "file": "示例讲义.txt",
+                  "page": 1,
+                  "anchor": "【块1】",
+                  "quote": "顺序表采用连续内存，支持下表直接定位"
+                },
+                "quoteVerified": true
+              },
+              {
+                "id": "q1",
+                "stem": "顺序表按下标访问第 i 个元素的时间复杂度是？",
+                "options": [
+                  "A. O(1)",
+                  "B. O(n)",
+                  "C. O(log n)"
+                ],
+                "answer": "A. O(1) —— 地址 = 首地址 + i × 元素大小。",
+                "solution": [
+                  "顺序表内存连续。",
+                  "地址可由首地址与下标直接算出。",
+                  "一次计算，故 O(1)。"
+                ],
+                "rationale": "「按下标」对应随机访问能力，这是顺序存储区别于链式存储的根本特征。",
+                "pitfalls": "把顺序表 O(1) 访问与链表 O(n) 查找记反。",
+                "difficulty": "基础",
+                "pointPath": [
+                  "第一章 线性表",
+                  "1.1 顺序存储"
+                ],
+                "pointId": "n2_2",
+                "source": {
+                  "file": "示例讲义.txt",
+                  "page": 1,
+                  "anchor": "【块1】",
+                  "quote": "下标访问一次计算即可"
+                },
+                "quoteVerified": true
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "简答题",
+        "items": [
+          {
+            "title": "链式存储",
+            "path": [
+              "第一章 线性表",
+              "1.2 链式存储"
+            ],
+            "pointId": "n2_5",
+            "questions": [
+              {
+                "id": "q2",
+                "stem": "简述单链表在已知结点 p 之后插入新结点为何是 O(1)，而删除 p 本身是 O(n)。",
+                "options": [],
+                "answer": "插入只改指针；删除需先找到前驱，故 O(n)。",
+                "solution": [
+                  "p 后插入：新结点 next 指向 p.next，再改 p.next，常数步。",
+                  "删除 p 要改前驱的 next。",
+                  "单链表无前驱指针，必须从头遍历，故 O(n)。"
+                ],
+                "rationale": "切入点是「单链表只有后继指针」这一结构约束：先看操作需要哪些指针，再看能否直接获得。",
+                "pitfalls": "误以为删除 p 也 O(1)，忽略前驱不可达。",
+                "difficulty": "进阶",
+                "pointPath": [
+                  "第一章 线性表",
+                  "1.2 链式存储"
+                ],
+                "pointId": "n2_5",
+                "source": {
+                  "file": "示例讲义.txt",
+                  "page": 2,
+                  "anchor": "【块2】",
+                  "quote": "单链表插入 O(1)，删除需找前驱"
+                },
+                "quoteVerified": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "简答题",
+        "items": [
+          {
+            "title": "概念辨析",
+            "path": [
+              "第三章 树与二叉树",
+              "3.1 二叉树遍历",
+              "中序遍历"
+            ],
+            "questions": [
+              {
+                "id": "q0",
+                "stem": "简述二叉树中序遍历的访问顺序。",
+                "options": [],
+                "answer": "先左子树，再根结点，最后右子树，即左根右。",
+                "solution": [
+                  "第1步：中序的\"中\"指根在中间访问",
+                  "第2步：故顺序为左子树→根→右子树。"
+                ],
+                "rationale": "中序遍历按左根右递归访问。先序是根左右，后序是左右根，三者区别在根的位置。",
+                "pitfalls": "把中序与先序的根左右记混。",
+                "difficulty": "基础",
+                "pointPath": [
+                  "第三章 树与二叉树",
+                  "3.1 二叉树遍历",
+                  "中序遍历"
+                ],
+                "pointId": "ch2_0_0_cw51ow",
+                "source": {
+                  "file": "新增-树与二叉树.txt",
+                  "page": 1,
+                  "anchor": "【块1】",
+                  "quote": "中序遍历按照左子树、根结点、右子树的顺序访问"
+                },
+                "quoteVerified": true
+              }
+            ],
+            "pointId": "ch2_0_0_cw51ow"
+          }
+        ],
+        "_incremental": true
+      }
+    ],
+    "quoteGranularity": "section-derived",
+    "codes": {
+      "n1_1": {
+        "code": "1",
+        "type": "chapter",
+        "chKey": "1",
+        "chLabel": "第一章 线性表",
+        "sec": ""
+      },
+      "n2_2": {
+        "code": "1.1",
+        "type": "section",
+        "chKey": "1",
+        "chLabel": "第一章 线性表",
+        "sec": "1.1 顺序存储"
+      },
+      "n3_3": {
+        "code": "1.1.1",
+        "type": "point",
+        "chKey": "1",
+        "chLabel": "第一章 线性表",
+        "sec": "1.1 顺序存储"
+      },
+      "n3_4": {
+        "code": "1.1.2",
+        "type": "point",
+        "chKey": "1",
+        "chLabel": "第一章 线性表",
+        "sec": "1.1 顺序存储"
+      },
+      "n2_5": {
+        "code": "1.2",
+        "type": "section",
+        "chKey": "1",
+        "chLabel": "第一章 线性表",
+        "sec": "1.2 链式存储"
+      },
+      "n3_6": {
+        "code": "1.2.1",
+        "type": "point",
+        "chKey": "1",
+        "chLabel": "第一章 线性表",
+        "sec": "1.2 链式存储"
+      },
+      "n1_7": {
+        "code": "2",
+        "type": "chapter",
+        "chKey": "2",
+        "chLabel": "第二章 复杂度分析",
+        "sec": ""
+      },
+      "n2_8": {
+        "code": "2.1",
+        "type": "section",
+        "chKey": "2",
+        "chLabel": "第二章 复杂度分析",
+        "sec": "时间代价对比"
+      },
+      "ch2_apla80": {
+        "code": "3",
+        "type": "chapter",
+        "chKey": "3",
+        "chLabel": "第三章 树与二叉树",
+        "sec": ""
+      },
+      "ch2_0_6i9008": {
+        "code": "3.1",
+        "type": "section",
+        "chKey": "3",
+        "chLabel": "第三章 树与二叉树",
+        "sec": "3.1 二叉树遍历"
+      },
+      "ch2_0_0_cw51ow": {
+        "code": "3.1.1",
+        "type": "point",
+        "chKey": "3",
+        "chLabel": "第三章 树与二叉树",
+        "sec": "3.1 二叉树遍历"
+      },
+      "ch2_0_1_wbbd5w": {
+        "code": "3.1.2",
+        "type": "point",
+        "chKey": "3",
+        "chLabel": "第三章 树与二叉树",
+        "sec": "3.1 二叉树遍历"
+      }
+    },
+    "byCode": {
+      "1": {
+        "id": "n1_1",
+        "type": "chapter",
+        "chKey": "1",
+        "chLabel": "第一章 线性表",
+        "sec": ""
+      },
+      "2": {
+        "id": "n1_7",
+        "type": "chapter",
+        "chKey": "2",
+        "chLabel": "第二章 复杂度分析",
+        "sec": ""
+      },
+      "3": {
+        "id": "ch2_apla80",
+        "type": "chapter",
+        "chKey": "3",
+        "chLabel": "第三章 树与二叉树",
+        "sec": ""
+      },
+      "1.1": {
+        "id": "n2_2",
+        "type": "section",
+        "chKey": "1",
+        "chLabel": "第一章 线性表",
+        "sec": "1.1 顺序存储"
+      },
+      "1.1.1": {
+        "id": "n3_3",
+        "type": "point",
+        "chKey": "1",
+        "chLabel": "第一章 线性表",
+        "sec": "1.1 顺序存储"
+      },
+      "1.1.2": {
+        "id": "n3_4",
+        "type": "point",
+        "chKey": "1",
+        "chLabel": "第一章 线性表",
+        "sec": "1.1 顺序存储"
+      },
+      "1.2": {
+        "id": "n2_5",
+        "type": "section",
+        "chKey": "1",
+        "chLabel": "第一章 线性表",
+        "sec": "1.2 链式存储"
+      },
+      "1.2.1": {
+        "id": "n3_6",
+        "type": "point",
+        "chKey": "1",
+        "chLabel": "第一章 线性表",
+        "sec": "1.2 链式存储"
+      },
+      "2.1": {
+        "id": "n2_8",
+        "type": "section",
+        "chKey": "2",
+        "chLabel": "第二章 复杂度分析",
+        "sec": "时间代价对比"
+      },
+      "3.1": {
+        "id": "ch2_0_6i9008",
+        "type": "section",
+        "chKey": "3",
+        "chLabel": "第三章 树与二叉树",
+        "sec": "3.1 二叉树遍历"
+      },
+      "3.1.1": {
+        "id": "ch2_0_0_cw51ow",
+        "type": "point",
+        "chKey": "3",
+        "chLabel": "第三章 树与二叉树",
+        "sec": "3.1 二叉树遍历"
+      },
+      "3.1.2": {
+        "id": "ch2_0_1_wbbd5w",
+        "type": "point",
+        "chKey": "3",
+        "chLabel": "第三章 树与二叉树",
+        "sec": "3.1 二叉树遍历"
+      }
+    },
+    "analyzedFiles": [
+      "新增-图结构.txt",
+      "新增-树与二叉树.txt"
+    ],
+    "incremental": true,
+    "lastAnalysis": {
+      "at": "2026-11-16T11:35:09.464Z",
+      "newFiles": [
+        "新增-图结构.txt",
+        "新增-树与二叉树.txt"
+      ],
+      "truncated": false,
+      "coverage": {
+        "truncated": false,
+        "totalChars": 316,
+        "keptChars": 316,
+        "files": 2,
+        "coverage": [
+          {
+            "file": "新增-图结构.txt",
+            "blocks": 1,
+            "totalChars": 200,
+            "keptChars": 200,
+            "keptBlocks": 1
+          },
+          {
+            "file": "新增-树与二叉树.txt",
+            "blocks": 1,
+            "totalChars": 116,
+            "keptChars": 116,
+            "keptBlocks": 1
+          }
+        ]
+      }
+    },
+    "targets": [
+      "knowledge",
+      "syllabus"
+    ],
+    "engine": "书馆 core 端到端复用"
+  },
+  "examOutline": {
+    "kind": "syllabus",
+    "generatedAt": "2026-11-16T11:35:09.467Z",
+    "model": "mock-model",
+    "sections": [
+      {
+        "rank": 1,
+        "chapter": "第三章 树与二叉树",
+        "why": "遍历是树结构的核心考点，必考",
+        "points": [
+          {
+            "title": "中序遍历",
+            "must": "按左子树、根结点、右子树的顺序递归访问，即左根右",
+            "formulas": [],
+            "importance": "高",
+            "question": {
+              "stem": "写出中序遍历的访问顺序。",
+              "answer": "左根右",
+              "steps": [
+                "先递归左子树",
+                "再访问根结点",
+                "最后递归右子树"
+              ]
+            },
+            "quote": "中序遍历按左、根、右的顺序访问结点",
+            "source": "示例讲义.txt",
+            "quoteVerified": false
+          },
+          {
+            "title": "图的存储",
+            "must": "邻接矩阵 O(n²) 适合稠密图；邻接表 O(n+e) 适合稀疏图",
+            "formulas": [
+              "邻接矩阵 O(n²)",
+              "邻接表 O(n+e)"
+            ],
+            "importance": "高",
+            "question": {
+              "stem": "稀疏图该用哪种存储？",
+              "answer": "邻接表",
+              "steps": [
+                "比较空间复杂度",
+                "稀疏图边数少",
+                "邻接表更省"
+              ]
+            },
+            "quote": "邻接表用链表为每个顶点存储邻接点",
+            "source": "新增-图结构.txt",
+            "quoteVerified": true
+          }
+        ]
+      }
+    ],
+    "stats": {
+      "sections": 1,
+      "points": 2,
+      "quoteHit": 1,
+      "quoteChecked": 2
+    },
+    "corpusMeta": {
+      "truncated": false,
+      "keptChars": 316,
+      "totalChars": 316
+    }
+  }
+};

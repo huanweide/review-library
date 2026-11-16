@@ -1,0 +1,25 @@
+{
+  "name": "tiandao-academy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "天道书院 · 书馆分析能力 + 罗盘呈现格式的 app 级备考应用（Node 服务 + 端口 + 服务端落盘）",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "node test/adapter.test.js && node test/server.test.js && node test/incremental.test.js && node test/e2e-llm.test.js && node test/engine.test.js && node test/ui-contract.test.js",
+    "test:adapter": "node test/adapter.test.js",
+    "test:server": "node test/server.test.js",
+    "test:incremental": "node test/incremental.test.js",
+    "test:e2e": "node test/e2e-llm.test.js",
+    "test:ui": "node test/ui-contract.test.js",
+    "list": "node cli.js list",
+    "import": "node cli.js import",
+    "build": "node cli.js build"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": ["备考", "考点", "复习", "LLM", "天道书阁", "考点罗盘"],
+  "license": "MIT"
+}

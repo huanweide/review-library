@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>天道书院 · 备考书架</title>
+  <meta name="description" content="天道书院：书馆分析能力 + 罗盘呈现格式，所有 LLM 解析统一格式的本地备考书架。" />
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="assets/css/style.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">跳到主内容</a>
+
+  <header class="topbar">
+    <div class="brand">天道书院<span class="dot">·</span></div>
+    <div class="subtitle" id="app-subtitle">备考书架</div>
+    <button class="btn btn--ghost hidden" id="back-shelf" aria-label="返回书架">← 书架</button>
+    <button class="theme-toggle" id="theme-toggle" aria-label="切换明暗主题" title="切换明暗主题">🌙</button>
+  </header>
+
+  <!-- ============ 书架层（默认首屏） ============ -->
+  <main class="wrap" id="bookshelf" aria-label="备考书架"></main>
+
+  <!-- ============ 书内应用层（打开书后显示） ============ -->
+  <div id="app" class="hidden">
+    <nav class="tabs" aria-label="主导航">
+      <button class="tab" data-tab="dashboard" aria-current="page">备考中心</button>
+      <button class="tab" data-tab="quiz">练习</button>
+      <button class="tab" data-tab="exam">模拟考</button>
+      <button class="tab" data-tab="wrong">错题本</button>
+      <button class="tab" data-tab="stats">统计</button>
+      <button class="tab" data-tab="digest">知识点大全</button>
+      <button class="tab" data-tab="syllabus">考纲考点</button>
+      <button class="tab" data-tab="refs">资料</button>
+      <button class="tab" data-tab="settings">设置</button>
+    </nav>
+
+    <main class="wrap" id="main">
+
+      <!-- 备考中心（默认落地页） -->
+      <section class="page" id="page-dashboard" aria-label="备考中心"></section>
+
+      <!-- 练习（核心复习流） -->
+      <section class="page hidden" id="page-quiz" aria-label="练习">
+        <div class="kg-toolbar">
+          <label class="label" for="q-chapter">章节</label>
+          <select class="field" id="q-chapter"></select>
+          <label class="label" for="q-type">题型</label>
+          <select class="field" id="q-type"></select>
+          <label class="switch"><input type="checkbox" id="q-hideMastered" /> 隐藏已掌握</label>
+          <label class="switch"><input type="checkbox" id="q-wrongOnly" /> 只练错题</label>
+          <span class="kg-count" id="q-count"></span>
+        </div>
+        <div class="pillrow" id="q-pills" aria-label="题号导航"></div>
+        <div class="qbar" style="margin-bottom:var(--sp-3)">
+          <span class="kg-count" id="q-progress"></span>
+        </div>
+        <div class="qsheet" id="q-main"></div>
+      </section>
+
+      <!-- 模拟考（零反馈 + 计时） -->
+      <section class="page hidden" id="page-exam" aria-label="模拟考">
+        <div class="kg-toolbar">
+          <label class="label" for="exam-scope">范围</label>
+          <select class="field" id="exam-scope"></select>
+          <label class="label" for="exam-limit">限时</label>
+          <select class="field" id="exam-limit">
+            <option value="0">不限</option>
+            <option value="900">15 分钟</option>
+            <option value="1800">30 分钟</option>
+            <option value="2700">45 分钟</option>
+            <option value="3600">60 分钟</option>
+            <option value="5400">90 分钟</option>
+          </select>
+          <span class="kg-count" id="exam-count"></span>
+        </div>
+        <div class="exam-subhead">
+          <div class="exam-progress" id="exam-progress-block">
+            <div class="bar"><div class="fill" id="exam-fill"></div></div>
+            <div class="lab" id="exam-progress-lab"></div>
+          </div>
+          <span class="exam-ring" id="exam-ring" aria-hidden="true"></span>
+          <span class="exam-timer" id="exam-timer" aria-live="off">⏱ 00:00</span>
+          <button class="btn" id="exam-submit-all">交卷</button>
+        </div>
+        <div class="pillrow" id="exam-pills" aria-label="题号导航"></div>
+        <div class="qsheet" id="exam-main"></div>
+      </section>
+
+      <!-- 错题本（含收藏子视图） -->
+      <section class="page hidden" id="page-wrong" aria-label="错题本">
+        <div class="kg-toolbar">
+          <div class="seg" role="tablist" aria-label="错题本视图">
+            <button class="seg-btn is-active" id="wrong-tab-wrong" data-view="wrong">错题</button>
+            <button class="seg-btn" id="wrong-tab-fav" data-view="fav">收藏</button>
+          </div>
+          <span class="kg-count" id="wrong-count"></span>
+        </div>
+        <div id="wrong-main"></div>
+      </section>
+
+      <!-- 统计（纯 inline SVG，0 依赖） -->
+      <section class="page hidden" id="page-stats" aria-label="学习统计"></section>
+
+      <!-- 知识点大全（核心产物①：知识点 + 题型整理；树形/大纲双视图，内嵌不再单列导图） -->
+      <section class="page hidden" id="page-digest" aria-label="知识点大全"></section>
+
+      <!-- 考纲考点（核心产物②：重点至上 + 解释 + 重点记忆，书馆 documents 官方生成） -->
+      <section class="page hidden" id="page-syllabus" aria-label="考纲考点"></section>
+
+      <!-- 参考资料（零云端 · 纯本地） -->
+      <section class="page hidden" id="page-refs" aria-label="参考资料"></section>
+
+      <!-- 设置（主题 + 重置 + 资料说明） -->
+      <section class="page hidden" id="page-settings" aria-label="设置"></section>
+
+    </main>
+
+    <footer class="foot">天道书院 · 本地离线 · 0 外部引用 · 数据存于本机浏览器</footer>
+  </div>
+
+  <!-- 书目索引 + 统一格式适配器（纯函数，浏览器内也可见） -->
+  <script src="books/index.js"></script>
+  <script src="assets/js/adapter.js"></script>
+  <!-- 逻辑层 -->
+  <script src="assets/js/core.js"></script>
+  <!-- UI 层（暴露 BookApp.boot） -->
+  <script src="assets/js/ui.js"></script>
+  <!-- 数据入口（API 优先，静态回退） -->
+  <script src="assets/js/api-client.js"></script>
+  <!-- 书架层 -->
+  <script src="assets/js/bookshelf.js"></script>
+</body>
+</html>
