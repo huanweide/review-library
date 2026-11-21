@@ -47,6 +47,6 @@ PROCESS/ppt-outline.md
 PROCESS/syllabus-data.json
 PROCESS/extract_*.py
 PROCESS/gen_*.py
-PROCESS/考纲全覆盖-*.html
-PROCESS/考纲全覆盖-*.md
+PROCESS/考纲全覆盖*.html
+PROCESS/考纲全覆盖*.md
 PROCESS/research-workbench整体优化/verification-aligned.html
