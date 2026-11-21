@@ -87,7 +87,7 @@ setx SILICONFLOW_MODEL "deepseek-ai/DeepSeek-V4.1-Flash"
 
 - **壳**：标题栏（品牌 / 面包屑 / 命令面板 / 安装按钮 / 连接状态）、左侧按域分组导航、右侧视图区、底部状态栏（真实书数、能力数、协议版本）。
 - **多文件模块化**：`workbench/src/` 下 `host / state / router / ui / views / shell` 各司其职；`index.html` 只是挂载点，逻辑不塞进 HTML。
-- **能力清单运行时拉取**：导航项 13 个视图、10 个 action 全部来自 `GET /api/app/manifest`（源头 `core/capabilities.js`），前端不手写第二份清单。
+- **能力清单运行时拉取**：导航项 13 个视图、12 个 action 全部来自 `GET /api/app/manifest`（源头 `core/capabilities.js`），前端不手写第二份清单。
 - **可安装**：`manifest.webmanifest` + `sw.js` + 图标，支持 PWA 安装与离线壳；`?selftest=1` 逐个真加载自检。
 
 **一个应用、五种形态**（同一份协议 `core/app-host.js`，不是各带一份引擎）：
@@ -109,7 +109,7 @@ setx SILICONFLOW_MODEL "deepseek-ai/DeepSeek-V4.1-Flash"
 - **导图判据**：与天道书院共享工作区根 `PROCESS/导图共享契约/共享契约.md`——六色/卡片宽/圆角/左色条/选中态逐字一致；字号绝对值、布局、折叠按各自载体差异化（书院只读展示 vs 本项目工作台）。两边测试各锁同一组常量防漂移。
 - **右侧讲解面板**：点导图节点或提纲条目后，按 ①定位 ②这是什么 ③常考什么 ④真题 ⑤答案与思路 ⑥易错 六步**逐步展开**，可「继续 →」或「一次看完」；本节点没挂题时，诚实回退到最近有题的分支并注明是哪一层，不冒充本节真题。
 - **导入**：拖文件到虚线框或点击选择，走 `POST /api/app/action {action:'add'}` 真落盘；导入后自动刷新资料树并提示「去分析」。
-- **分析**：弹窗内填 API 地址 / 模型 / 密钥（密钥只在本次请求内存里，不落盘；地址与模型记在 localStorage 便于复用），期间显示已耗时。
+- **分析**：模型配置由服务端单一权威持有（环境变量或本机 `library/settings.json`，密钥只对前端显示掩码）；已配好时弹窗直接预填，点「开始」即可，不必每次粘密钥。界面里可一键「找模型」列出账号全部模型，期间显示已耗时。
 
 真浏览器验收（本机 Edge + playwright-core）：应用验收 **30/30**、一体形态契约 **25/25**、全量 `npm test` **24/24**、零未捕获 JS 报错；截图在 `PROCESS/workbench-verify/`。书详情里的思维导图复用 `renderer/js/mindmap-layout.js`（同一份纯函数，屏幕与导出坐标同源；DSH 宿主也托管该文件，载不到时诚实降级为大纲）。
 
