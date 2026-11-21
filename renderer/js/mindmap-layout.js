@@ -16,9 +16,13 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  // 按章分支配色（markmap branch colors / Xmind 彩虹线）。同色贯穿连线与后代。
-  const BRANCH_COLORS = ['#3a7afe', '#f2994a', '#27ae60', '#9b51e0', '#eb5757', '#00a3b8', '#d4a017'];
-  const NODE_W = 176, NODE_H = 34, GAP_X = 62, GAP_Y = 14, PAD = 28;
+  // 按章分支配色。2026-11-17 与「天道书院」导图统一：低饱和六色（原来 7 色高饱和刺眼），
+  // 依据见天道书院 PROCESS/research-导图视觉美化/best-practices.md（≤5-6 主色、低饱和、同色系分层）。
+  const BRANCH_COLORS = ['#4E8098', '#C17450', '#5C8D6B', '#7C6A9C', '#A6803E', '#A85F6E'];
+  // 尺寸对齐书院：卡片放大到能放「标题 + 一行说明」，字号按层级（见 toSvg 的 typeFs）。
+  const NODE_W = 224, NODE_H = 58, GAP_X = 56, GAP_Y = 18, PAD = 28;
+  /** 层级字号：root 20 / 章 16 / 节 14 / 点及以下 13（书院同款落差，不许全 12px） */
+  function typeFs(depth) { return depth === 0 ? 20 : depth === 1 ? 16 : depth === 2 ? 14 : 13; }
 
   function escXml(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
@@ -27,6 +31,39 @@
   function short(s, n) {
     const t = String(s == null ? '' : s);
     return t.length > n ? t.slice(0, n - 1) + '…' : t;
+  }
+
+  /**
+   * 节点标签换行（2026-11-21）：长标题不许再用省略号吞字。
+   * 基准：markmap README 让长文本作为 note 进 popover；Visual Paradigm 的 Wrap Width
+   * 与 jsMind 的 node_overflow:wrap 都选择换行而不是截断。
+   * 策略：优先在中文语义断点（，、：（ 与和）处断，避免把一个短语劈开；
+   * 最多三行（58px 卡片放得下），确实超长才在最后一行加省略号——全文仍在 tooltip 里。
+   */
+  function wrapLabel(s, maxChars, maxLines) {
+    const t = String(s == null ? '' : s).replace(/\s+/g, ' ').trim();
+    const cap = Math.max(6, Number(maxChars) || 12);
+    const max = Math.max(1, Number(maxLines) || 3);
+    if (!t) return [''];
+    const lines = [];
+    let rest = t;
+    while (rest && lines.length < max) {
+      if (rest.length <= cap) { lines.push(rest); rest = ''; break; }
+      const seg = rest.slice(0, cap + 1);
+      const positions = ['，', ',', '、', '（', '(', '：', ':', ' ', '与', '和']
+        .map(ch => seg.lastIndexOf(ch))
+        .filter(i => i >= Math.ceil(cap * 0.55));
+      const p = positions.length ? Math.max.apply(null, positions) : -1;
+      const cut = p >= 0 ? p + 1 : cap;
+      lines.push(rest.slice(0, cut).trim());
+      rest = rest.slice(cut).trim();
+    }
+    if (rest) {
+      let last = lines[lines.length - 1] || '';
+      if (last.length > cap - 1) last = last.slice(0, cap - 1);
+      lines[lines.length - 1] = last + '…';
+    }
+    return lines.length ? lines : [''];
   }
   function childrenOf(n) { return (n && Array.isArray(n.children)) ? n.children : []; }
 
@@ -42,7 +79,8 @@
       const kids = childrenOf(node);
       const b = depth === 1 ? (branch == null ? flat.filter(n => n.depth === 1).length : branch) : branch;
       // 一级分支强制取自己的分支色，不继承 root 的蓝；后代才继承父色。
-      const col = depth === 0 ? '#3a7afe'
+      // 根节点用中性墨色（与彩色主干拉开，符合「60-30-10 主次分明」）
+      const col = depth === 0 ? '#263746'
         : depth === 1 ? BRANCH_COLORS[(b || 0) % BRANCH_COLORS.length]
         : (color || BRANCH_COLORS[0]);
       const rec = {
@@ -219,27 +257,51 @@
         const mx = (x1 + x2) / 2;
         d = 'M' + x1 + ' ' + y1 + ' C' + mx + ' ' + y1 + ' ' + mx + ' ' + y2 + ' ' + x2 + ' ' + y2;
       }
-      body += '<path d="' + d + '" stroke="' + e.color + '" stroke-width="1.6" fill="none" opacity="0.65"/>';
+      // 主干（连到章节点）线更粗，其余细线——层次感来自线宽而非颜色
+      const toN = pos[e.to];
+      const isTrunk = !!(toN && toN.depth === 1);
+      body += '<path d="' + d + '" stroke="' + e.color + '" stroke-width="' + (isTrunk ? 2.4 : 1.6) + '" fill="none" opacity="0.62"/>';
     });
     (layout.nodes || []).forEach(n => {
-      const isRoot = n.depth === 0;
-      const fill = isRoot ? n.color : nodeFill;
-      const stroke = n.color;
-      const tc = isRoot ? rootText : textColor;
+      // 层级递进（与书院同款）：root 深色实心 / 章彩色实心 / 其余白卡片 + 左侧色条。
+      const isRoot = n.depth === 0, isChapter = n.depth === 1;
+      const solid = isRoot || isChapter;
+      const fill = isRoot ? n.color : (isChapter ? n.color : nodeFill);
+      const stroke = solid ? n.color : (o.nodeStroke || '#E4E9F0');
+      const tc = solid ? rootText : textColor;
+      const metaC = solid ? 'rgba(255,255,255,.86)' : metaColor;
+      const fs = typeFs(n.depth);
+      // 标题分层（2026-11-21）：节点只放短标签；完整标题与 desc 由 tooltip / 右栏讲解面板承载。
+      // 旧版把 desc 塞成 11px 灰字，是「有信息但看不清」的假完整，已移除。
+      const lines = wrapLabel(n.title, Math.max(8, Math.floor((n.w - 32) / (fs * 0.95))), 3);
+      const lineH = fs * 1.16;
+      const textH = (lines.length - 1) * lineH + fs * 0.92;
+      const titleY = n.y + Math.max(12, (n.h - textH) / 2 + fs * 0.86);
       body += '<g class="mm-node" data-id="' + escXml(n.id) + '" data-kind="' + escXml(n.kind || n.type) + '">';
       body += '<rect x="' + n.x + '" y="' + n.y + '" width="' + n.w + '" height="' + n.h + '" rx="9" fill="' + fill +
-        '" stroke="' + stroke + '" stroke-width="' + (isRoot ? 0 : 1.4) + '"/>';
-      body += '<text x="' + (n.x + 10) + '" y="' + (n.y + n.h / 2 + 4) + '" font-size="12" font-family="system-ui,sans-serif" fill="' +
-        tc + '">' + escXml(short(n.title, 16)) + '</text>';
+        '" stroke="' + stroke + '" stroke-width="' + (solid ? 1.4 : 1.3) + '"/>';
+      // 左侧色条：非实心节点用它表达主干归属（比整框描边克制、更精致）
+      if (!solid) {
+        body += '<rect x="' + n.x + '" y="' + n.y + '" width="4" height="' + n.h + '" rx="2" fill="' + n.color + '"/>';
+      }
+      body += '<text x="' + (n.x + 14) + '" y="' + titleY.toFixed(1) + '" font-size="' + fs + '" font-weight="' +
+        (isRoot ? 700 : 600) + '" font-family="PingFang SC,Microsoft YaHei UI,system-ui,sans-serif" fill="' + tc +
+        '" letter-spacing=".3">';
+      lines.forEach((line, i) => {
+        body += '<tspan x="' + (n.x + 14) + '"' + (i === 0 ? '' : ' dy="' + lineH.toFixed(1) + '"') + '>'
+          + escXml(line) + '</tspan>';
+      });
+      body += '</text>';
       if (n.questionTypes && n.questionTypes.length) {
-        body += '<circle cx="' + (n.x + n.w - 10) + '" cy="' + (n.y + 10) + '" r="4" fill="' + n.color + '"/>';
+        body += '<circle cx="' + (n.x + n.w - 10) + '" cy="' + (n.y + 12) + '" r="4" fill="' +
+          (solid ? '#FFFFFF' : n.color) + '" opacity="' + (solid ? '.9' : '1') + '"/>';
       }
       if (n.meta && typeof n.meta.count === 'number') {
-        body += '<text x="' + (n.x + n.w - 8) + '" y="' + (n.y + n.h / 2 + 4) + '" font-size="10" text-anchor="end" fill="' +
-          (isRoot ? rootText : metaColor) + '" font-family="system-ui,sans-serif">' + n.meta.count + '</text>';
+        body += '<text x="' + (n.x + n.w - 10) + '" y="' + (n.y + 24) + '" font-size="11" text-anchor="end" fill="' +
+          metaC + '" font-family="SFMono-Regular,Consolas,monospace" font-weight="700">' + n.meta.count + '</text>';
       }
       if (n.question && n.question.source && n.question.source.file) {
-        body += '<circle cx="' + (n.x + n.w - 10) + '" cy="' + (n.y + n.h - 9) + '" r="3" fill="#f2994a"/>';
+        body += '<circle cx="' + (n.x + n.w - 10) + '" cy="' + (n.y + n.h - 10) + '" r="3" fill="#E8920E"/>';
       }
       body += '</g>';
     });
@@ -248,7 +310,7 @@
   }
 
   return {
-    layoutTree, searchNodes, buildQuestionTree, toMarkdown, toOpml, toSvg,
+    layoutTree, searchNodes, buildQuestionTree, toMarkdown, toOpml, toSvg, typeFs,
     BRANCH_COLORS, NODE_W, NODE_H, escXml
   };
 });

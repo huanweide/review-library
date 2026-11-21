@@ -248,7 +248,8 @@ body {
 .search-count { font-size: 11px; color: var(--ink-soft); min-width: 52px; }
 .mm-hint { font-size: 11px; color: var(--ink-soft); margin: 2px 0 var(--space-2); }
 .mm-viewport {
-  position: relative; overflow: auto; max-height: 62vh;
+  /* 2026-11-17 与书院「图要放很大」对齐：62vh → 78vh，画布更占视野 */
+  position: relative; overflow: auto; max-height: 78vh;
   border: 1px solid var(--line); border-radius: var(--radius); padding: var(--space-4);
   background: var(--surface-1); cursor: grab;
 }
@@ -261,7 +262,13 @@ body {
 .mm-node:hover rect { stroke-width: 2.2; }
 .mm-node.hit rect { stroke: var(--locate) !important; stroke-width: 3 !important; }
 .mm-node.locate rect { stroke: var(--locate) !important; stroke-width: 3.2 !important; }
-.mm-node.dim { opacity: .28; }
+/* 选中：深色粗描边 + 阴影，不改变填充色——文字永远清晰，绝不会像"透明" */
+.mm-node.selected rect { stroke: #263746 !important; stroke-width: 2.6 !important;
+  filter: drop-shadow(0 3px 9px rgba(30,45,70,.22)); }
+.mm-node.selected text { font-weight: 700; }
+/* 搜索未命中：只降对比、保持可见（原 opacity .28 太透，看起来像消失） */
+.mm-node.dim { opacity: .52; }
+.mm-node.dim:hover { opacity: 1; }
 .mm-node text { pointer-events: none; user-select: none; }
 .mm-outline-hidden { display: none; }
 

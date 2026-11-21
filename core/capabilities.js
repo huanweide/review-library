@@ -24,7 +24,7 @@ const ACTIONS = [
   'list', 'create', 'add', 'analyze', 'get',
   // 学习闭环（2026-11-11 F1 落地，本轮同步到全部入口）
   'practice', 'quiz', 'due', 'attempt', 'rate',
-  // 语义重点标注 + 整理文档（2026-11-14：mark / compose=考点大全+考纲）
+  // 语义重点标注 + 整理文档（2026-11-14：mark / compose=考点大全+考纲+考试幻灯片；三种文档形态同源协议，仅 kind 不同，不新增 action）
   'mark', 'compose',
 ];
 

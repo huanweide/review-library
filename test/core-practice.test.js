@@ -177,23 +177,34 @@ function makeAnalysis() {
   try {
     let ready = false;
     for (let i = 0; i < 60; i++) {
-      try { const r = await fetch('http://127.0.0.1:' + PORT + '/core.html'); if (r.ok) { ready = true; break; } } catch (e) {}
+      try { const r = await fetch('http://127.0.0.1:' + PORT + '/core.html', { headers: { Connection: 'close' } }); if (r.ok) { ready = true; break; } } catch (e) {}
       await sleep(150);
     }
     // 前置环境检查不计入通过数：旧版本来就绿，若算分会污染「baseline 必红」的差分证据。
     if (ready) console.log('  · J5c 前置：本地 server 在 ' + PORT + ' 就绪（环境检查，不计分）');
     else ok(false, 'J5c 前置：本地 server 未就绪（环境故障，本轮判别无效）', srvErr.slice(0, 200));
     if (ready && global.__testBookId) {
-      const r = await fetch('http://127.0.0.1:' + PORT + '/api/core/books/' + global.__testBookId + '/practice/quiz');
+      const r = await fetch('http://127.0.0.1:' + PORT + '/api/core/books/' + global.__testBookId + '/practice/quiz', { headers: { Connection: 'close' } });
       httpQuiz = { status: r.status, data: await r.json().catch(() => ({})) };
       const r2 = await fetch('http://127.0.0.1:' + PORT + '/api/core/books/' + global.__testBookId + '/practice/attempt', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json', Connection: 'close' },
         body: JSON.stringify({ key: global.__wrongKey || 'x', given: 'B' })
       });
       httpAttempt = { status: r2.status, data: await r2.json().catch(() => ({})) };
     }
   } catch (e) { srvErr += ' | ' + e.message; }
-  finally { try { srv.kill(); } catch (e) {} }
+  finally {
+    try { srv.kill(); } catch (e) {}
+    // Windows Node v24：spawn.kill() 是异步的。主进程若先退出，stderr pipe 的 handle
+    // 还处于 closing 状态，libuv 会抛 UV_HANDLE_CLOSING 断言（实测 exit 3221226505），
+    // 让 28/28 全绿的套件被误判为失败。等子进程真退出并释放 pipe 再往下走。
+    await new Promise((resolve) => {
+      if (srv.exitCode != null || srv.signalCode != null) return resolve();
+      const timer = setTimeout(resolve, 2000);
+      srv.once('exit', () => { clearTimeout(timer); resolve(); });
+    });
+    try { srv.stderr.destroy(); } catch (e) { /* 忽略 */ }
+  }
   ok(!!(httpQuiz && httpQuiz.status === 200 && Array.isArray(httpQuiz.data.questions)),
     'J5d HTTP 真发 GET practice/quiz 返回 200 且题目列表可用',
     httpQuiz ? String(httpQuiz.status) : 'no http response');

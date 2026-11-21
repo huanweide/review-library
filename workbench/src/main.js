@@ -84,8 +84,10 @@ async function boot() {
     refreshShell();
     const v = currentView();
     const params = get().routeParams;
-    // 书内工作区是沉浸式：进入时隐藏全局侧栏，离开时恢复（否则左侧会叠两层导航）
-    if (!v || v.id !== 'book') document.body.classList.remove('bs-focus');
+    // 书内工作区与练习都是沉浸式：进入时隐藏全局侧栏，离开时恢复（否则左侧会叠两层导航）。
+    // 2026-11-21：练习（quiz/practice/due/attempt/rate）也纳入——从书内去做题不再「换一个 App」。
+    if (v && BOOK_VIEWS.indexOf(v.id) >= 0) document.body.classList.add('bs-focus');
+    else document.body.classList.remove('bs-focus');
     renderView(viewRoot(), v, params);
     // 数据加载只由路由变化触发：每次进视图都拿后端当前真数据，
     // 不因已缓存旧 data 而跳过（否则切回书架看不到刚建的书）。

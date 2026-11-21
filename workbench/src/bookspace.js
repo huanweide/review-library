@@ -13,6 +13,8 @@ import { toast } from './state.js';
 import host from './host.js';
 import { go } from './router.js';
 import { mountMindmap } from './mindmap.js';
+import { loadSettings, saveSettings, credentialFields, credentialDialog, readiness } from './llm-config.js';
+import { deriveOverview } from './overview.mjs';
 
 const TABS = [
   { id: 'map', label: '思维导图' },
@@ -20,6 +22,7 @@ const TABS = [
   { id: 'types', label: '题型' },
   { id: 'digest', label: '考点大全' },
   { id: 'syllabus', label: '考纲' },
+  { id: 'slides', label: '幻灯片' },
   { id: 'about', label: '概览' },
 ];
 
@@ -37,6 +40,38 @@ function humanSize(n) {
   if (v < 1024) return v + ' B';
   if (v < 1024 * 1024) return (v / 1024).toFixed(1) + ' KB';
   return (v / 1024 / 1024).toFixed(1) + ' MB';
+}
+// 说明文本拆两半：「它是什么」与「从哪几个文件来的」。
+// 实测资料说明是「期末总复习提纲：只收 PPT 里的知识点…｜来源：a.md；b.md」这种整句，
+// 直接进列表会变成四行长的糊块——列表只留前半句，来源压成一个「来源 2」角标。
+// 中文双字重合度：老书的分析结果没有 imageIds，题干写「如图」时靠它与图注对齐。
+// 不用单字（"的/图"到处都是），不用整句相等（图注和题干措辞必不同）——双字是本例的甜点位。
+function bigrams(s) {
+  const t = String(s || '').replace(/\s+/g, '');
+  const out = new Set();
+  for (let i = 0; i < t.length - 1; i++) out.add(t.slice(i, i + 2));
+  return out;
+}
+function overlapCount(a, b) {
+  const A = bigrams(a), B = bigrams(b);
+  let n = 0;
+  A.forEach((x) => { if (B.has(x)) n++; });
+  return n;
+}
+function imageTextOf(img) {
+  return ((img && img.sources) || []).map((s) =>
+    [s.caption, s.context, s.fileName].filter(Boolean).join(' ')).join(' ');
+}
+
+function splitNote(note) {
+  const s = String(note || '').trim();
+  if (!s) return { desc: '', sources: [] };
+  const i = s.search(/[｜|]\s*来源\s*[:：]/);
+  if (i < 0) return { desc: s, sources: [] };
+  return {
+    desc: s.slice(0, i).trim(),
+    sources: s.slice(i).replace(/^[｜|]\s*来源\s*[:：]\s*/, '').split(/[;；]/).map((x) => x.trim()).filter(Boolean),
+  };
 }
 function walkTree(node, depth, path, out) {
   if (!node) return out;
@@ -114,6 +149,53 @@ function questionsOfNode(analysis, node) {
     (q.pointPath || []).some((t) => titles.has(String(t))));
 }
 
+/* ---------------- 交叉索引（2026-11-19） ----------------
+   判据：思维导图 / 提纲 / 题型 / 考点大全 / 考纲 是同一份分析的五个切面，不是五套数据。
+   任何一处都要能说清「它和别处是什么关系」，否则点进去就迷路（用户要的「互相索引」）。
+   这里不新造数据、不猜内容：只把已有字段（pointId / pointPath / title）编成可反查的表。 */
+function buildPointIndex(analysis) {
+  const map = new Map();                    // pointId → { node, path, depth, qs }
+  const rows = walkTree(analysis && analysis.tree, 0, [], []);
+  rows.forEach((r) => {
+    if (r.node && r.node.id) map.set(String(r.node.id), { node: r.node, path: r.path, depth: r.depth, qs: [] });
+  });
+  (analysis && analysis.questionIndex || []).forEach((g) => {
+    (g.items || []).forEach((it) => {
+      (it.questions || []).forEach((q) => {
+        if (q.pointId != null && map.has(String(q.pointId))) {
+          map.get(String(q.pointId)).qs.push(Object.assign({ type: g.type }, q));
+        }
+      });
+    });
+  });
+  return map;
+}
+// 节点子树题数（章 / 节要连同下面的知识点一起算），导图角标与提纲角标共用这一个口径。
+function subtreeQuestionCount(analysis, node) {
+  if (!analysis || !node) return 0;
+  const ids = new Set();
+  (function walk(n) {
+    if (!n) return;
+    if (n.id) ids.add(String(n.id));
+    (n.children || []).forEach(walk);
+  })(node);
+  return allQuestions(analysis).filter((q) => q.pointId && ids.has(String(q.pointId))).length;
+}
+// 「这句话在这本书的哪个节点」——考点大全 / 考纲的条目只带章节名，靠标题把条目挂回导图。
+// 先精确匹配，再退到包含匹配；匹配不到就诚实返回 null（不硬塞一个错的节点）。
+function findNodeByTitle(tree, title) {
+  const want = String(title || '').replace(/\s+/g, '').trim();
+  if (!want) return null;
+  let loose = null;
+  for (const r of walkTree(tree, 0, [], [])) {
+    const t = String((r.node && r.node.title) || '').replace(/\s+/g, '').trim();
+    if (!t) continue;
+    if (t === want) return r;
+    if (!loose && (t.includes(want) || want.includes(t)) && Math.min(t.length, want.length) >= 4) loose = r;
+  }
+  return loose;
+}
+
 export async function mountBookspace(root, bookId, params) {
   const S = {
     id: String(bookId || ''),
@@ -132,7 +214,12 @@ export async function mountBookspace(root, bookId, params) {
     step: 1,            // 讲解面板已展开到第几步
     digest: null,       // 考点大全文档状态 {loading,busy,err,data,tried}
     syllabus: null,     // 考纲文档状态
+    slides: null,       // 考试幻灯片文档状态
     editingFile: '',    // 正在编辑说明的资料 id
+    fileQuery: '',      // 资料检索关键词（30 份的书靠滚动找文件太折磨）
+    olQuery: '',        // 提纲检索关键词（229 条提纲靠滚动找是折磨）
+    focusId: '',        // 从考点大全 / 题型跳回导图时要高亮的节点 id
+    images: null,       // get 附带的原图清单（images.json），看图区的数据源
   };
 
   document.body.classList.add('bs-focus');
@@ -170,10 +257,30 @@ export async function mountBookspace(root, bookId, params) {
       const g = await host.action('get', { bookId: S.id });
       if (g && g.ok) {
         S.analysis = g.data;
+        // P1-2 老数据兼容：旧分析有逐字校验结果 quoteVerified 但没有 origin。
+        // 用已有校验结果在会话内派生一次，不写回磁盘、不重跑模型——老书也能显示来源，
+        // 且判据与新分析一致（真逐字命中才算 material），不会把模型自编题冒充真题。
+        ((S.analysis && S.analysis.questionIndex) || []).forEach((grp) => {
+          ((grp && grp.items) || []).forEach((it) => {
+            ((it && it.questions) || []).forEach((q) => {
+              if (q && !q.origin && typeof q.quoteVerified === 'boolean') {
+                q.origin = q.quoteVerified ? 'material' : 'model';
+              }
+            });
+          });
+        });
         S.book = (g.data && g.data.book) || null;
+        // v4：原图清单随 get 一起回来（不新增 action，三端能力清单保持一致）
+        S.images = (g.data && g.data.images) || null;
       } else {
         S.analysis = null;
-        S.err = (g && g.error) || '';
+        // 「尚无分析结果」是正常业务状态，不是错误——get 用 ok:false+error 表达它，
+        // 若照单全收进 S.err，空状态会冒出「看错误详情」与「先导入资料」两条矛盾引导。
+        // 只让真异常（网络/服务端故障）进 S.err；未分析交给 needAnalysis 的诚实空态处理。
+        const msg = String((g && g.error) || '');
+        S.err = msg.includes('尚无分析结果') ? '' : msg;
+        // 未分析的书也会从 get 的失败响应里带回原图清单（导入时已抽取，与分析无关）
+        if (g && g.data && g.data.images) S.images = g.data.images;
       }
       // 没分析也要能把书拿回来（标题 / 资料清单）——每次都用列表兜底刷新，
       // 否则「未分析」的书导完资料仍显示 0 份（get 拿不到，旧 S.book 又是空的）。
@@ -196,6 +303,130 @@ export async function mountBookspace(root, bookId, params) {
     mainEl.innerHTML = '';
     buildRail();
     buildMain();
+  }
+
+  /* ---- 原图：题目下方独立看图区（2026-11-20） ----
+     判据：图原样来自资料，不画不生成；正文周边绝不横插大图——只在题目卡片下方开一个
+     固定高度的看图条，点一下再放大。老分析没有 imageIds 时用「如图」+ 双字重合度兜底。 */
+  // 配对 / 题旁看图只用主图：同字节的几份图内容一样，但出处该指向正文原图而非答题截图，
+  // 否则用户核对时会以为配错了。判据与后端 images.primaryImages 一致。
+  function allImages() {
+    const list = (S.images && S.images.images) || [];
+    const byHash = new Map();
+    list.forEach((img) => {
+      const s = (img.sources || [])[0] || {};
+      const rank = (s.caption ? 4 : 0)
+        + ((s.pageType === 'slide' || s.pageType === 'paragraph') ? 2 : 0)
+        + ((img.vision && img.vision.ok && img.vision.status === 'ok') ? 1 : 0);
+      const prior = byHash.get(img.sha256);
+      if (!prior || rank > prior.rank) byHash.set(img.sha256, { img, rank });
+    });
+    return Array.from(byHash.values()).map((x) => x.img);
+  }
+  function allImagesRaw() { return (S.images && S.images.images) || []; }
+  function imagesForQuestion(q, limit) {
+    const max = Number(limit) || 2;
+    if (!q || !allImages().length) return [];
+    const ids = (Array.isArray(q.imageIds) ? q.imageIds : []).map(String);
+    const byId = ids.map((id) => allImages().find((x) => String(x.id) === id)).filter(Boolean);
+    if (byId.length) return byId.slice(0, max);
+    const text = [q.stem, q.answer, q.rationale].filter(Boolean).join(' ');
+    if (!/如图|下图|图中|示意图|直方图|曲线图|图所示|这幅图/.test(text)) return [];
+    return allImages()
+      .map((img) => ({ img, score: overlapCount(text, imageTextOf(img)) }))
+      .filter((x) => x.score >= 2)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, max)
+      .map((x) => x.img);
+  }
+  // 图题并置（2026-11-20 用户纠正）：图是拿来「看懂题、做得出题」的，必须紧挨题目/知识点同屏。
+  // 单开页签＝图和题分家，没人会去看，等于没有；64px 缩略条又太小看不清。
+  // 所以这里直接嵌原图：字节原样不动，只用 CSS 限制显示高度（~300px）避免大图横插乱排版；
+  // 点一下开 lightbox 看全尺寸原图（细节多的答题截图靠这一步看清）。
+  function zoomImage(url, cap) {
+    if (!url) return;
+    const mask = el('div', { class: 'bs-lightbox' }, [
+      el('img', { src: url, alt: cap || '原图' }),
+      el('div', { class: 'bs-lightbox-cap', text: (cap || '资料原图 · 原样复现，未重绘未重编码') + ' · 点任意处关闭' }),
+    ]);
+    mask.addEventListener('click', () => mask.remove());
+    document.body.appendChild(mask);
+  }
+  function figureStrip(imgs, label) {
+    if (!imgs.length) return null;
+    return el('div', { class: 'bs-inline-figs' }, [
+      label ? el('div', { class: 'bs-inline-figs-t', text: label }) : null,
+    ].concat(imgs.map((img) => {
+      const url = host.imageUrl(S.id, img.id);
+      const s = (img.sources || [])[0] || {};
+      const v = img.vision && img.vision.ok && img.vision.status === 'ok' ? img.vision : null;
+      // 图注只作补充；主说明用视觉模型「真看到的」，这样图注错/无图注也不会误导配对。
+      const cap = (v && v.what) || s.caption || s.context || '资料原图';
+      const where = s.pageType === 'slide' ? 'PPT 第 ' + s.page + ' 页' :
+        s.pageType === 'paragraph' ? 'Word 第 ' + s.page + ' 段' : s.fileName || '';
+      if (!url) return el('div', { class: 'bs-q-fig-none', text: '原图（桌面端请在浏览器查看）' });
+      const card = el('div', { class: 'bs-inline-fig-wrap' }, [
+        el('button', {
+          class: 'bs-inline-fig',
+          title: '点开看原图全尺寸' + (cap ? '：' + cap : ''),
+          onclick: () => zoomImage(url, cap),
+        }, [
+          el('img', { src: url, alt: cap, loading: 'lazy' }),
+          el('span', { class: 'bs-inline-fig-cap', text: cap }),
+          el('span', { class: 'bs-inline-fig-src', text: v ? '视觉已核对 · ' + (where || '资料原图') : '图注 · ' + (where || '资料原图') }),
+        ]),
+      ]);
+      // 「看懂了什么」可折叠：默认收起不占地方，想核对模型有没有看错图时展开。
+      if (v && (v.details || v.forQuestions)) {
+        const detail = el('div', { class: 'bs-fig-vision hidden' }, [
+          v.details ? el('div', { class: 'bs-fig-vision-line', text: '图里看见：' + v.details }) : null,
+          v.forQuestions ? el('div', { class: 'bs-fig-vision-line', text: '什么题要用：' + v.forQuestions }) : null,
+        ]);
+        card.appendChild(el('button', {
+          class: 'bs-fig-vision-toggle',
+          text: '看懂了什么 ▾',
+          onclick: (e) => {
+            const hidden = detail.classList.toggle('hidden');
+            e.currentTarget.textContent = hidden ? '看懂了什么 ▾' : '收起 ▴';
+          },
+        }));
+        card.appendChild(detail);
+      }
+      return card;
+    })));
+  }
+  // 知识点 → 相关图：老书没有 imageIds，用它自己的标题/desc 与图注做双字重合度匹配。
+  function imagesForNode(node, limit) {
+    const max = Number(limit) || 1;
+    if (!node || !allImages().length) return [];
+    const text = [node.title, node.desc].filter(Boolean).join(' ');
+    if (!text) return [];
+    return allImages()
+      .map((img) => ({ img, score: overlapCount(text, imageTextOf(img)) }))
+      .filter((x) => x.score >= 2)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, max)
+      .map((x) => x.img);
+  }
+
+  // 索引懒建：重绘很频繁，229 个知识点 × 23 道题不必每次重算，按 analysis 引用做一次缓存。
+  function pointIndex() {
+    if (!S._pidx || S._pidxFor !== S.analysis) {
+      S._pidx = buildPointIndex(S.analysis);
+      S._pidxFor = S.analysis;
+    }
+    return S._pidx;
+  }
+  // 从任何一页跳回导图的某个节点（考点大全条目 / 题型里的题 / 提纲都走这一条路，
+  // 保证「互相索引」只有一个跳转口径，不会各页各写一套定位逻辑）。
+  function jumpToMap(node) {
+    if (!node || !S.analysis) return;
+    S.tab = 'map';
+    S.picked = { node, path: pathOfNode(S.analysis.tree, node.id) };
+    S.focusId = String(node.id);
+    S.step = 1;
+    render();
+    renderDetail();
   }
 
   /* ---------------- 左栏：书 / 导入 / 资料 / 题型 ---------------- */
@@ -237,51 +468,95 @@ export async function mountBookspace(root, bookId, params) {
     filesBox.appendChild(filesHead);
     // 语义重点（2026-11-14）：★ 一键标重点、✎ 一句话说明为什么重要——
     // 用户不手动分层，分析时模型按这份说明决定侧重。
-    const fileList = el('div', { class: 'bs-list' }, files.length ? files.map((f) => {
-      if (S.editingFile === f.id) {
-        const inp = el('input', { class: 'bs-note-input', value: f.note || '', placeholder: '一句话说明它为什么重要（分析会优先参考）' });
-        const box = el('div', { class: 'bs-file editing', title: f.name }, [
+    // 排版返工（2026-11-19）：一条资料固定两行（文件名行 + 说明行），文件名永远优先占宽、
+    // 说明单行省略。长句不再把列表撑成参差的糊块。
+    const fileList = el('div', { class: 'bs-list' });
+    if (!files.length) {
+      fileList.appendChild(el('div', { class: 'bs-hint', text: '还没有资料，拖一份进来试试' }));
+    } else {
+      const rowsBox = el('div', { class: 'bs-files' });
+      if (files.length > 5) {
+        const find = el('input', { class: 'bs-find', placeholder: '找资料：文件名或说明', value: S.fileQuery || '' });
+        find.addEventListener('input', () => {
+          S.fileQuery = find.value;
+          paintFiles();
+          // 重绘后焦点会丢（实测每敲一个字就跳出输入框），这里手动还回去并保持光标在末尾
+          const again = fileList.querySelector('.bs-find');
+          if (again) {
+            again.focus();
+            try { again.setSelectionRange(again.value.length, again.value.length); } catch (e) { /* 忽略 */ }
+          }
+        });
+        fileList.appendChild(find);
+      }
+      fileList.appendChild(rowsBox);
+      paintFiles();
+
+      function paintFiles() {
+        rowsBox.innerHTML = '';
+        const q = String(S.fileQuery || '').trim().toLowerCase();
+        const shown = q
+          ? files.filter((f) => (String(f.name || '') + ' ' + String(f.note || '')).toLowerCase().includes(q))
+          : files;
+        if (!shown.length) {
+          rowsBox.appendChild(el('div', { class: 'bs-find-empty', text: '没有匹配「' + q + '」的资料' }));
+          return;
+        }
+        shown.forEach((f) => rowsBox.appendChild(paintFileRow(f)));
+      }
+
+      function paintFileRow(f) {
+        if (S.editingFile === f.id) {
+          const inp = el('input', { class: 'bs-note-input', value: f.note || '', placeholder: '一句话说明它为什么重要（分析会优先参考）' });
+          const box = el('div', { class: 'bs-file editing', title: f.name }, [
+            el('div', { class: 'bs-file-row' }, [
+              el('span', { class: 'bs-ext', text: fileIcon(f.ext) }),
+              el('span', { class: 'bs-file-name', text: f.name }),
+            ]),
+            inp,
+            el('div', { class: 'bs-note-acts' }, [
+              btn('保存', async () => {
+                const r = await host.action('mark', { bookId: S.id, fileId: f.id, note: inp.value });
+                if (!r || r.ok === false) return toast((r && r.error) || '保存失败', 'bad');
+                f.note = inp.value; S.editingFile = '';
+                toast('已保存说明，分析与整理会优先参考', 'ok');
+                render();
+              }, 'primary sm'),
+              btn('取消', () => { S.editingFile = ''; render(); }, 'ghost sm'),
+            ]),
+          ]);
+          setTimeout(() => { try { inp.focus(); } catch (e) { /* 忽略 */ } }, 0);
+          return box;
+        }
+        const cut = splitNote(f.note);
+        const tip = [f.name, cut.desc, cut.sources.length ? '来源：' + cut.sources.join('；') : '']
+          .filter(Boolean).join('\n');
+        return el('div', { class: 'bs-file' + (f.focus ? ' focus' : ''), title: tip }, [
           el('div', { class: 'bs-file-row' }, [
             el('span', { class: 'bs-ext', text: fileIcon(f.ext) }),
             el('span', { class: 'bs-file-name', text: f.name }),
+            el('span', { class: 'bs-file-size', text: humanSize(f.size) }),
+            el('button', { class: 'bs-star' + (f.focus ? ' on' : ''), text: f.focus ? '★' : '☆',
+              title: f.focus ? '取消重点' : '标为考试重点',
+              onclick: async () => {
+                const r = await host.action('mark', { bookId: S.id, fileId: f.id, focus: !f.focus });
+                if (!r || r.ok === false) return toast((r && r.error) || '标记失败', 'bad');
+                f.focus = !f.focus;
+                toast(f.focus ? '已标为重点：分析与整理会优先围绕它' : '已取消重点', 'ok');
+                render();
+              } }),
+            el('button', { class: 'bs-editnote', text: '✎', title: '说明它为什么重要',
+              onclick: () => { S.editingFile = f.id; render(); } }),
           ]),
-          inp,
-          el('div', { class: 'bs-note-acts' }, [
-            btn('保存', async () => {
-              const r = await host.action('mark', { bookId: S.id, fileId: f.id, note: inp.value });
-              if (!r || r.ok === false) return toast((r && r.error) || '保存失败', 'bad');
-              f.note = inp.value; S.editingFile = '';
-              toast('已保存说明，分析与整理会优先参考', 'ok');
-              render();
-            }, 'primary sm'),
-            btn('取消', () => { S.editingFile = ''; render(); }, 'ghost sm'),
-          ]),
+          (cut.desc || cut.sources.length) ? el('div', { class: 'bs-file-row' }, [
+            el('span', { class: 'bs-file-desc' + (cut.desc ? '' : ' none'), text: cut.desc || '未写说明',
+              title: cut.desc || '' }),
+            cut.sources.length ? el('span', { class: 'bs-file-src', text: '来源 ' + cut.sources.length,
+              title: cut.sources.join('\n') }) : null,
+          ]) : null,
         ]);
-        setTimeout(() => { try { inp.focus(); } catch (e) { /* 忽略 */ } }, 0);
-        return box;
       }
-      return el('div', { class: 'bs-file' + (f.focus ? ' focus' : ''), title: f.name }, [
-        el('div', { class: 'bs-file-row' }, [
-          el('span', { class: 'bs-ext', text: fileIcon(f.ext) }),
-          (f.isImage && host.rawFileUrl(S.id, f.id))
-            ? el('img', { class: 'bs-thumb', src: host.rawFileUrl(S.id, f.id), alt: f.name, loading: 'lazy' }) : null,
-          el('span', { class: 'bs-file-name', text: f.name }),
-          el('span', { class: 'bs-file-size', text: humanSize(f.size) }),
-          el('button', { class: 'bs-star' + (f.focus ? ' on' : ''), text: f.focus ? '★' : '☆',
-            title: f.focus ? '取消重点' : '标为考试重点',
-            onclick: async () => {
-              const r = await host.action('mark', { bookId: S.id, fileId: f.id, focus: !f.focus });
-              if (!r || r.ok === false) return toast((r && r.error) || '标记失败', 'bad');
-              f.focus = !f.focus;
-              toast(f.focus ? '已标为重点：分析与整理会优先围绕它' : '已取消重点', 'ok');
-              render();
-            } }),
-          el('button', { class: 'bs-editnote', text: '✎', title: '说明它为什么重要',
-            onclick: () => { S.editingFile = f.id; render(); } }),
-        ]),
-        f.note ? el('div', { class: 'bs-file-note', text: '↳ ' + f.note }) : null,
-      ]);
-    }) : [el('div', { class: 'bs-hint', text: '还没有资料，拖一份进来试试' })]);
+    }
     filesBox.appendChild(fileList);
     railEl.appendChild(filesBox);
 
@@ -310,7 +585,7 @@ export async function mountBookspace(root, bookId, params) {
     // 底部动作
     const acts = el('div', { class: 'bs-acts' });
     acts.appendChild(btn(S.analysis ? '重新分析' : '开始分析', openAnalyze, 'primary sm'));
-    if (S.analysis) acts.appendChild(btn('去练习', () => go('quiz', { id: S.id }), 'ghost sm'));
+    if (S.analysis) acts.appendChild(btn('去练习', () => go('quiz', { id: S.id, title: (S.book && S.book.title) || '' }), 'ghost sm'));
     railEl.appendChild(acts);
   }
 
@@ -336,6 +611,7 @@ export async function mountBookspace(root, bookId, params) {
     if (S.tab === 'types') return renderTypes(body);
     if (S.tab === 'digest') return renderDoc(body, 'digest');
     if (S.tab === 'syllabus') return renderDoc(body, 'syllabus');
+    if (S.tab === 'slides') return renderDoc(body, 'slides');
     return renderAbout(body);
   }
 
@@ -364,19 +640,63 @@ export async function mountBookspace(root, bookId, params) {
     body.classList.add('mapmode');
     const wrap = el('div', { class: 'mm-wrap grow' });
     body.appendChild(wrap);
-    mountMindmap(wrap, S.analysis.tree, {
+    const mm = mountMindmap(wrap, S.analysis.tree, {
+      // 展开态按书持久化（2026-11-21）：切页签/刷新后回到上次的章与展开层。
+      // 默认层可由分析结果里的 mapView.defaultDepth 指定（数据层可配），没给就按规模自动。
+      storageKey: 'book:' + S.id,
+      defaultDepth: (S.analysis && S.analysis.mapView && S.analysis.mapView.defaultDepth) || 0,
+      // 节点角标 = 这个知识点挂了几道题（交叉索引最轻的一层：只给信号，不塞正文）
+      badgeOf: (node) => {
+        const e = pointIndex().get(String(node && node.id));
+        return e ? e.qs.length : 0;
+      },
       onPick: (node) => {
         S.picked = { node: findNodeById(S.analysis.tree, node.id) || node, path: pathOfNode(S.analysis.tree, node.id) };
         S.step = 1;
         renderDetail();
       },
     });
-    body.appendChild(el('p', { class: 'bs-hint', text: '点任一节点 → 右侧逐步讲解这个知识点（是什么 / 常考 / 真题 / 易错）' }));
+    if (S.focusId) {
+      const fid = S.focusId;
+      S.focusId = '';
+      setTimeout(() => { try { mm.focus(fid); } catch (e) { /* 忽略 */ } }, 60);
+    }
+    body.appendChild(el('p', { class: 'bs-hint', text: '点任一节点 → 右侧逐步讲解；节点右下角数字＝这个知识点挂了几道题。' }));
   }
 
   function renderOutline(body) {
     if (needAnalysis(body)) return;
-    const rows = walkTree(S.analysis.tree, 0, [], []);
+    const allRows = walkTree(S.analysis.tree, 0, [], []);
+    const q = String(S.olQuery || '').trim().toLowerCase();
+    // 二百多条提纲，不给人一个搜索框就只能靠滚轮硬找（用户要的「知识点齐全」体感就在这）。
+    // 命中行连同它的祖先一起留下，否则层级会断成一堆没有上下文的孤行。
+    let rows = allRows;
+    if (q) {
+      const keep = new Set();
+      (function rec(n) {
+        const self = ((String(n.title || '') + ' ' + String(n.desc || '')).toLowerCase().includes(q));
+        let any = self;
+        (n.children || []).forEach((c) => { if (rec(c)) any = true; });
+        if (any) keep.add(String(n.id));
+        return any;
+      })(S.analysis.tree);
+      rows = allRows.filter((r) => keep.has(String(r.node.id)));
+    }
+    const bar = el('div', { class: 'bs-ol-bar' }, [
+      el('input', {
+        class: 'bs-find', placeholder: '在 ' + allRows.length + ' 条提纲里找：术语 / 关键词',
+        value: S.olQuery || '',
+        oninput: (e) => {
+          S.olQuery = e.target.value;
+          const keepFocus = e.target.selectionStart;
+          render();
+          const again = mainEl.querySelector('.bs-ol-bar .bs-find');
+          if (again) { again.focus(); try { again.setSelectionRange(keepFocus, keepFocus); } catch (err) { /* 忽略 */ } }
+        },
+      }),
+      q ? el('span', { class: 'bs-hint', text: '命中 ' + rows.filter((r) => ((String(r.node.title || '') + ' ' + String(r.node.desc || '')).toLowerCase().includes(q))).length + ' 条（含所在章节）' }) : null,
+    ]);
+    body.appendChild(bar);
     const list = el('div', { class: 'bs-outline' });
     rows.forEach(({ node, depth, path }) => {
       const qs = questionsOfNode(S.analysis, node);
@@ -431,11 +751,17 @@ export async function mountBookspace(root, bookId, params) {
     ]);
     return el('div', { class: 'bs-q' }, [
       el('div', { class: 'bs-q-head' }, [
-        badge('第 ' + (i + 1) + ' 题', 'plain'),
+        // 全局题号（2026-11-21）：不再按分类内下标重数，否则同屏会出现两个「第 1 题」。
+        // 老数据没有 seqNo，用 id（q0 起）反推同一口径，和练习页完全一致。
+        badge('第 ' + (Number(q.seqNo) > 0 ? Number(q.seqNo) : (Number(String(q.id || '').replace(/^q/, '')) + 1 || (i + 1))) + ' 题', 'plain'),
         badge(String(q.difficulty || '基础'), 'plain'),
+        // P1-2：🟢资料原题 / ⚠️模型整理。老数据没有 origin 字段时不显示，不谎称来源。
+        q.origin === 'material' ? badge('🟢 资料原题', 'good')
+          : q.origin === 'model' ? badge('⚠️ 模型整理', 'warn') : null,
         el('span', { class: 'bs-sub', text: (it && it.title) || '' }),
       ]),
       el('div', { class: 'bs-q-stem', text: q.stem || '' }),
+      figureStrip(imagesForQuestion(q, 2), '这道题要看的图'),
       (q.options || []).length ? el('div', { class: 'bs-q-opts' }, q.options.map((o) => el('div', { class: 'bs-q-opt', text: o }))) : null,
       el('div', { class: 'bs-q-acts' }, [
         el('button', { class: 'btn ghost sm', text: '显示答案', onclick: (e) => {
@@ -468,8 +794,18 @@ export async function mountBookspace(root, bookId, params) {
         ].map(([k, v]) => el('div', { class: 'bs-kv-row' }, [el('span', { text: k }), el('strong', { text: String(v) })]))),
       ]),
       el('div', { class: 'bs-card' }, [
-        el('h4', { text: '摘要' }),
-        el('p', { class: 'bs-para', text: a.summary || '（模型没有给摘要）' }),
+        el('h4', { text: '这本书讲什么' }),
+        (() => {
+          // 模型没写 summary 时按真实目录/统计派生，不显示「（模型没有给摘要）」那种空壳。
+          const ov = deriveOverview(S.analysis || {});
+          return el('div', { class: 'bs-overview' }, [
+            el('div', { class: 'bs-overview-list' }, ov.points.map((p) => el('div', { class: 'bs-overview-row' }, [
+              el('strong', { text: p.label }),
+              el('span', { text: p.text }),
+            ]))),
+            ov.note ? el('p', { class: 'bs-overview-note', text: ov.note }) : null,
+          ]);
+        })(),
       ]),
     ]));
     if (files.length) {
@@ -482,6 +818,28 @@ export async function mountBookspace(root, bookId, params) {
         ]))),
       ]));
     }
+    // 图片索引降到概览底部一小节（不再是独立页签）：图已贴在题目/知识点旁，
+    // 这里只回答「全书共几张原图、分别在哪些题用到」，给想核对的人兜底，不抢主流程。
+    if (allImagesRaw().length) {
+      const box = el('div', { class: 'bs-card' }, [el('h4', { text: '资料原图 · 共 ' + allImagesRaw().length + ' 张（含重复原图的不同出处）' })]);
+      const allQ = allQuestions(S.analysis);
+      allImagesRaw().forEach((img) => {
+        const url = host.imageUrl(S.id, img.id);
+        const s = (img.sources || [])[0] || {};
+        const used = allQ.filter((q) => (Array.isArray(q.imageIds) && q.imageIds.map(String).includes(String(img.id)))
+          || imagesForQuestion(q, 2).some((x) => String(x.id) === String(img.id)));
+        box.appendChild(el('div', { class: 'bs-fig-index-row' }, [
+          url ? el('img', { src: url, alt: s.caption || '原图', loading: 'lazy',
+            onclick: () => zoomImage(url, s.caption) }) : null,
+          el('div', { class: 'bs-fig-index-txt' }, [
+            el('div', { class: 'bs-fig-index-cap', text: s.caption || '资料原图' }),
+            el('div', { class: 'bs-fig-index-src', text: (s.pageType === 'slide' ? 'PPT P' + s.page : s.pageType === 'paragraph' ? 'Word 段' + s.page : s.fileName || '') + ' · ' + humanSize(img.bytes) }),
+            el('div', { class: 'bs-fig-index-used', text: used.length ? '用于：第 ' + used.slice(0, 6).map((q) => (Number(q.seqNo) > 0 ? Number(q.seqNo) : allQ.indexOf(q) + 1)).join('、') + ' 题' : '暂无题目引用' }),
+          ]),
+        ]));
+      });
+      body.appendChild(box);
+    }
   }
 
   /* ---------------- 整理文档：考点大全 / 考纲（2026-11-14） ---------------- */
@@ -490,38 +848,73 @@ export async function mountBookspace(root, bookId, params) {
     return S[kind];
   }
 
-  async function genDoc(kind, refresh) {
+  // 生成文档前的配置检查（2026-11-21 改）。
+  // 旧行为：每次点「生成考点大全」都弹框要求粘密钥——同一份密钥一天粘五遍。
+  // 新行为：服务端已配好（环境变量或 settings.json）就直接跑，**连弹窗都不出现**；
+  //         只有真的缺配置时才问一次，问完就存下来。
+  async function askDocCredential(kind, refresh) {
     const st = docState(kind);
+    const label = kind === 'digest' ? '考点大全' : kind === 'syllabus' ? '考纲' : '考试幻灯片';
+    const rd = await readiness();
     let cfg = {};
-    try { cfg = JSON.parse(localStorage.getItem('wb-llm') || '{}'); } catch (e) { cfg = {}; }
-    if (!cfg.baseURL || !cfg.model) {
-      toast('还没有模型配置：先「开始分析」填一次 API 地址与模型（会自动记住），再来生成', 'info');
-      return;
+    if (!rd.ok) {
+      const entered = await credentialDialog({
+        title: '生成' + label + '前，先把模型配好',
+        sub: '密钥存在本机服务里，填一次以后分析、考点大全、考纲都用这份配置。',
+        confirmLabel: '保存并开始生成',
+      });
+      if (!entered) return; // 取消：什么都不做，也不留半截状态
+      cfg = entered;
     }
     st.busy = true; st.err = ''; render();
     try {
-      const r = await host.action('compose', { bookId: S.id, kind, cfg, refresh: !!refresh });
+      const r = await host.action('compose', { bookId: S.id, kind, cfg, refresh: !!refresh, timeoutMs: 420000 });
       st.busy = false;
       if (!r || r.ok === false) { st.err = (r && r.error) || '生成失败'; render(); return; }
       st.data = r.data;
-      const n = (r.data && r.data.stats && r.data.stats.points) || 0;
+      const n = (r.data && r.data.stats && (kind === 'slides' ? r.data.stats.slides : r.data.stats.points)) || 0;
       toast((r.data && r.data.label || '文档') + '已生成：' + n + ' 个条目', 'ok');
       render();
-    } catch (e) {
-      st.busy = false; st.err = String(e.message || e); render();
-    }
+    } catch (e) { st.busy = false; st.err = String(e.message || e); render(); }
+  }
+  function genDoc(kind, refresh) { askDocCredential(kind, refresh); }
+
+  /**
+   * 分析完成后自动补齐两份派生文档（2026-11-21）。
+   *
+   * 为什么不是塞进 analyze 一次出：一次调用的输出预算有限（实测 16000 token 会截断），
+   * 硬塞会把导图和题型挤掉。所以拆成两次并行请求——总耗时约等于较慢的那一份，而不是两份相加。
+   * 为什么失败不重试：失败多半是额度/网络，自动重试会变成 tight loop（get-it 踩过这个坑）。
+   */
+  async function autoCompose(cfg) {
+    const jobs = [['digest', '考点大全'], ['syllabus', '考纲']];
+    const bookId = S.id;
+    toast('分析好了。正在后台补齐考点大全与考纲，可先看导图', 'info');
+    const out = await Promise.all(jobs.map(([kind, label]) =>
+      host.action('compose', { bookId, kind, cfg, timeoutMs: 420000 })
+        .then((r) => ({ kind, label, ok: !!(r && r.ok !== false && r.data), err: (r && r.error) || '' }))
+        .catch((e) => ({ kind, label, ok: false, err: String((e && e.message) || e) }))
+    ));
+    const good = out.filter((x) => x.ok).map((x) => x.label);
+    if (good.length) toast(good.join('、') + ' 已生成', 'ok');
+    out.filter((x) => !x.ok).forEach((x) => toast(x.label + ' 未生成（可手动重试）：' + (x.err || '未知原因'), 'info'));
+    // 用户正停在那两个页签上时，让内容当场出现；停在导图就不打断。
+    if (S.id === bookId && (S.tab === 'digest' || S.tab === 'syllabus')) render();
   }
 
   function renderDoc(body, kind) {
     const st = docState(kind);
-    const label = kind === 'digest' ? '考点大全' : '考纲';
+    const label = kind === 'digest' ? '考点大全' : kind === 'syllabus' ? '考纲' : '考试幻灯片';
     const desc = kind === 'digest'
       ? '囊括全部考点的知识点汇总：能用原话就用原话（逐字引用，标注是否命中原文），一字不落。'
-      : '按考试重要性从高到低排布的速通手册：重点在前，出题与知识点混杂，含自编例题与做法步骤。';
+      : kind === 'syllabus'
+      ? '按考试重要性从高到低排布的速通手册：重点在前，出题与知识点混杂，含自编例题与做法步骤。'
+      : '把全书考点压成可演示的考试幻灯片：每页一个主题，要点带 ★ 标记重点，可直接讲、可直接考。';
     // 打开页签时先静默试一次缓存（compose 已生成即返回；没有就停在空态，不打扰）
+    // cachedOnly：没有缓存就返回 null，绝不在这里偷偷发起一次模型调用。
     if (!st.data && !st.tried && !st.busy) {
       st.tried = true;
-      host.action('compose', { bookId: S.id, kind }).then((r) => {
+      host.action('compose', { bookId: S.id, kind, cachedOnly: true }).then((r) => {
         if (r && r.ok !== false && r.data) { st.data = r.data; render(); }
       }).catch(() => { /* 无缓存/无配置：保持空态 */ });
     }
@@ -535,28 +928,73 @@ export async function mountBookspace(root, bookId, params) {
     if (st.err) body.appendChild(el('div', { class: 'bs-doc-err', text: st.err }));
     if (!st.data) {
       return body.appendChild(el('div', { class: 'bs-doc-empty' }, [
-        el('div', { class: 'bs-cta-art', text: kind === 'digest' ? '▤' : '◈' }),
+        el('div', { class: 'bs-cta-art', text: kind === 'digest' ? '▤' : kind === 'slides' ? '▦' : '◈' }),
         el('h3', { text: '还没有' + label }),
-        el('p', { text: '生成与分析共用同一份模型配置。' + (kind === 'syllabus' ? '考纲会按重要性排序、给必背要点并自编例题说明做法。' : '生成后每个考点都尽量带逐字原文引用。') }),
+        el('p', { text: '生成与分析共用同一份模型配置。' + (kind === 'syllabus' ? '考纲会按重要性排序、给必背要点并自编例题说明做法。' : kind === 'slides' ? '考试幻灯片会把考点压成每页一个主题、重点带 ★ 的演示稿，可直接讲、可直接考。' : '生成后每个考点都尽量带逐字原文引用。') }),
         el('div', { class: 'bs-cta-acts' }, [btn('生成' + label, () => genDoc(kind, false), 'primary')]),
       ]));
     }
     const stats = st.data.stats || {};
-    body.appendChild(el('p', { class: 'bs-hint', text: '共 ' + st.data.sections.length + ' 章 · ' + (stats.points || 0) + ' 个条目 · 原文逐字命中 ' + (stats.quoteVerified || 0) + '/' + (stats.quoteTotal || 0) + (stats.placeholderHits ? ' · 警告：模型输出含占位词 ' + stats.placeholderHits + ' 处' : '') + ' · 生成于 ' + String(st.data.generatedAt || '').slice(0, 16).replace('T', ' ') }));
-    st.data.sections.forEach((sec) => {
-      const box = el('div', { class: 'bs-doc-sec' });
+    // 幻灯片是另一种结构（slides + bullets），与 digest/syllabus 的 sections 不同，单独渲染。
+    if (kind === 'slides') {
+      const slides = st.data.slides || [];
+      body.appendChild(el('p', { class: 'bs-hint', text: '共 ' + slides.length + ' 页 · ' + (stats.bullets || 0) + ' 条要点 · 其中重点 ' + (stats.markCount || 0) + ' 条' + (stats.placeholderHits ? ' · 警告：模型输出含占位词 ' + stats.placeholderHits + ' 处' : '') + ' · 生成于 ' + String(st.data.generatedAt || '').slice(0, 16).replace('T', ' ') }));
+      slides.forEach((sl, si) => {
+        const box = el('div', { class: 'bs-doc-sec' });
+        box.appendChild(el('div', { class: 'bs-doc-chapter' }, [
+          el('strong', { text: (si + 1) + '. ' + (sl.title || '未命名页') }),
+          sl.source ? el('span', { class: 'bs-src', text: sl.source }) : null,
+        ]));
+        (sl.bullets || []).forEach((b) => {
+          box.appendChild(el('div', { class: 'bs-doc-point' }, [
+            el('div', { class: 'bs-doc-pt-head' }, [b.mark ? badge('重点', 'accent') : null]),
+            el('div', { class: 'bs-doc-detail', text: (b.mark ? '★ ' : '') + (b.text || '') }),
+          ]));
+        });
+        body.appendChild(box);
+      });
+      body.appendChild(el('p', { class: 'bs-hint', text: '列表无上限：有多少页渲染多少页，不折叠、不省略。' }));
+      return;
+    }
+    // 显示口径：空 quote 是「资料无连续原文段可引用、用讲解讲清」的诚实形态，
+    // 不算「未命中」。只统计真正给了引文的条目，避免「0/9」误导用户以为生成失败。
+    const quoteGiven = (st.data.sections || []).reduce((n, s) => n + (s.points || []).filter((p) => p.quote).length, 0);
+    const hitLine = quoteGiven
+      ? '原文逐字命中 ' + (stats.quoteVerified || 0) + '/' + quoteGiven
+      : '讲解型（资料无连续原文段可引用，逐条完整讲清）';
+    body.appendChild(el('p', { class: 'bs-hint', text: '共 ' + st.data.sections.length + ' 章 · ' + (stats.points || 0) + ' 个条目 · ' + hitLine + (stats.placeholderHits ? ' · 警告：模型输出含占位词 ' + stats.placeholderHits + ' 处' : '') + ' · 生成于 ' + String(st.data.generatedAt || '').slice(0, 16).replace('T', ' ') }));
+    // 章节跳转条：这本文档动辄几十章上百条，靠滚轮找章是折磨（2026-11-19）
+    if ((st.data.sections || []).length > 2) {
+      body.appendChild(el('div', { class: 'bs-doc-nav' }, st.data.sections.map((sec, i) => el('button', {
+        class: 'bs-doc-nav-item',
+        title: String(sec.chapter || ''),
+        onclick: () => {
+          const t = mainEl.querySelector('[data-sec="' + i + '"]');
+          if (t) { try { t.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) { /* 忽略 */ } }
+        },
+      }, [
+        el('span', { text: String(sec.chapter || '未分章').slice(0, 18) }),
+        el('span', { class: 'n', text: String((sec.points || []).length) }),
+      ]))));
+    }
+    st.data.sections.forEach((sec, si) => {
+      const box = el('div', { class: 'bs-doc-sec', dataset: { sec: String(si) } });
       box.appendChild(el('div', { class: 'bs-doc-chapter' }, [
         el('strong', { text: sec.chapter || '未分章' }),
         (kind === 'syllabus' && sec.rank) ? badge('重要性 #' + sec.rank, 'accent') : null,
         sec.why ? el('span', { class: 'bs-sub', text: sec.why }) : null,
       ]));
       (sec.points || []).forEach((pt, i) => {
-        box.appendChild(el('div', { class: 'bs-doc-point' }, [
+        // 反向索引：每条整理结果都能回到导图上它的那个节点（找不到就不给按钮，不硬指一个错的）
+        const back = () => { const h = findNodeByTitle(S.analysis.tree, pt.title); if (h) jumpToMap(h.node); };
+        box.appendChild(el('div', { class: 'bs-doc-point', dataset: { doc: si + '-' + i } }, [
           el('div', { class: 'bs-doc-pt-head' }, [
             el('strong', { text: (i + 1) + '. ' + (pt.title || '') }),
             pt.importance ? badge(pt.importance, 'plain') : null,
             pt.quoteVerified ? badge('原文已核', 'accent') : (pt.quote ? badge('引文未逐字命中', 'plain') : null),
             pt.source ? el('span', { class: 'bs-src', text: pt.source }) : null,
+            el('button', { class: 'bs-goto', text: '→ 导图', title: '在思维导图里定位这一条',
+              onclick: back }),
           ]),
           pt.must ? el('div', { class: 'bs-doc-must', text: '必背：' + pt.must }) : null,
           el('div', { class: 'bs-doc-detail', text: pt.detail || '' }),
@@ -565,6 +1003,7 @@ export async function mountBookspace(root, bookId, params) {
           pt.question ? el('div', { class: 'bs-doc-q' }, [
             el('div', { class: 'bs-doc-q-tag', text: '自编例题' }),
             el('div', { class: 'bs-q-stem', text: pt.question.stem || '' }),
+            figureStrip(imagesForQuestion(pt.question, 2), '这道例题要看的图'),
             el('div', { class: 'bs-ans-line', text: '答案：' + (pt.question.answer || '—') }),
             (pt.question.steps || []).map((s) => el('div', { class: 'bs-step', text: s })),
           ]) : null,
@@ -576,6 +1015,141 @@ export async function mountBookspace(root, bookId, params) {
   }
 
   /* ---------------- 右侧：一步一步讲 ---------------- */
+  function normKey(s) { return String(s || '').replace(/\s+/g, '').trim(); }
+
+  // 在考点大全 / 考纲里找「讲同一件事」的条目。
+  // 两张表的条目只带自己的标题，没有 pointId，所以只能按标题对齐；
+  // 先精确相等，再退到「一条包含另一条且都不太短」，最多给 3 条，避免糊成一堆弱匹配。
+  function docHits(kind, node) {
+    const st = S[kind];
+    const d = st && st.data;
+    const key = normKey(node && node.title);
+    if (!d || !key) return [];
+    const out = [];
+    (d.sections || []).forEach((sec, si) => {
+      (sec.points || []).forEach((pt, pi) => {
+        const t = normKey(pt.title);
+        if (!t) return;
+        if (t === key) out.push({ si, pi, pt, sec, exact: true });
+        else if (Math.min(t.length, key.length) >= 6 && (t.includes(key) || key.includes(t))) {
+          out.push({ si, pi, pt, sec, exact: false });
+        }
+      });
+    });
+    return out.sort((a, b) => (b.exact ? 1 : 0) - (a.exact ? 1 : 0)).slice(0, 3);
+  }
+
+  // 跳到某张整理文档的某一条（考点大全 / 考纲 / 幻灯片都走这里）
+  function gotoDoc(kind, si, pi) {
+    S.tab = kind;
+    render();
+    setTimeout(() => {
+      const t = mainEl.querySelector('[data-doc="' + si + '-' + pi + '"]');
+      if (!t) return;
+      try { t.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) { /* 忽略 */ }
+      t.classList.add('hit');
+      setTimeout(() => t.classList.remove('hit'), 1800);
+    }, 40);
+  }
+
+  // 交叉索引卡：一个知识点要能立刻回答「它在全书哪儿、有几道题、考点大全第几条、考纲第几位、出自哪份资料」。
+  // 只显示真的有的东西——没有那一路数据就不出现，不用「共 0 条」占位置。
+  function buildXref(node) {
+    const path = pathOfNode(S.analysis.tree, node.id) || [];
+    const rows = [];
+    const chapterNode = findNodeByTitle(S.analysis.tree, path[1] || path[0] || '');
+    rows.push(el('button', {
+      class: 'bs-xrow' + (chapterNode ? '' : ' static'),
+      onclick: () => chapterNode && jumpToMap(chapterNode.node),
+    }, [
+      el('span', { class: 'k', text: '全书位置' }),
+      el('span', { class: 'v', text: path.slice(1).join(' › ') || String(node.title || '') }),
+      chapterNode ? el('span', { class: 'go', text: '看这一章' }) : null,
+    ]));
+
+    // 题目：这一支（含下级知识点）总共几道。叶子常没有直接挂题（题挂在上一层），
+    // 这时按「最近有题的那一层」兜底并写明层级——不冒充「本节真题」。
+    let branchQs = questionsOfNode(S.analysis, node);
+    let qsLevel = '';
+    if (!branchQs.length) {
+      const fb = questionsFromBranch(S.analysis, path);
+      branchQs = fb.list;
+      qsLevel = fb.level;
+    }
+    if (branchQs.length) {
+      const t0 = branchQs[0].type || '';
+      rows.push(el('button', {
+        class: 'bs-xrow',
+        onclick: () => { S.tab = 'types'; S.activeType = t0; render(); },
+      }, [
+        el('span', { class: 'k', text: '相关题目' }),
+        el('span', { class: 'v', text: branchQs.length + ' 道 · ' + Array.from(new Set(branchQs.map((q) => q.type).filter(Boolean))).slice(0, 3).join(' / ') + (qsLevel ? '（' + qsLevel + '）' : '') }),
+        el('span', { class: 'go', text: '去做' }),
+      ]));
+    }
+
+    // 考点大全 / 考纲：只有生成过才显示，且给出「第几章 · 第几条」这种能核对的位置
+    [['digest', '考点大全'], ['syllabus', '考纲']].forEach(([kind, label]) => {
+      const hits = docHits(kind, node);
+      if (!hits.length) return;
+      const h = hits[0];
+      rows.push(el('button', {
+        class: 'bs-xrow',
+        onclick: () => gotoDoc(kind, h.si, h.pi),
+      }, [
+        el('span', { class: 'k', text: label }),
+        el('span', { class: 'v', text: (h.sec && h.sec.chapter ? h.sec.chapter + ' · ' : '') + '第 ' + (h.pi + 1) + ' 条' + (h.sec && h.sec.rank ? '（重要性 #' + h.sec.rank + '）' : '') }),
+        el('span', { class: 'go', text: '去读' }),
+      ]));
+    });
+
+    // 相关原图：按节点标题/说明与图注的重合度给出（老书没有 imageIds 时的正向索引）
+    const figHits = allImages()
+      .map((img) => ({ img, score: overlapCount(String(node.title || '') + ' ' + String(node.desc || ''), imageTextOf(img)) }))
+      .filter((x) => x.score >= 3)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 2);
+    if (figHits.length) {
+      rows.push(el('button', {
+        class: 'bs-xrow',
+        onclick: () => { S.tab = 'figures'; render(); },
+      }, [
+        el('span', { class: 'k', text: '资料原图' }),
+        el('span', { class: 'v', text: figHits.map((x) => ((x.img.sources || [])[0] || {}).caption || '原图').join(' / ') }),
+        el('span', { class: 'go', text: '看图' }),
+      ]));
+    }
+
+    // 原始资料出处：题目自带的 source，没有题的节点就退回整本书的资料数
+    const srcFile = (branchQs.find((q) => q.source && q.source.file) || {}).source;
+    if (srcFile && srcFile.file) {
+      rows.push(el('div', { class: 'bs-xrow static' }, [
+        el('span', { class: 'k', text: '原文出处' }),
+        el('span', { class: 'v', text: srcFile.file + (srcFile.loc ? ' · ' + srcFile.loc : ''), title: srcFile.file }),
+      ]));
+    }
+
+    // 同一节里的其它知识点：最容易「顺手多看一个」的入口
+    const parentPath = path.slice(0, -1);
+    const parentNode = parentPath.length ? findNodeByTitle(S.analysis.tree, parentPath[parentPath.length - 1]) : null;
+    const sibs = ((parentNode && parentNode.node && parentNode.node.children) || [])
+      .filter((c) => String(c.id) !== String(node.id))
+      .slice(0, 8);
+    const box = el('div', { class: 'bs-xref' }, [
+      el('div', { class: 'bs-xref-t', text: '这处与全书的连接' }),
+    ].concat(rows));
+    if (sibs.length) {
+      box.appendChild(el('div', { class: 'bs-xref-t', text: '同一节的其它知识点', style: { marginTop: '6px' } }));
+      box.appendChild(el('div', { class: 'bs-xchips' }, sibs.map((c) => el('button', {
+        class: 'bs-xchip',
+        text: String(c.title || '').replace(/^[\d.]+\s*/, ''),
+        title: String(c.title || ''),
+        onclick: () => jumpToMap(c),
+      }))));
+    }
+    return box;
+  }
+
   function renderDetail() {
     if (!S.picked) { detailEl.classList.add('hidden'); return; }
     const { node, path } = S.picked;
@@ -592,25 +1166,52 @@ export async function mountBookspace(root, bookId, params) {
     }
     const steps = [
       { t: '先定位：它在全书的哪儿', body: [el('div', { class: 'bs-path', text: (path || []).join('  ›  ') })] },
-      { t: '这是什么', body: [el('p', { class: 'bs-para', text: node.desc || (
-        (node.children || []).length
-          ? '模型没给这一层的说明。它下面有 ' + (node.children || []).length + ' 个分支：' +
-            (node.children || []).map((c) => c.title).filter(Boolean).join('、')
-          : '这是最末端的一个知识点，底下没有更细的分支；直接看下面的真题最有效。'
-      ) })] },
+      { t: '这是什么', body: [
+        el('p', { class: 'bs-para', text: node.desc || (
+          (node.children || []).length
+            ? '模型没给这一层的说明。它下面有 ' + (node.children || []).length + ' 个分支：' +
+              (node.children || []).map((c) => c.title).filter(Boolean).join('、')
+            : '这是最末端的一个知识点，底下没有更细的分支；直接看下面的真题最有效。'
+        ) }),
+        // 知识点本身带图就贴在这里——看图才懂的知识点，图和讲解必须同屏（用户验收核心）
+        figureStrip(imagesForNode(node, 2), '这个知识点的图'),
+      ] },
       { t: '常考什么', body: [(node.questionTypes || []).length
         ? el('div', { class: 'bs-chips' }, (node.questionTypes || []).map((x) => badge(x, 'accent')))
         : el('p', { class: 'bs-para', text: '模型没标这个知识点的题型；下面按真题看更准。' })] },
-      { t: '真题长什么样', body: fallbackNote ? [el('p', { class: 'bs-note', text: fallbackNote })].concat(
-        qs.slice(0, 2).map((q) => el('div', { class: 'bs-mini' }, [
-          el('div', { class: 'bs-mini-stem', text: q.stem || '' }),
-          el('div', { class: 'bs-note', text: '题型：' + (q.type || '') + (q.subtype ? ' · ' + q.subtype : '') }),
-        ]))) : qs.length
-        ? qs.slice(0, 2).map((q) => el('div', { class: 'bs-mini' }, [
-          el('div', { class: 'bs-mini-stem', text: q.stem || '' }),
-          el('div', { class: 'bs-note', text: '题型：' + (q.type || '') + (q.subtype ? ' · ' + q.subtype : '') }),
-        ]))
-        : [el('p', { class: 'bs-para', text: '这道分支下暂时没有题；换个更靠下的知识点看看。' })] },
+      { t: '真题长什么样', body: (function () {
+        // P1-3（2026-11-20 · retrieval-first）：配图默认折叠，先自己读题想一遍，
+        // 点「看这道题的配图」才展开。来源判据：universal-examprep-skill SKILL.md §4 逐字
+        // "Show the question figure before asking the question; show the answer figure only when explaining the answer"，
+        // 以及英文 best practice "Each review must be a retrieval attempt — you try to produce the answer before checking it"。
+        // 注意：题型卡里的图题并置（figureStrip(q,2,'这道题要看的图')）不动——那是为了「看懂必看图的题」，
+        // 这里折叠的是讲解面板的「答案配图」，两者用途不同，不能一刀切。
+        const mini = (q) => {
+          const figs = imagesForQuestion(q, 1);
+          const box = el('div', { class: 'bs-mini' }, [
+            el('div', { class: 'bs-mini-stem', text: q.stem || '' }),
+            el('div', { class: 'bs-note', text: '题型：' + (q.type || '') + (q.subtype ? ' · ' + q.subtype : '') }),
+          ]);
+          if (figs.length) {
+            const holder = el('div', { class: 'bs-ansfig hidden' });
+            const toggle = el('button', {
+              class: 'btn ghost sm bs-ansfig-toggle',
+              text: '看这道题的配图（先自己想一想）',
+              onclick: (e) => {
+                const opened = holder.classList.toggle('hidden');
+                e.currentTarget.textContent = opened ? '看这道题的配图（先自己想一想）' : '收起配图';
+              },
+            });
+            holder.appendChild(figureStrip(figs, '这道题的配图'));
+            box.appendChild(toggle);
+            box.appendChild(holder);
+          }
+          return box;
+        };
+        if (!qs.length) return [el('p', { class: 'bs-para', text: '这道分支下暂时没有题；换个更靠下的知识点看看。' })];
+        const head = fallbackNote ? [el('p', { class: 'bs-note', text: fallbackNote })] : [];
+        return head.concat(qs.slice(0, 2).map(mini));
+      })() },
       { t: '答案与思路（先自己想一想）', body: qs.length
         ? qs.slice(0, 2).map((q) => el('div', { class: 'bs-mini' }, [
           el('div', { class: 'bs-ans-line', text: '答案：' + (q.answer || '—') }),
@@ -621,6 +1222,24 @@ export async function mountBookspace(root, bookId, params) {
       { t: '最容易错的地方', body: qs.some((q) => q.pitfalls)
         ? qs.filter((q) => q.pitfalls).slice(0, 3).map((q) => el('div', { class: 'bs-note', text: '· ' + q.pitfalls }))
         : [el('p', { class: 'bs-para', text: '分析结果里没有标注易错点。' })] },
+      // 递进深挖（2026-11-21）：这一章学生最容易卡的点 + 必须串起来看的知识点。
+      // 只在用户分析时勾了「递进深挖」且成功才有；没有就诚实说明，不伪造。
+      { t: '这一章的坎（递进深挖）', body: (function () {
+        const dd = S.analysis && S.analysis.deepDive;
+        if (!dd || dd.status !== 'ok' || !Array.isArray(dd.chapters) || !dd.chapters.length) {
+          return [el('p', { class: 'bs-para', text: '本次未做递进深挖（分析时勾选可生成）。已有步骤照常可用。' })];
+        }
+        const chapter = String((path || [])[0] || '');
+        const hit = dd.chapters.find((c) => String(c.chapter || '') === chapter)
+          || dd.chapters.find((c) => chapter && (String(c.chapter).includes(chapter) || chapter.includes(String(c.chapter))));
+        if (!hit) return [el('p', { class: 'bs-para', text: '深挖结果里没有这一章；看其它章或重新分析时勾选递进深挖。' })];
+        const out = [];
+        if ((hit.traps || []).length) out.push(el('div', { class: 'bs-deep-t', text: '最容易卡住' }),
+          ...hit.traps.map((x) => el('div', { class: 'bs-note', text: '· ' + x })));
+        if ((hit.links || []).length) out.push(el('div', { class: 'bs-deep-t', text: '要串起来看' }),
+          ...hit.links.map((x) => el('div', { class: 'bs-note', text: '· ' + x })));
+        return out.length ? out : [el('p', { class: 'bs-para', text: '这一章深挖结果为空（资料里没有依据，不硬凑）。' })];
+      })() },
     ];
     detailEl.classList.remove('hidden');
     detailEl.innerHTML = '';
@@ -637,6 +1256,7 @@ export async function mountBookspace(root, bookId, params) {
       ]));
     });
     detailEl.appendChild(flow);
+    detailEl.appendChild(buildXref(node));
     const foot = el('div', { class: 'bs-detail-foot' });
     if (S.step < steps.length) {
       foot.appendChild(btn('继续 →', () => { S.step += 1; renderDetail(); }, 'primary sm'));
@@ -679,22 +1299,33 @@ export async function mountBookspace(root, bookId, params) {
     render();
   }
 
-  function openAnalyze() {
-    const cfg = (() => { try { return JSON.parse(localStorage.getItem('wb-llm') || '{}'); } catch (e) { return {}; } })();
-    const base = el('input', { class: 'bs-input', placeholder: 'https://api.example.com/v1', value: cfg.baseURL || '' });
-    const model = el('input', { class: 'bs-input', placeholder: '模型名，如 deepseek-chat', value: cfg.model || '' });
-    const key = el('input', { class: 'bs-input', type: 'password', placeholder: '密钥（只在本次请求内存在，不落盘）' });
+  async function openAnalyze() {
+    // 配置从服务端读（2026-11-21）：已配好就把值预填、密钥只显示掩码，
+    // 用户点「开始分析」即可，不必再粘一次。
+    const s = await loadSettings();
+    const fields = credentialFields(s);
+    const ready = !!(s && s.ok !== false && s.hasKey && s.model);
+    // 递进深挖（2026-11-21）：可选第二轮，按章产出「最容易卡住 + 跨点串联」。
+    // 默认不勾——主分析已够用；勾了多花一次请求，失败也会单独标注、不挡主结果。
+    const deepDive = el('input', { class: 'bs-check', type: 'checkbox' });
+    deepDive.checked = !!(s && s.deepDive);
     const status = el('div', { class: 'bs-hint' });
     const mask = el('div', { class: 'bs-mask' });
-    const dlg = el('div', { class: 'bs-dialog' }, [
+    const cancelBtn = btn('取消', close, 'ghost');
+    cancelBtn.type = 'button'; // 不想在取消时再触发一次表单提交（控制台噪声）
+    const dlg = el('form', { class: 'bs-dialog bs-dialog-wide' }, [
       el('h3', { text: S.analysis ? '重新分析这本书' : '分析这本书' }),
-      el('p', { class: 'bs-sub', text: '模型会把整本书当作一个整体读一遍，生成思维导图、提纲与题型分类。资料多时会比较久。' }),
-      el('label', { class: 'bs-field' }, [el('span', { text: 'API 地址' }), base]),
-      el('label', { class: 'bs-field' }, [el('span', { text: '模型' }), model]),
-      el('label', { class: 'bs-field' }, [el('span', { text: '密钥' }), key]),
+      el('p', { class: 'bs-sub', text: ready
+        ? '模型会把整本书当作一个整体读一遍，生成思维导图、提纲与题型分类。已保存的配置直接可用，不必再填密钥。'
+        : '模型会把整本书当作一个整体读一遍，生成思维导图、提纲与题型分类。密钥填一次就记住。' }),
+      fields.node,
+      el('label', { class: 'bs-field' }, [
+        el('span', { text: '递进深挖（可选，多一次请求）' }),
+        el('span', { class: 'bs-check-row' }, [deepDive, el('span', { class: 'bs-hint', text: '按章总结最容易卡住的点 + 必须串起来看的知识点，视图谱页和讲解面板可见' })]),
+      ]),
       status,
       el('div', { class: 'bs-dialog-acts' }, [
-        btn('取消', close, 'ghost'),
+        cancelBtn,
         btn('开始分析', run, 'primary'),
       ]),
     ]);
@@ -702,23 +1333,54 @@ export async function mountBookspace(root, bookId, params) {
     document.body.appendChild(mask);
     function close() { mask.remove(); }
     mask.addEventListener('click', (e) => { if (e.target === mask) close(); });
+    dlg.addEventListener('submit', (e) => { e.preventDefault(); run(); });
     async function run() {
-      const payloadCfg = { baseURL: base.value.trim(), model: model.value.trim(), apiKey: key.value };
-      if (!payloadCfg.baseURL || !payloadCfg.model || !payloadCfg.apiKey) { status.textContent = '地址 / 模型 / 密钥都要填'; return; }
-      try { localStorage.setItem('wb-llm', JSON.stringify({ baseURL: payloadCfg.baseURL, model: payloadCfg.model })); } catch (e) { /* 忽略 */ }
+      const v = fields.read();
+      if (!v.model) { status.textContent = '先选一个对话模型（点「找模型」或手填）'; return; }
+      if (!v.apiKey && !(s && s.hasKey)) { status.textContent = '还没有密钥：填一个 sk- 开头的密钥'; return; }
+      // 存下来：地址/模型/视觉模型必存；密钥只在这次填了才写（留空＝沿用）
+      const saved = await saveSettings({ baseURL: v.baseURL, model: v.model, visionModel: v.visionModel, apiKey: v.apiKey || undefined, deepDive: !!deepDive.checked });
+      if (!saved || saved.ok === false) { status.textContent = '保存配置失败：' + ((saved && saved.error) || '未知原因'); return; }
+      const payloadCfg = { baseURL: v.baseURL, model: v.model };
+      if (v.apiKey) payloadCfg.apiKey = v.apiKey;
       const t0 = Date.now();
       let alive = true;
       const tick = setInterval(() => { if (alive) status.textContent = '分析中…已 ' + Math.round((Date.now() - t0) / 1000) + ' 秒（不要关页面）'; }, 1000);
       status.textContent = '分析中…';
       try {
-        const r = await host.action('analyze', { bookId: S.id, cfg: payloadCfg });
+        // 填了视觉模型就通过 visionCfg 传给 analyze：它会在出题前先逐张看图（不改协议、
+        // 不新增 action，三端能力清单保持一致）。看图失败自动降级按图注配图，不挡分析。
+        const vm = v.visionModel;
+        if (vm) status.textContent = '正在让视觉模型看图…（看懂才不会被图注带偏）';
+        // 语料上限 12 万字符 + 输出预算 4.8 万 token，真机耗时可能 3-8 分钟（大资料更久）。
+        // 超时失败用户一无所得，比慢更糟；给 600s，宁可等也不失败。
+        const r = await host.action('analyze', {
+          bookId: S.id, cfg: payloadCfg, timeoutMs: 600000,
+          // visionCfg 不带密钥也成立：服务端会把配置里那份补给它
+          visionCfg: vm ? { baseURL: payloadCfg.baseURL, model: vm } : null,
+          deepDive: !!deepDive.checked,
+        });
         alive = false; clearInterval(tick);
         if (!r || r.ok === false) throw new Error((r && r.error) || '分析失败');
         close();
         toast('分析完成', 'ok');
+        if (vm && r.data && r.data.visionStat) {
+          const vs = r.data.visionStat;
+          toast(vs.error ? ('看图未完成，本次按图注配图：' + vs.error)
+            : ('已看懂 ' + vs.done + ' 张图' + (vs.failed ? '，' + vs.failed + ' 张看图失败' : '') + '，题图已按图内容配对'), vs.error ? 'info' : 'ok');
+        }
+        if (deepDive.checked && r.data && r.data.deepDive) {
+          const dd = r.data.deepDive;
+          toast(dd.status === 'ok' ? ('递进完成：' + (dd.chapters || []).length + ' 章的易错与串联已写入')
+            : ('递进深挖未完成（主分析不受影响）：' + (dd.error || '未知原因')), dd.status === 'ok' ? 'ok' : 'info');
+        }
         await load();
         S.tab = 'map';
         render();
+        // 自动补齐考点大全与考纲（2026-11-21）：
+        // 判据——同源产物不该让用户再点两次「生成」。两份一起并行发，谁好了算谁，
+        // 失败只在控制台/提示里说明，绝不挡已经成功的分析结果。
+        autoCompose(payloadCfg);
       } catch (e) {
         alive = false; clearInterval(tick);
         status.textContent = '失败：' + String(e.message || e);

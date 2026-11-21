@@ -8,7 +8,7 @@
 // 用法（仓库根目录）：node scripts/sync-engine.mjs   （或 npm run forms:sync）
 import fs from 'node:fs';
 import path from 'node:path';
-import { FORMS } from './_forms.mjs';
+import { FORMS, ROOT } from './_forms.mjs';
 
 let ok = 0, skipped = 0;
 for (const form of FORMS) {
@@ -30,6 +30,19 @@ for (const form of FORMS) {
     const b = fs.existsSync(to) ? fs.readFileSync(to) : null;
     if (b && a.equals(b)) { console.log('  已一致：' + form.label + ' / ' + rel); }
     else { fs.writeFileSync(to, a); console.log('  已同步：' + form.label + ' / ' + rel); ok++; }
+  }
+}
+// DSH 安装戳记：cordis.patch.yml 发布到 GitHub 后不能写死作者本机路径，
+// 所以在同步到「本机已安装位置」时额外写一份 project-root.json（在 ~/.dsh 下，不入库）。
+// 插件的 resolveProjectRoot() 会读它，既保持仓库可移植，也不破坏现有安装。
+const dsh = FORMS.find((f) => f.label === 'DSH 插件' && fs.existsSync(f.dst));
+if (dsh) {
+  const stamp = path.join(dsh.dst, 'project-root.json');
+  const text = JSON.stringify({ projectRoot: path.resolve(ROOT), generatedBy: 'npm run forms:sync' }, null, 2) + '\n';
+  if (!fs.existsSync(stamp) || fs.readFileSync(stamp, 'utf8') !== text) {
+    fs.writeFileSync(stamp, text);
+    console.log('  已写入安装戳记：' + stamp);
+    ok++;
   }
 }
 console.log('[forms] 完成：更新 ' + ok + ' 个文件，跳过 ' + skipped + ' 个未安装形态');

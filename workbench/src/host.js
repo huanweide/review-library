@@ -40,6 +40,13 @@ function detect() {
 
 const info = detect();
 
+// 配置接口的根：/api/app → /api；/review-analysis/api/app → /review-analysis/api。
+// 不另设一个 base 参数，避免同一份 host 里出现第二套地址推导。
+function cfgUrl(name) {
+  const root = String(info.base || '').replace(/\/app$/, '');
+  return root + '/' + name;
+}
+
 async function getJson(url, opts) {
   const r = await fetch(url, Object.assign({ cache: 'no-store', headers: { Accept: 'application/json' } }, opts || {}));
   if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -78,6 +85,42 @@ export const host = {
     if (info.kind === 'electron') return null;
     return info.base + '/file?bookId=' + encodeURIComponent(String(bookId || ''))
       + '&fileId=' + encodeURIComponent(String(fileId || ''));
+  },
+
+  /** 内嵌原图直显 URL（2026-11-20）：imageId 来自 get 返回的 images 清单。 */
+  imageUrl(bookId, imageId) {
+    if (info.kind === 'electron') return null;
+    return info.base + '/image?bookId=' + encodeURIComponent(String(bookId || ''))
+      + '&imageId=' + encodeURIComponent(String(imageId || ''));
+  },
+
+  /* ---------- 模型配置（2026-11-21） ---------- */
+  // 密钥住在服务端（配置文件或环境变量），前端只读状态、写设置、列模型，永远拿不到原文。
+  // 配置接口不在 action 协议里：它不是「书库能力」，加进能力清单会污染五种形态的语义。
+  async settings(patch) {
+    if (info.kind === 'electron') return { ok: false, unsupported: true, error: '桌面端暂未接入配置存储' };
+    const url = cfgUrl('settings');
+    try {
+      if (patch) return await getJson(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch || {}) });
+      return await getJson(url);
+    } catch (e) { return { ok: false, unsupported: true, error: String(e.message || e) }; }
+  },
+
+  async testSettings(cfg) {
+    if (info.kind === 'electron') return { ok: false, unsupported: true, error: '桌面端暂未接入配置存储' };
+    try {
+      return await getJson(cfgUrl('settings/test'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cfg: cfg || {} }) });
+    } catch (e) { return { ok: false, error: String(e.message || e) }; }
+  },
+
+  async models(override) {
+    if (info.kind === 'electron') return { ok: false, unsupported: true, error: '桌面端暂未接入配置存储', models: [] };
+    const url = cfgUrl('models');
+    try {
+      const body = override && Object.keys(override).length ? override : null;
+      if (body) return await getJson(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      return await getJson(url);
+    } catch (e) { return { ok: false, error: String(e.message || e), models: [] }; }
   },
 };
 

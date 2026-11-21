@@ -49,10 +49,10 @@ plugin_manager list_plugins            # 找到 include:review-analysis
 
 | 字段 | 说明 |
 |---|---|
-| `projectRoot` | **必填**：主项目根目录，必须含 `core/index.js`。插件从这里 `require` 统一核心 |
+| `projectRoot` | 主项目根目录（含 `core/index.js`）。缺省填 `__AUTO__`，由 `resolveProjectRoot()` 自动推导；也可设环境变量 `DSH_REVIEW_PROJECT_ROOT` |
 | `library` | 可选，数据目录；缺省 `<projectRoot>/library` |
 
-**密钥绝不写进 patch / 任何文件。** 模型配置走工具参数 `cfg`，或环境变量：
+**密钥绝不写进 patch / 插件文件 / 日志。** 模型配置优先走工具参数 `cfg` 或环境变量；在设置页主动保存的配置才写进主项目 `library/settings.json`（已 gitignore，不入库）：
 
 ```bash
 DSH_LLM_BASE_URL=https://api.example.com/v1
@@ -89,9 +89,22 @@ DSH_LLM_API_KEY=...        # 只在进程内存，不落盘
 - **应用**（默认）：内嵌的就是根目录 `workbench/` 这个应用工程（同一个 `index.html` + `src/*`，不是另写一版）。面板以 `/review-analysis/app/index.html?base=/review-analysis/api/app` 加载，应用通过 `?base` 把协议端点指回插件，因此 DSH 里的 APP 与内置浏览器 / Electron / PWA 是**同一份代码、同一份数据**。
 - **状态**：插件自己的只读视图（`GET /review-analysis/api/state`，同源校验）。按 root → 章 → 节 → 知识点 → 子点层层展开，另有题型索引与概览；要重新分析，在对话里调用 `review_analysis` 工具（面板不接收模型密钥、不落盘）。
 
-静态托管：`index.html / manifest.webmanifest / sw.js / icons/icon.svg / src/*.js / src/style.css` 逐文件 `kind:'exact'` 注册（固定清单 + `path.resolve` 双重校验，防目录穿越）；思维导图布局另托一份 `renderer/js/mindmap-layout.js`（唯一源码，不复制算法）。
+静态托管：`index.html / manifest.webmanifest / sw.js / icons/icon.svg / src/*.js / src/*.mjs / src/style.css` 逐文件 `kind:'exact'` 注册（固定清单 + `path.resolve` 双重校验，防目录穿越），包含 2026-11-21 新增的 `src/llm-config.js` 与 `src/overview.mjs`——漏一个就是面板白屏；`.mjs` 必须映射成 `text/javascript`。思维导图布局另托一份 `renderer/js/mindmap-layout.js`（唯一源码，不复制算法）。
 
 ---
+
+
+## DSH 版本适配矩阵（2026-11-21）
+
+| 场景 | 怎么找到统一核心 | 模型配置从哪来 | 状态 |
+|---|---|---|---|
+| DSH 0.2.x web profile 侧栏 | bundle patch `dsh.client.platform: web`，面板内嵌同一 `workbench/` | `/review-analysis/api/settings` + `/api/models`（与 HTTP 形态同语义，复用 `core/settings.js`） | ✅ |
+| `~/.dsh/local-plugins/` 安装 | `npm run forms:sync` 写 `project-root.json` 安装戳记 | 同上；密钥也可来自 `DSH_LLM_API_KEY` | ✅ |
+| 源码放在仓库 `plugins/dsh-review-analysis/` | 从 `import.meta.url` 相对推导仓库根 | 同上 | ✅ |
+| 自定义安装位置 | `DSH_REVIEW_PROJECT_ROOT` 或 patch 的 `config.projectRoot` | 同上 | ✅ |
+| WorkBuddy 专家（另一个宿主） | `bin/driver.js --project` | `REVIEW_LLM_*` 与 `SILICONFLOW_*` 共用同一解析逻辑 | ✅ |
+
+`cordis.patch.yml` 里不再写作者本机的绝对路径——那份文件会随仓库发布，写死等于插件只能在作者机器上运行。三个配置端点与 action 的 cfg 补全都直接 `require` 主项目的 `core/settings.js`，**插件里没有第二份配置解析规则**。判别：`node tools/check-dsh-adapt.mjs`（22 项，含真跑 Host 半边路由）。
 
 ## 版本与形态
 

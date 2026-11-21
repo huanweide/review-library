@@ -8,14 +8,18 @@
 //   await core.addFile(book.id, buf, { name: '第1章.pdf' });
 //   const result = await core.analyze(book.id, { cfg });  // cfg = { baseURL, apiKey, model }
 //   core.getAnalysis(book.id);
+const fs = require('fs');
+const path = require('path');
 const { BookStore } = require('./bookStore');
 const extract = require('./extract');
+const imagesLib = require('./images');
+const visionLib = require('./image-vision');
 const analyzeLib = require('./analyze');
 const practiceLib = require('./practice');
 const documentsLib = require('./documents');
 
 // 版本号唯一真源 = 根 package.json 的 version；本常量由 scripts/sync-versions.mjs 机械同步，禁止手改。
-const CORE_VERSION = '1.6.1';
+const CORE_VERSION = '1.6.4';
 
 class Core {
   constructor(root) {
@@ -27,12 +31,42 @@ class Core {
   getBook(id) { return this.store.getBook(id); }
   deleteBook(id) { return this.store.deleteBook(id); }
 
-  // 加文件并自动抽取文本缓存（图片不抽，文本留待多模态 LLM）。
+  // 加文件并自动抽取文本缓存；同时把文档里的内嵌图**原字节**抽出来（2026-11-20）。
+  // 图片抽取失败绝不能挡住资料导入：文本链路是主，图片是增强。
   async addFile(id, buf, meta) {
     const rec = this.store.addFile(id, buf, meta);
     const text = rec.isImage ? '' : await extract.extractText(rec.ext, buf);
     this.store.setFileText(id, rec.id, text == null ? '' : text);
-    return rec;
+    let imageStats = { added: 0, deduped: 0 };
+    try {
+      const bookDir = this.store._bookDir(id);
+      imageStats = imagesLib.ingest(bookDir, rec.id, rec.name, rec.ext, buf, {
+        relPath: path.join('files', fs.readdirSync(path.join(bookDir, 'files')).find((n) => n.startsWith(rec.id + '__')) || ''),
+        size: rec.size,
+      });
+    } catch (e) {
+      // 只记到 rec 上，不抛：抽图是增量能力，不能让一份坏 OOXML 毁掉整个导入。
+      imageStats.error = String(e.message || e);
+    }
+    return Object.assign({}, rec, { imageStats });
+  }
+
+  // 图片清单与取图（前端看图区 / 分析提示词都走这两个方法，不各读 images.json）
+  getImages(id) {
+    const book = this.store.getBook(id);
+    return book ? imagesLib.loadIndex(this.store._bookDir(id)) : null;
+  }
+  getImage(id, imageId) {
+    const book = this.store.getBook(id);
+    return book ? imagesLib.readImage(this.store._bookDir(id), imageId) : null;
+  }
+
+  // 让视觉模型真的看一遍本书原图，把「图里是什么」写回 images.json（key 只在 opts.cfg 内存）。
+  // 分析时会自动优选用这些描述做「题→图」配对，避免只看图注配错图。
+  async describeImages(id, cfg, opts) {
+    const book = this.store.getBook(id);
+    if (!book) throw new Error('书不存在：' + id);
+    return visionLib.describeBook(this.store._bookDir(id), cfg || {}, opts);
   }
 
   getFileBuffer(id, fileId) { return this.store.getFileBuffer(id, fileId); }
@@ -63,8 +97,16 @@ class Core {
     const text = this.getBookText(id);
     // F5：把「图片数 / 资料总数」传给分析层，纯图片书才能给出「需视觉模型」而不是空壳分析。
     const files = book.files || [];
+    // v4（2026-11-20）：把「原图清单」注入分析。图片本体不进文本语料（不画、不生成），
+    // 模型看到的是图 id + 图注 + 上下文 + 出处，用来在题目上标 imageIds 完成「题→图」关联。
+    // v5（2026-11-20）：优先喂「视觉模型看图后写下的真内容」，没有视觉理解时才退回图注。
+    // 用户要的就是别张冠李戴：模型得看懂图再决定它配哪道题。
+    const bookDir = this.store._bookDir(id);
+    const imageDescriptions = visionLib.describeForPrompt(bookDir);
     const withStats = Object.assign({}, opts, {
       imageCount: files.filter(f => f.isImage).length,
+      embeddedImageCount: imageDescriptions.length,
+      imageDescriptions,
       materialCount: files.length,
       // v2：真实文件名清单注入提示词，题目的 source.file 才能回溯到导入的资料。
       files: files.map(f => ({ name: f.name, isImage: !!f.isImage }))
@@ -84,13 +126,16 @@ class Core {
   async composeDocument(id, kind, opts) {
     const o = opts || {};
     const k = String(kind || '');
-    if (!['digest', 'syllabus'].includes(k)) {
-      throw new Error('未知文档类型：' + kind + '（可用 digest=考点大全 / syllabus=考纲）');
+    if (!['digest', 'syllabus', 'slides'].includes(k)) {
+      throw new Error('未知文档类型：' + kind + '（可用 digest=考点大全 / syllabus=考纲 / slides=考试幻灯片）');
     }
     if (!o.refresh) {
       const cached = this.store.getDocument(id, k);
       if (cached) return cached;
     }
+    // 只读缓存（2026-11-21）：打开页签时的「有没有现成的」探测必须走这条。
+    // 否则「点开考点大全」= 悄悄发起一次 1-3 分钟的模型调用，用户以为自己只是看了一眼。
+    if (o.cachedOnly) return null;
     const book = this.store.getBook(id);
     if (!book) throw new Error('书不存在：' + id);
     const cfg = o.cfg || {};

@@ -54,6 +54,12 @@ function flatten(analysis, publicOnly) {
           difficulty: String(q.difficulty || '基础'),
           pointPath: Array.isArray(q.pointPath) ? q.pointPath.slice() : [],
           pointId: String(q.pointId || ''),
+          // 全局题号（2026-11-21）：两处显示同一个号，用户才能引用「第 13 题」。
+          // 老分析数据没有 seqNo，用 id（q0 起）反推同一口径，不逼用户重跑模型。
+          seqNo: Number(q.seqNo) > 0 ? Number(q.seqNo) : (Number(String(q.id || '').replace(/^q/, '')) + 1 || 0),
+          // 题目配图（2026-11-21）：练习页必须能带图，否则「根据图中」的题做不了。
+          // 脱敏（publicOnly）也要带——图是题面的一部分，不是答案。
+          imageIds: Array.isArray(q.imageIds) ? q.imageIds.map((x) => String(x)).filter(Boolean).slice(0, 4) : [],
           auto: AUTO_TYPES.has(type)
         };
         if (!publicOnly) {
@@ -81,8 +87,10 @@ function parseAnswer(q) {
   const answer = String((q && q.answer) || '').trim();
   const opts = Array.isArray(q && q.options) ? q.options : [];
   let letter = '';
-  const m = answer.match(/^\s*([A-Ha-h])\s*[.．、:：)）]/);
-  if (m) letter = m[1].toUpperCase();
+  // 末尾 `|$` 不能漏：模型经常只写「B」不带标点。normalizeGiven 早就支持纯字母，
+  // 这里少一个 `$` 会让「标准答案是纯字母」的题永远判不了卷、全退化成人工自评（2026-11-21 实测）。
+  const m = answer.match(/^\s*([A-Ha-h])\s*[.．、:：)）]|^\s*([A-Ha-h])\s*$/);
+  if (m) letter = (m[1] || m[2] || '').toUpperCase();
   // 判断题可能只写「错误 —— 理由」不带字母：从答案首个中文结论反查选项。
   let label = '';
   if (letter) {
@@ -198,12 +206,48 @@ function pushHistory(card, entry) {
 }
 
 /** 提交一次作答：判分 → 排程 → 落状态。返回给前端的结果里才第一次带上答案与解析。 */
+/**
+ * 把「还要多少毫秒到期」说成人话。
+ * 用户看不懂 stability=2.2，但看得懂「10 分钟后」「4 天后」。
+ */
+function humanGap(ms) {
+  const m = Math.max(0, Math.round(Number(ms) || 0) / 60000);
+  if (m < 1) return '马上';
+  if (m < 60) return Math.round(m) + ' 分钟后';
+  const h = m / 60;
+  if (h < 24) return Math.round(h) + ' 小时后';
+  const d = h / 24;
+  if (d < 30) return Math.round(d) + ' 天后';
+  const mo = d / 30;
+  if (mo < 12) return Math.round(mo) + ' 个月后';
+  return (d / 365).toFixed(1) + ' 年后';
+}
+
+/**
+ * 四档预览（2026-11-21，对齐 Anki「评分前显示下一个间隔」）。
+ * 必须在 applySchedule **之前**用旧状态算——用新状态算出来的是「已经评完再评一次」，会骗人。
+ */
+function previewRatings(card, now) {
+  const prev = {
+    stability: card.stability, difficulty: card.difficulty,
+    lapses: card.lapses, reps: card.reps
+  };
+  const names = ['重来', '有点难', '记得', '很简单'];
+  return [1, 2, 3, 4].map((r) => {
+    const out = srs.schedule(prev, r, now);
+    return { rating: r, name: names[r - 1], dueAt: out.dueAt, label: humanGap(out.dueAt - now) };
+  });
+}
+
 function attempt(state, q, given, now) {
   const t = Number(now) || Date.now();
   const s = normalizeState(state);
   const g = gradeOne(q, q.type, given);
   const card = ensureCard(s, q, t);
   const givenClean = String(given == null ? '' : given).slice(0, MAX_GIVEN);
+
+  // 先算四档（基于当前还没被排程改写的卡），再落排程。
+  const nextIntervals = previewRatings(card, t);
 
   if (g.verdict === 'correct') card.correctCount = (card.correctCount || 0) + 1;
   else if (g.verdict === 'wrong') card.lapseCount = (card.lapseCount || 0) + 1;
@@ -221,7 +265,11 @@ function attempt(state, q, given, now) {
       // ↓ 提交后才下发：这是「先答后揭」的真实边界，不是 CSS 遮挡。
       answer: String(q.answer || ''), solution: q.solution || [],
       rationale: String(q.rationale || ''), pitfalls: String(q.pitfalls || ''),
-      card, dueAt: card.dueAt
+      card, dueAt: card.dueAt,
+      // 四档各自的到期时间：用户可以接受自动结果，也可以改成别的档位。
+      nextIntervals,
+      scheduledBy: g.mode === 'auto' ? (g.correct ? 'auto-correct' : 'auto-wrong') : 'self',
+      currentLabel: humanGap(card.dueAt - t)
     }
   };
 }

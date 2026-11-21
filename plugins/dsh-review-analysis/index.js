@@ -21,8 +21,36 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+
+/**
+ * 统一核心根目录（2026-11-21 适配特化）。
+ * 优先级：插件 config > DSH_REVIEW_PROJECT_ROOT 环境变量 > 安装时写入的 project-root.json
+ *         > 从插件自身位置推导（源码在 <root>/plugins/dsh-review-analysis/）。
+ * 为什么不用 cordis.patch.yml 写死绝对路径：那份文件会随 GitHub 仓库发布到别人机器，
+ * 写作者本机的 C:/Users/... 路径等于把插件做成只能在我这台机器上跑。
+ */
+export function resolveProjectRoot(config) {
+  const fromConfig = String((config && config.projectRoot) || '').trim();
+  if (fromConfig && fromConfig !== '__AUTO__' && fs.existsSync(path.join(fromConfig, 'core', 'index.js'))) {
+    return path.resolve(fromConfig);
+  }
+  const fromEnv = String(process.env.DSH_REVIEW_PROJECT_ROOT || '').trim();
+  if (fromEnv && fs.existsSync(path.join(fromEnv, 'core', 'index.js'))) return path.resolve(fromEnv);
+  for (const base of [HERE, path.join(HERE, '..', 'source')]) {
+    try {
+      const stamp = JSON.parse(fs.readFileSync(path.join(base, 'project-root.json'), 'utf8'));
+      const root = String(stamp.projectRoot || '').trim();
+      if (root && fs.existsSync(path.join(root, 'core', 'index.js'))) return path.resolve(root);
+    } catch (e) { /* 没有安装戳记是正常情况 */ }
+  }
+  const derived = path.resolve(HERE, '..', '..');
+  if (fs.existsSync(path.join(derived, 'core', 'index.js'))) return derived;
+  throw new Error('未找到统一核心目录：请配置 projectRoot / DSH_REVIEW_PROJECT_ROOT，或把插件放在仓库 plugins/dsh-review-analysis/ 下。');
+}
 
 export const name = 'dsh-review-analysis';
 export const inject = ['tools', 'webServer'];
@@ -33,6 +61,11 @@ const API_STATE = '/review-analysis/api/state';
 const API_APP_MANIFEST = '/review-analysis/api/app/manifest';
 const API_APP_STATE = '/review-analysis/api/app/state';
 const API_APP_ACTION = '/review-analysis/api/app/action';
+// 模型配置（2026-11-21）：与 server.js 的同名端点同语义，复用 core/settings.js 单一真源。
+// DSH 面板里那套 workbench 必须能在这里读写配置，否则它会把宿主判成「不支持配置存储」。
+const API_SETTINGS = '/review-analysis/api/settings';
+const API_SETTINGS_TEST = '/review-analysis/api/settings/test';
+const API_MODELS = '/review-analysis/api/models';
 // DSH 侧栏面板内嵌同一个 workbench 应用：静态资源经 webServer 同源托管。
 // 只用已验证的 kind:'exact' 逐文件注册，不用未验证的 prefix/wildcard；
 // 文件清单固定，路径经 path.resolve + startsWith 双重校验，防目录穿越。
@@ -45,9 +78,12 @@ const APP_FILES = [
   'src/main.js', 'src/host.js', 'src/state.js', 'src/router.js',
   'src/ui.js', 'src/views.js', 'src/shell.js', 'src/style.css',
   'src/bookspace.js', 'src/mindmap.js',
+  // 2026-11-21 新增：少列一个模块，DSH 侧栏里的应用就是 404 白屏（不是降级，是缺文件）。
+  'src/llm-config.js', 'src/overview.mjs',
 ];
 const APP_MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml',
   '.webmanifest': 'application/manifest+json',
 };
@@ -61,6 +97,16 @@ function sendJson(res, status, payload) {
   res.setHeader('content-length', String(body.length));
   res.end(body);
 }
+// 读 JSON 请求体。畸形 JSON 只回固定文案，绝不回显原文（可能含 apiKey）。
+async function readJsonBody(req) {
+  try {
+    const chunks = [];
+    for await (const c of req) chunks.push(c);
+    const m = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+    return m && typeof m === 'object' ? m : {};
+  } catch (e) { return null; }
+}
+
 function errorText(error) {
   if (!error) return '未知错误';
   return error && error.message ? String(error.message) : String(error);
@@ -83,8 +129,7 @@ function coreLoader(config) {
   let cached = null;
   return function getCore() {
     if (cached) return cached;
-    const root = String((config && config.projectRoot) || process.env.DSH_REVIEW_PROJECT_ROOT || '').trim();
-    if (!root) throw new Error('未配置统一核心目录：请在插件 config.projectRoot（或环境变量 DSH_REVIEW_PROJECT_ROOT）填写主项目根目录（含 core/）。');
+    const root = resolveProjectRoot(config);
     const entry = path.resolve(root, 'core', 'index.js');
     if (!fs.existsSync(entry)) throw new Error('找不到统一核心入口：' + entry + '（确认 projectRoot 指向含 core/ 的主项目根）');
     const mod = require(entry);
@@ -101,8 +146,7 @@ function appHostLoader(config) {
   let cached = null;
   return function getAppHost() {
     if (cached) return cached;
-    const root = String((config && config.projectRoot) || process.env.DSH_REVIEW_PROJECT_ROOT || '').trim();
-    if (!root) throw new Error('未配置统一核心目录：config.projectRoot');
+    const root = resolveProjectRoot(config);
     const p = path.resolve(root, 'core', 'app-host.js');
     if (!fs.existsSync(p)) throw new Error('找不到统一应用协议：' + p);
     cached = require(p);
@@ -118,13 +162,25 @@ function appHostLoader(config) {
 // projectRoot 本就是插件必填配置（README 已标），这里在注册期就取到清单：
 // 配置缺失时提前大声失败，而不是等用户调用工具才发现能力表是旧的。
 function loadCapabilities(config) {
-  const root = String((config && config.projectRoot) || process.env.DSH_REVIEW_PROJECT_ROOT || '').trim();
-  if (!root) throw new Error('未配置统一核心目录：请在插件 config.projectRoot（或环境变量 DSH_REVIEW_PROJECT_ROOT）填写主项目根目录（含 core/）。');
+  const root = resolveProjectRoot(config);
   const p = path.resolve(root, 'core', 'capabilities.js');
   if (!fs.existsSync(p)) throw new Error('找不到统一核心能力清单：' + p);
   const mod = require(p);
   if (!mod || !Array.isArray(mod.ACTIONS)) throw new Error('能力清单格式不正确：' + p);
   return mod;
+}
+
+// 模型配置单一真源：直接 require 主项目的 core/settings.js，不在插件里复制第二份解析规则。
+// 这样 DSH 面板里的 workbench 与 HTTP / 桌面端看到的「密钥从哪来」是同一套语义。
+function settingsLoader(config) {
+  let cached = null;
+  return function getSettings() {
+    if (cached) return cached;
+    const p = path.resolve(resolveProjectRoot(config), 'core', 'settings.js');
+    if (!fs.existsSync(p)) throw new Error('找不到统一模型配置模块：' + p);
+    cached = require(p);
+    return cached;
+  };
 }
 
 // 密钥只走工具参数或环境变量；任何情况下不写盘。
@@ -223,6 +279,7 @@ const OUTPUT_SCHEMA = {
 export function apply(ctx, config) {
   const getCore = coreLoader(config);
   const getAppHost = appHostLoader(config);
+  const getSettings = settingsLoader(config);
   const CAPS = loadCapabilities(config);
   const ACTIONS = CAPS.ACTIONS;
 
@@ -435,7 +492,7 @@ export function apply(ctx, config) {
   // 同一个 APP 在 DSH 侧栏里打开：逐文件 exact 托管 workbench 静态资源。
   // 应用通过 ?base=/review-analysis/api/app 自动把协议端点指回本插件，
   // 因此 DSH 里的 APP 与内置浏览器 / Electron 里的 APP 是同一份代码、同一份数据。
-  const appRoot = path.resolve(String((config && config.projectRoot) || process.env.DSH_REVIEW_PROJECT_ROOT || ''), 'workbench');
+  const appRoot = path.resolve(resolveProjectRoot(config), 'workbench');
   APP_FILES.forEach(rel => {
     ctx.effect(
       () => ctx.webServer.register({
@@ -462,7 +519,7 @@ export function apply(ctx, config) {
 
   // 共用导图布局模块：APP 以 ../js/mindmap-layout.js 相对路径加载，
   // 在 DSH 宿主下映射到同一份 renderer/js/mindmap-layout.js（唯一源码，不复制）。
-  const sharedMindmapFile = path.resolve(String((config && config.projectRoot) || process.env.DSH_REVIEW_PROJECT_ROOT || ''), 'renderer', 'js', 'mindmap-layout.js');
+  const sharedMindmapFile = path.resolve(resolveProjectRoot(config), 'renderer', 'js', 'mindmap-layout.js');
   ctx.effect(
     () => ctx.webServer.register({
       kind: 'exact',
@@ -499,11 +556,81 @@ export function apply(ctx, config) {
           if (!m || typeof m !== 'object' || typeof m.action !== 'string') {
             return sendJson(res, 200, { ok: false, error: '需要 action 字符串' });
           }
-          const r = await getAppHost().invoke(getCore().core, m.action, m.payload || {}, { cfg: m.cfg || {} });
+          // 与 server.js 同语义：前端可以只传模型名，密钥由 core/settings.js 从
+          // 配置文件 / SILICONFLOW_* / DSH_LLM_* / REVIEW_LLM_* 补齐。
+          const root = resolveProjectRoot(config);
+          const S = getSettings();
+          const rawCfg = m.cfg || (m.payload && m.payload.cfg) || {};
+          const cfg = S.mergeCfg(root, rawCfg);
+          const payload = Object.assign({}, m.payload || {}, { cfg });
+          if (payload.visionCfg) payload.visionCfg = S.mergeCfg(root, payload.visionCfg);
+          const r = await getAppHost().invoke(getCore().core, m.action, payload, { cfg });
+          if (r && r.ok && (m.action === 'analyze' || m.action === 'compose')) S.remember(root, rawCfg);
           return sendJson(res, 200, r);
         } catch (error) { return sendJson(res, 200, { ok: false, error: errorText(error) }); }
       },
     }),
     'dsh-review-analysis: POST ' + API_APP_ACTION,
+  );
+
+  // ===== 模型配置 / 找模型（2026-11-21 DSH 特化） =====
+  // 面板里的 workbench 通过 ?base=/review-analysis/api/app 推导 /review-analysis/api/settings，
+  // 这三个端点缺一个，DSH 里的「模型与密钥」就只会显示「宿主不支持」——不是能力问题，是没接线。
+  ctx.effect(
+    () => ctx.webServer.register({
+      kind: 'exact',
+      path: API_SETTINGS,
+      handler: async (req, res) => {
+        if (!admitted(ctx, req)) return sendJson(res, 403, { ok: false, error: 'forbidden' });
+        try {
+          const S = getSettings();
+          if (req.method === 'GET') return sendJson(res, 200, S.publicInfo(resolveProjectRoot(config)));
+          if (req.method === 'POST') {
+            const m = await readJsonBody(req);
+            if (m === null) return sendJson(res, 400, { ok: false, error: '请求体不是合法 JSON' });
+            return sendJson(res, 200, S.save(resolveProjectRoot(config), m));
+          }
+          return sendJson(res, 405, { ok: false, error: 'method not allowed' });
+        } catch (error) { return sendJson(res, 200, { ok: false, error: errorText(error) }); }
+      },
+    }),
+    'dsh-review-analysis: settings',
+  );
+
+  ctx.effect(
+    () => ctx.webServer.register({
+      kind: 'exact',
+      path: API_SETTINGS_TEST,
+      handler: async (req, res) => {
+        if (!admitted(ctx, req)) return sendJson(res, 403, { ok: false, error: 'forbidden' });
+        if (req.method !== 'POST') return sendJson(res, 405, { ok: false, error: 'method not allowed' });
+        try {
+          const m = await readJsonBody(req) || {};
+          const root = resolveProjectRoot(config);
+          const cfg = getSettings().mergeCfg(root, m.cfg || {});
+          // 复用主项目的 lib/llm.js，不在插件里再写一份 HTTP 客户端。
+          const llm = require(path.resolve(root, 'lib', 'llm.js'));
+          const r = await llm.testConnection(cfg);
+          return sendJson(res, 200, Object.assign({}, r, { model: cfg.model, keySource: cfg.keySource, models: (r && r.models) || [] }));
+        } catch (error) { return sendJson(res, 200, { ok: false, error: errorText(error) }); }
+      },
+    }),
+    'dsh-review-analysis: settings/test',
+  );
+
+  ctx.effect(
+    () => ctx.webServer.register({
+      kind: 'exact',
+      path: API_MODELS,
+      handler: async (req, res) => {
+        if (!admitted(ctx, req)) return sendJson(res, 403, { ok: false, error: 'forbidden' });
+        if (req.method !== 'GET' && req.method !== 'POST') return sendJson(res, 405, { ok: false, error: 'method not allowed' });
+        try {
+          const m = req.method === 'POST' ? (await readJsonBody(req) || {}) : {};
+          return sendJson(res, 200, await getSettings().listModels(resolveProjectRoot(config), m));
+        } catch (error) { return sendJson(res, 200, { ok: false, error: errorText(error), models: [] }); }
+      },
+    }),
+    'dsh-review-analysis: models',
   );
 }

@@ -331,6 +331,8 @@
         const id = g.dataset.id, kind = g.dataset.kind;
         $$('#mmCanvas .mm-node.selected').forEach(x => x.classList.remove('selected'));
         g.classList.add('selected');
+        // 点开的节点周围不该是"透明"的：清掉搜索态的 dim，保持整图可见
+        $$('#mmCanvas .mm-node.dim').forEach(x => x.classList.remove('dim'));
         if (kind === 'question') { const q = view.questionById[id] || (layout.nodes.find(n => n.id === id) || {}).question; if (q) openQuestion(q); return; }
         if (kind === 'qitem') { const it = view.qitemById[id]; if (it) openQitem(it); return; }
         const node = layout.nodes.find(n => n.id === id);

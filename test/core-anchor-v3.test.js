@@ -97,10 +97,14 @@ function auditResult() {
 
     // ---------- C 组：长书不再从头静默砍掉后半本 ----------
     section('C 组：长书不再从头静默砍掉后半本');
-    function fileBlock(name, ch) {
-      return '【文件：' + name + '】\n【块1】' + ('【' + ch + '】' + ch.repeat(197)).repeat(200);
+    function fileBlock(name, ch, times) {
+      return '【文件：' + name + '】\n【块1】' + ('【' + ch + '】' + ch.repeat(197)).repeat(times);
     }
-    const long = ['A.txt', 'B.txt', 'C.txt'].map((n, i) => fileBlock(n, 'ABC'[i])).join('\n\n');
+    // 按当前上限自适应构造：每文件块数 = 上限/3/每块正文长 + 余量，
+    // 保证「确实超限」与 MAX_CORPUS 的取值解耦（写死 200 曾在 5万→12万后卡边界误红）。
+    const perBlockChars = 200; // 【X】2 字 + 197 复写
+    const times = Math.ceil(A.MAX_CORPUS / 3 / perBlockChars) + 10;
+    const long = ['A.txt', 'B.txt', 'C.txt'].map((n, i) => fileBlock(n, 'ABC'[i], times)).join('\n\n');
     ok(long.length > A.MAX_CORPUS, 'C0 构造语料确实超上限（' + long.length + ' > ' + A.MAX_CORPUS + '）');
     const hasCompose = typeof A.composeCorpus === 'function';
     ok(hasCompose, 'C1 analyze.composeCorpus 存在（v1.4.0 无 → baseline 红）');

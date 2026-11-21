@@ -28,3 +28,25 @@ Thumbs.db
 # 本机临时产物（playwright 快照、发布前备份），绝不入库
 init.yaml
 _backup/
+
+# 2026-11-21 发布清理：调试截图 / 归档 / 缓存不进公开仓库；
+# 给 README 用的正式截图放在 docs/screenshots/（入库）。
+screenshots-check/
+screenshots4/
+verification-lib-live.png
+snap.yaml
+.slidep/
+_archive/
+PROCESS/__pycache__/
+
+# 研究过程里生成的讲义/题库产物（4 万行的 HTML / 1.9 万行的 md），不是源码；
+# 结论已写进 PROCESS/research-*/best-practices.md 与 自检报告，产物不进公开仓库。
+PROCESS/ppt/
+PROCESS/ppt-outline.json
+PROCESS/ppt-outline.md
+PROCESS/syllabus-data.json
+PROCESS/extract_*.py
+PROCESS/gen_*.py
+PROCESS/考纲全覆盖-*.html
+PROCESS/考纲全覆盖-*.md
+PROCESS/research-workbench整体优化/verification-aligned.html

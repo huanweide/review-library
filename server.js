@@ -20,6 +20,7 @@ const mindmapLib = require('./lib/mindmap');
 const { Core } = require('./core');
 const requestLib = require('./core/request');
 const appHost = require('./core/app-host');
+const settings = require('./core/settings');
 
 const ROOT = process.env.LIBRARY_ROOT || path.join(__dirname, 'library');
 const PORT = parseInt(process.env.PORT, 10) || 5178;
@@ -62,15 +63,42 @@ async function handleApi(req, res, u) {
       }
       if (parts[2] && parts.length === 3 && method === 'DELETE') return send(res, 200, store.purgeTrash(parts[2]));
     }
-    // /api/llm/test —— 测试用户填的 API 能否连通。cfg 只在本请求内存里，不落盘不写日志。
+    // /api/llm/test —— 测试 API 能否连通。未填的字段由服务端配置补齐，密钥不落盘不写日志。
     if (parts[1] === 'llm' && parts[2] === 'test' && method === 'POST') {
-      const m = JSON.parse(await readBody(req));
-      return send(res, 200, await llm.testConnection(m.cfg || {}));
+      const m = JSON.parse(await readBody(req) || '{}');
+      return send(res, 200, await llm.testConnection(settings.mergeCfg(ROOT, m.cfg || {})));
     }
-    // /api/llm/probe-vision —— 探测用户填的模型是否支持图片输入（M3 看图）。cfg 只在本请求内存里。
+    // /api/llm/probe-vision —— 探测模型是否支持图片输入（M3 看图）。cfg 只在本请求内存里。
     if (parts[1] === 'llm' && parts[2] === 'probe-vision' && method === 'POST') {
-      const m = JSON.parse(await readBody(req));
-      return send(res, 200, await llm.probeVision(m.cfg || {}, llm.chat));
+      const m = JSON.parse(await readBody(req) || '{}');
+      return send(res, 200, await llm.probeVision(settings.mergeCfg(ROOT, m.cfg || {}), llm.chat));
+    }
+    // ===== 模型配置（2026-11-21）：密钥只住服务端，前端永不持有、也不要求用户每次粘 =====
+    // 用户原话：「就用环境变量的硅基流动（可保存住，可找模型，可设置）」。
+    // 解析顺序在 core/settings.js 一处定义（入参 > library/settings.json > SILICONFLOW_API_KEY）。
+    if (parts[1] === 'settings') {
+      if (parts.length === 2 && method === 'GET') return send(res, 200, settings.publicInfo(ROOT));
+      if (parts.length === 2 && method === 'POST') {
+        let m = {};
+        try { m = JSON.parse(await readBody(req) || '{}'); } catch (e) { return send(res, 400, { error: '请求体不是合法 JSON' }); }
+        return send(res, 200, settings.save(ROOT, m));
+      }
+      // 连通性测试：用合并后的配置真发一次最小对话，不落盘、不回显密钥。
+      if (parts[2] === 'test' && method === 'POST') {
+        let m = {};
+        try { m = JSON.parse(await readBody(req) || '{}'); } catch (e) { m = {}; }
+        const cfg = settings.mergeCfg(ROOT, m.cfg || {});
+        const r = await llm.testConnection(cfg);
+        return send(res, 200, Object.assign({}, r, {
+          model: cfg.model, keySource: cfg.keySource, models: (r && r.models) || [],
+        }));
+      }
+    }
+    // 找模型（「可找模型」）：GET 用已存配置，POST 可带临时地址/密钥先试再存。
+    if (parts[1] === 'models' && parts.length === 2 && (method === 'GET' || method === 'POST')) {
+      let m = {};
+      if (method === 'POST') { try { m = JSON.parse(await readBody(req) || '{}'); } catch (e) { m = {}; } }
+      return send(res, 200, await settings.listModels(ROOT, m));
     }
     // ===== 统一应用协议（APP / 内置浏览器 / 任意宿主） =====
     // 与 Electron IPC、DSH webServer 共用 core/app-host.js，能力清单不复制第二份。
@@ -82,7 +110,17 @@ async function handleApi(req, res, u) {
     }
     if (parts[1] === 'app' && parts[2] === 'action' && method === 'POST') {
       const m = JSON.parse(await readBody(req) || '{}');
-      return send(res, 200, await appHost.invoke(core, m.action, m.payload || {}, { cfg: m.cfg || {} }));
+      const payload = m.payload && typeof m.payload === 'object' ? m.payload : {};
+      // 密钥补全（2026-11-21）：前端可以只传 baseURL/model，密钥由服务端从配置或环境变量补齐。
+      // 合并后原样交给 app-host / Core，传输层不碰业务。
+      const cfg = settings.mergeCfg(ROOT, m.cfg || payload.cfg || {});
+      const patched = Object.assign({}, payload, { cfg });
+      if (patched.visionCfg) patched.visionCfg = settings.mergeCfg(ROOT, patched.visionCfg);
+      const r = await appHost.invoke(core, m.action, patched, { cfg });
+      // 一次成功的分析/整理之后顺手记住这次用的地址与模型（含用户当场粘的密钥）：
+      // 「粘一次就够」是这套配置层存在的全部理由，不能只做一半。
+      if (r && r.ok && (m.action === 'analyze' || m.action === 'compose')) settings.remember(ROOT, m.cfg || payload.cfg || {});
+      return send(res, 200, r);
     }
     // 资料原图回读（2026-11-14 图片直显）：只回读已登记文件字节，fileId 校验在 getFileBuffer 内。
     if (parts[1] === 'app' && parts[2] === 'file' && method === 'GET') {
@@ -104,6 +142,24 @@ async function handleApi(req, res, u) {
       res.writeHead(200, { 'Content-Type': imgMime, 'Cache-Control': 'private, max-age=60' });
       return res.end(buf);
     }
+    // 内嵌原图回读（2026-11-20）：返回 images.json 里登记的**原字节**，不加工不重画。
+    // imageId 是 genId 产物，读回时由 core.getImage 再做一次索引匹配，杜绝路径穿越。
+    if (parts[1] === 'app' && parts[2] === 'image' && method === 'GET') {
+      const q = u.searchParams;
+      const bookId = String(q.get('bookId') || '');
+      const imageId = String(q.get('imageId') || '');
+      if (!bookId || !imageId) return send(res, 400, { error: '需要 bookId 与 imageId' });
+      if (!core.getBook(bookId)) return send(res, 404, { error: '书不存在' });
+      const hit = core.getImage(bookId, imageId);
+      if (!hit) return send(res, 404, { error: '图片不存在' });
+      const mime = {
+        '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+        '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp',
+        '.tif': 'image/tiff', '.tiff': 'image/tiff', '.svg': 'image/svg+xml',
+      }[hit.ext] || 'application/octet-stream';
+      res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'private, max-age=3600' });
+      return res.end(hit.data);
+    }
     // ===== 统一核心 API（新架构）：建书 / 加文件 / 整体分析 =====
     // cfg（API 地址/密钥/模型）只在本次请求内存里，不落盘、不写日志。
     if (parts[1] === 'core') {
@@ -115,7 +171,13 @@ async function handleApi(req, res, u) {
         try { body = JSON.parse(await readBody(req) || '{}'); }
         catch (e) { return send(res, 400, { error: '请求体不是合法 JSON' }); }
       }
-      const r = await requestLib.dispatch(core, '/' + parts.slice(2).join('/'), method, body);
+      const route = '/' + parts.slice(2).join('/');
+      // 只有这两条路由会调模型；cfg 可省略，密钥/模型由服务端配置补齐。
+      const needsCfg = /\/(analyze|compose)$/.test(route);
+      const rawCfg = body.cfg && typeof body.cfg === 'object' ? body.cfg : null;
+      if (needsCfg) body.cfg = settings.mergeCfg(ROOT, rawCfg || {});
+      const r = await requestLib.dispatch(core, route, method, body);
+      if (r.status === 200 && needsCfg && rawCfg) settings.remember(ROOT, rawCfg);
       return send(res, r.status, r.data);
     }
     // /api/study/* —— 分析 / 出题 / 批改 / 巩固卷。答案只留在后端，前端只拿脱敏试卷。
@@ -125,7 +187,9 @@ async function handleApi(req, res, u) {
         return send(res, 200, study.boundary(store, m.bookId, m.selectedIds));
       }
       if (parts[2] === 'analyze' && method === 'POST') {
-        const r = await study.analyze(store, m.bookId, Object.assign({}, m.opts || {}, { cfg: m.cfg }));
+        // 老协议入口也走同一套配置补全：不传 cfg 也能跑（密钥由服务端给）。
+        const r = await study.analyze(store, m.bookId, Object.assign({}, m.opts || {}, { cfg: settings.mergeCfg(ROOT, m.cfg || {}) }));
+        if (r && r.ok !== false && m.cfg) settings.remember(ROOT, m.cfg);
         return send(res, 200, r);
       }
       if (parts[2] === 'save-analysis' && method === 'POST') {
@@ -199,7 +263,9 @@ async function handleApi(req, res, u) {
       }
       if (parts.length === 3 && method === 'POST') {
         const m = JSON.parse(await readBody(req) || '{}');
-        return send(res, 200, await mindmapLib.generate(store, bookId, m.cfg, { force: !!m.force }));
+        const r = await mindmapLib.generate(store, bookId, settings.mergeCfg(ROOT, m.cfg || {}), { force: !!m.force });
+        if (r && r.ok !== false && m.cfg) settings.remember(ROOT, m.cfg);
+        return send(res, 200, r);
       }
       if (parts.length === 5 && method === 'GET') {
         // /api/mindmap/:bookId/:mapId/:nodeId —— 取单张图内某个节点详情

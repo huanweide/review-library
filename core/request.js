@@ -83,8 +83,9 @@ async function dispatch(core, path, method, body) {
       return { status: 200, data: core.markFile(id, b.fileId, { focus: b.focus, note: b.note }) };
     }
     // 整理文档生成（走 LLM，可能较慢）：已生成则直接返回缓存，refresh=true 强制重生成。
+    // cachedOnly=true 只查缓存，没有就返回 null，绝不触发生成（页签探测专用）。
     if (parts[2] === 'compose' && parts.length === 3 && m === 'POST') {
-      const d = await core.composeDocument(id, b.kind, { cfg: b.cfg || {}, maxTokens: b.maxTokens, timeoutMs: b.timeoutMs, refresh: !!b.refresh });
+      const d = await core.composeDocument(id, b.kind, { cfg: b.cfg || {}, maxTokens: b.maxTokens, timeoutMs: b.timeoutMs, refresh: !!b.refresh, cachedOnly: !!b.cachedOnly });
       return { status: 200, data: d };
     }
     // 已生成文档只读。

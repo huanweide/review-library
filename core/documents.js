@@ -37,6 +37,18 @@ const KINDS = {
 只输出一个 JSON 对象：
 {"sections":[{"rank":1,"chapter":"…","why":"…","points":[{"title":"…","must":"…","formulas":["…"],"importance":"高|中","question":{"stem":"…","answer":"…","steps":["…"]},"quote":"…","source":"…"}]}]}`,
   },
+  slides: {
+    label: '考试幻灯片',
+    system: `你是一位复习资料幻灯片设计师。用户给你一整本书（若干资料拼接成的纯文本）。任务：把整本书整理成一套「考试幻灯片」——按书中章节组织的幻灯片序列，每页一个主题，便于速通复习与直接导出 PPT。
+铁律：
+1. 不落下：覆盖全书主要章节与核心考点；严禁占位省略（不得出现「（略）」「待补充」等）。
+2. 每页 slides[i] 含 title（章节/主题名）与 bullets（要点数组）；重点、必背、公式用 mark=true 标出。
+3. 每页 bullets 控制在 4~9 条，每条简明（一句话讲清一个考点 / 公式 / 易错点）；能用原话就用原话。
+4. 整份幻灯片页数依书体量而定（小书 6~10 页，大书 12~20 页），页与页之间不重复、不空泛。
+5. source 只能从【资料文件清单】里选真实文件名（用于标注本页引用了哪份资料）。
+只输出一个 JSON 对象：
+{"slides":[{"title":"页标题（章节名）","source":"引用的资料文件名（可空串）","bullets":[{"text":"要点（可用原话）","mark":true}]}]}`,
+  },
 };
 
 // 用户可见的资料清单：含语义重点（★）与一句话说明——「不手动分层」的落点。
@@ -63,6 +75,36 @@ const BAD = /（略）|待补充|同上|此处省略|待定|xxx/i;
 // 结构收口 + quote 逐字命中校验。宁可丢弃空条目，不造空壳。
 function finish({ kind, title, parsed, corpus, files, cfg }) {
   const cNorm = norm(corpus);
+
+  // ---- slides：考试幻灯片（与 digest/syllabus 同源协议的第三种形态）----
+  if (kind === 'slides') {
+    const slides = Array.isArray(parsed && parsed.slides) ? parsed.slides : [];
+    if (!slides.length) throw new Error('模型输出缺 slides：整理失败，请重试或换模型');
+    let placeholder = 0, markCount = 0;
+    const outSlides = slides.map((sl) => {
+      const bullets = Array.isArray(sl && sl.bullets) ? sl.bullets : [];
+      return {
+        title: toStr(sl && sl.title, 80),
+        source: toStr(sl && sl.source, 120),
+        bullets: bullets.map((b) => {
+          const t = toStr(b && b.text, 300);
+          if (BAD.test(t)) placeholder++;
+          if (b && b.mark) markCount++;
+          return { text: t, mark: !!(b && b.mark) };
+        }).filter((b) => b.text),
+      };
+    }).filter((sl) => sl.title);
+    const kept = outSlides.reduce((n, s) => n + s.bullets.length, 0);
+    if (!kept) throw new Error('模型输出没有有效幻灯片要点，请重试或换模型');
+    return {
+      kind, label: KINDS[kind].label, bookTitle: String(title || ''),
+      generatedAt: new Date().toISOString(), model: String((cfg && cfg.model) || ''),
+      slides: outSlides,
+      stats: { slides: outSlides.length, bullets: kept, markCount, placeholderHits: placeholder },
+    };
+  }
+
+  // ---- digest / syllabus ----
   const sections = Array.isArray(parsed && parsed.sections) ? parsed.sections : [];
   if (!sections.length) throw new Error('模型输出缺 sections：整理失败，请重试或换模型');
   let total = 0, verified = 0, placeholder = 0;
@@ -131,7 +173,10 @@ async function compose({ title, fullText, files, kind, cfg, maxTokens, timeoutMs
     },
   ];
   const text = await chat(cfg, messages, {
-    maxTokens: maxTokens || 8000,
+    // 默认 16000：2026-11-19 真机实测（6 份资料 / DeepSeek-V4.1-Flash）
+    // 8000 → "模型输出缺 sections"（JSON 被预算截断但 finish_reason 未报 length，
+    // lib/llm.js 的截断检测漏过）；16000 → 成功产出 sections。生成按需触发，成本可接受。
+    maxTokens: maxTokens || 16000,
     timeoutMs: timeoutMs || 300000,
     temperature: 0.2,
     responseFormat: 'json_object',

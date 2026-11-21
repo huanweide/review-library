@@ -53,6 +53,23 @@ function renderTitlebar() {
     el('span', { class: 'crumb cur', text: (view && view.label) || '启动台' }),
   ]));
   dom.titlebar.appendChild(el('div', { class: 'tb-right' }, [
+    // 今日待复习（2026-11-21）：用户打开应用最想知道的一件事。
+    // 数字由书架拉 list 后汇总写进 state；没有待复习就不显示，不占位、不显示 0。
+    (function () {
+      const due = Number(s.dueTotal) || 0;
+      if (due <= 0) return null;
+      return el('button', {
+        class: 'tb-btn tb-due',
+        title: '今天该复习的题还有 ' + due + ' 张',
+        text: '待复习 ' + due,
+        onclick: () => {
+          // 先找有到期卡的那本；都没有再退回上次打开的书；再没有就回书架。
+          const id = get().dueBookId || get().lastBookId;
+          if (id) go('due', { id });
+          else go('library');
+        },
+      });
+    })(),
     el('button', { class: 'tb-btn', title: '命令面板 (Ctrl+K)', text: '⌘ 搜索', onclick: togglePalette }),
     el('button', { class: 'tb-btn ghost', title: '刷新当前视图', text: '↻', onclick: () => {
       const v = (get().manifest.views || []).find(x => x.id === get().route);
@@ -83,7 +100,8 @@ function renderSidebar() {
       }, [
         el('span', { class: 'nav-icon', text: v.icon || '·' }),
         el('span', { class: 'nav-label', text: v.label }),
-        v.action ? el('span', { class: 'nav-action', text: v.action }) : null,
+        // 2026-11-21 移除：这里原来显示 v.action（list/get/analyze/attempt…），
+        // 那是后端动作名，对用户零信息量，还让界面像调试面板。动作名仍可从 manifest 查。
       ])),
     ]));
   });

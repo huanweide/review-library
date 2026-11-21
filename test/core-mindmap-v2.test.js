@@ -390,6 +390,19 @@ async function main() {
   ok(/buildQuestionTree|questionTree/.test(ui), '前端构建题型树并长进导图');
   ok(/\/raw['"]|\/raw`|\/raw\b/.test(ui) && /files\//.test(ui), '前端调用 files/.../raw 路由取原图（精确匹配，避免 draw 误命中）');
 
+  // 共享契约（PROCESS/导图共享契约/共享契约.md）：与书院逐字一致的项目，交叉锁死防漂移。
+  section('共享契约：与天道书院同判据（代码不合并，判据不分裂）');
+  const PALETTE = ['#4E8098', '#C17450', '#5C8D6B', '#7C6A9C', '#A6803E', '#A85F6E'];
+  ok(JSON.stringify(L.BRANCH_COLORS) === JSON.stringify(PALETTE), '主干六色与书院逐字一致');
+  ok(L.NODE_W === 224 && L.NODE_H === 58, '卡片 224×58（书院宽同为 224）');
+  const svgS = L.toSvg(L.layoutTree(TREE, 'right'), {});
+  ok(svgS.includes('rx="9"'), '卡片圆角 rx=9');
+  ok(svgS.includes('width="4"'), '非实心节点有 4px 左侧色条');
+  ok(/font-size="20"/.test(svgS) && /font-size="16"/.test(svgS) && /font-size="14"/.test(svgS) && /font-size="13"/.test(svgS), '字号四级 20/16/14/13 严格递减');
+  const cssS = fs.readFileSync(path.join(ROOT, 'renderer', 'css', 'core.css'), 'utf8');
+  ok(/\.mm-node\.dim\s*\{[^}]*opacity:\s*\.?0?\.?5[2-9]/.test(cssS), 'dim 透明度 ≥ .5（不把节点压到看不清）');
+  ok(/\.mm-node\.selected[^}]*stroke-width:\s*2\.6/.test(cssS), '选中态深描边 2.6px（不靠浅底白字）');
+
   console.log('\n=== 思维导图 v2 判别测试：通过 ' + passed + ' / 失败 ' + failed + ' ===');
   if (failed) process.exit(1);
 }

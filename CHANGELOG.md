@@ -5,6 +5,85 @@
 DSH 插件与 WorkBuddy 专家的 manifest，以及 README 顶部定位行；`scripts/check-versions.mjs`
 挂在 `pretest` 上做漂移检测。发版 tag 必须与 `package.json` 严格一致（如 `v1.5.0`）。
 
+## v1.6.4 — 2026-11-21（未发布）
+
+maxloop 第二轮：**把「看得见但读不了」的两处修掉**。阶段零外查与逐字符证据见 `PROCESS/research-概览与导图可读性/best-practices.md`。
+
+**导图节点（`renderer/js/mindmap-layout.js`）**
+- 新增 `wrapLabel()`：按中文语义断点（，、：（与和）换行，最多三行；`NODE_W=224 / NODE_H=58` 与字号层级都不变，格子坐标不受影响。原先 `short()` 会把 `(1) 正态分布曲线的两个主要参数` 吞成 `(1) 正态分布曲线的两个…`。
+- 节点里不再画 11px 灰色描述（「有信息但看不清」的假完整）；完整标题 + 描述仍在既有 tooltip 里，点节点仍可到右栏讲解面板读。基准：markmap 13,277★ `stays with its branch as a note that opens in a popover`、jsMind `view.node_overflow: wrap`。
+
+**概览页（新增 `workbench/src/overview.mjs`）**
+- 模型没写 `summary` 时不再显示「（模型没有给摘要）」：`deriveOverview()` 从 `tree` / `questionIndex` / `stats` 派生 4–6 条要点（章数、真实章节名、知识点数、两个样例、题数与题型分布），并明确写出「按目录如实整理的结构（不是模型原文）」。模型给了摘要就优先用原文；没有知识结构就直说没有。
+- 老书 `questionIndex` 的题挂在 `points[]` 而不是 `items[]`，两种键名都认，避免把 14 道题数成 0；`stats.points` 只当加速路径，实际节点数优先。
+
+**验证**
+- `tools/check-overview.mjs`：基线 **7 通过 / 5 失败** → 改后 **18 / 0**（旧红新绿，且清掉了「全局数 tspan 得假红」的测试 bug）。
+- 真浏览器（playwright-cli）实测：节点省略号 **0** 个、11px 描述 **0** 个、概览 6 条要点 + 诚实说明；控制台 0 error / 0 warning。基线/修复后真截图留 `screenshots-check/baseline-ux-*.png` 与 `final-ux-*.png`。
+- 门禁 `npm test` 24/25（同一 Node24/Windows undici 噪声）；其余八组判别脚本全绿；SW 升 v27（新模块进缓存清单）。
+
+**DSH 全版本适配特化（同日追加）**
+- `plugins/dsh-review-analysis/index.js` 新增 `resolveProjectRoot()`：config > `DSH_REVIEW_PROJECT_ROOT` > 安装戳记 `project-root.json` > 从插件位置相对推导。`cordis.patch.yml` 不再写作者本机绝对路径，`__AUTO__` 让仓库 clone 后即可用；`npm run forms:sync` 在本机安装目录写戳记。
+- Host 半边补 `/review-analysis/api/settings`、`/settings/test`、`/models` 三个端点，并让 action 入口用 `core/settings.js` 补 cfg；DSH 面板里的 workbench 与 HTTP 形态同语义。静态托管清单补 `src/llm-config.js` 与 `src/overview.mjs`、`.mjs` MIME（漏列就是面板 404）。
+- `core/settings.js` 增加 `DSH_LLM_*` / `REVIEW_LLM_*` 环境变量别名——同一把 key 不用在三个宿主里起三个名字。
+- 新增 `tools/check-dsh-adapt.mjs`：**22 项全绿**（baseline 取 git HEAD 旧版必红，含真跑 Host 路由、真拉模型清单）；插件自带 21/21、形态漂移 18/18、版本一致 8/8。
+- README 重做首屏（徽章 / 三张真截图 / 60 秒上手 / DSH 适配矩阵），给 GitHub 访客一条能立刻看懂的入口；调试截图与归档加入 `.gitignore`，正式截图放 `docs/screenshots/`。
+
+**放弃报告**：自检 #8「实心块溢出画布」在真截图与 viewBox/rect 边界实测中**未复现**，本轮不改布局，保留为历史观察。KNOWN-LIMITATION：老版 renderer 入口仍是 `(无概览)` 空文案；极端无标点超长标题仍会在最后一行出现省略号（tooltip 保留全文）；DSH 宿主 GUI 未由脚本重启，端点以真跑 Host 路由验证，面板实显待本机亲验。
+
+## v1.6.3 — 2026-11-21（未发布）
+
+模型配置从「每次粘密钥」改成「一次配好、全应用共用」。用户原话：**「就用环境变量的硅基流动（可保存住，可找模型，可设置）保存了使用」**。
+
+**配置层（新增 `core/settings.js`）**
+
+- 密钥只有一处权威位置：服务端。解析顺序 **本次请求显式传的 > `library/settings.json` > 环境变量 `SILICONFLOW_API_KEY`**；来源随结果回传（`file`/`env`/`input`），界面能说清「现在用的是哪一份」。
+- 对外只给掩码（`sk-…qkoj`）：`publicInfo()` 结构性不返回原文，前端拿不到、也不需要。
+- 落盘 `library/settings.json`（`library/` 已在 .gitignore），临时文件 + rename 原子写，尽力 0600；空串＝沿用、`clearKey`＝删除并回落环境变量；只写白名单字段。
+- 环境变量读不到时退到 **Windows 用户级注册表**：从资源管理器或快捷方式启动的 node 才有用户环境变量，从某些 shell 拉起时没有——这条兜底让「用环境变量」在任何启动方式下都成立。
+- 「找模型」：`GET /models` 归一后按 `chat / vision / other` 分类（embed / rerank / TTS / OCR 不算对话模型，`Qwen3-VL-Embedding` 这类名字带 VL 的也不许当视觉模型）。
+
+**接线（`server.js` / `core/app-host.js` / `core/request.js`）**
+
+- 新增 `GET|POST /api/settings`、`POST /api/settings/test`、`GET|POST /api/models`；配置不是「书库能力」，故意不进 `capabilities.js`，五种形态的能力清单仍是 12 项。
+- `/api/app/action`、`/api/core/*`、`/api/study/analyze`、`/api/mindmap/:id` 一律在入口补齐 `cfg`：前端可以只传地址与模型，甚至什么都不传。
+- 成功的分析/整理之后 `settings.remember()` 顺手记住这次用的地址与模型（含当场粘的密钥）——「粘一次就够」是这套东西存在的全部理由。
+- **修坑**：打开「考点大全 / 考纲」页签时原来会静默发起一次 1–3 分钟的模型调用（`composeDocument` 没缓存就直接生成）。新增 `cachedOnly` 契约：只查缓存，没有就返回 `null`，绝不因为「看了一眼」而花钱。
+
+**前端（新增 `workbench/src/llm-config.js`，SW 升 v26）**
+
+- 三处入口（设置页 / 分析对话框 / 生成文档对话框）共用同一组控件与同一个对话框，不各写一份表单。
+- 已配置时**默认零表单**：点「生成考点大全」直接跑，弹窗不出现；只有真的缺配置才问一次，问完存下来。
+- 设置页新增「模型与密钥」卡（地址 / 密钥 / 对话模型 / 视觉模型 + 找模型 + 保存 + 测试连接 + 清掉已存密钥）；分析对话框改为预填 + 掩码回显。
+- 顺手清掉若干浏览器噪声：密码框归入 form、取消按钮 `type=button`、密钥框 `autocomplete=off`。
+
+**验证**
+
+- 新增 `tools/check-settings.mjs`：**52 项判别全绿**（不泄漏 / 优先级 / 持久化 / 分类 / 接线 / SW / 降级七组）。
+- `tools/check-compose-chain.mjs` 按新契约重写（旧的「必须每次弹框要 key」是被用户否掉的旧行为）。
+- 门禁 `npm test` 24/25（唯一红仍是 Node24/Windows 下 undici 退出断言，断言本身 28/28 全过）；其余七组判别脚本全绿。
+- 真机：`GET /api/settings` 回 `keySource=env / sk-…qkoj`；`/api/models` 回 92 个模型（56 对话 / 5 看图）；`POST /api/settings/test` 真发一次最小对话 **ok**；浏览器里点「找模型」→ 选中即填入；点「生成考点大全」**不弹窗**直接产出 4 章 43 条并落盘。
+
+## v1.6.2 — 2026-11-17（未发布）
+
+把导图视觉与「天道书院」定稿统一（基准：天道书院 `PROCESS/research-导图视觉美化/best-practices.md`），并修掉「点击后变透明」。
+
+**导图视觉（`renderer/js/mindmap-layout.js`）**
+
+- 配色：7 色高饱和 → **低饱和六色**（`#4E8098/#C17450/#5C8D6B/#7C6A9C/#A6803E/#A85F6E`）；根节点改中性墨色 `#263746`，与彩色主干拉开主次。
+- 字号层级：原来全部 12px → **root 20 / 章 16 / 节 14 / 点及以下 13**，说明行 11px（`typeFs` 导出可测）。
+- 节点：`NODE_W 176→224`、`NODE_H 34→58`、`GAP_X 62→56`、`GAP_Y 14→18`，卡片能放「标题 + 一行说明」；层级样式 root/章实心、其余白卡片 + **左侧 4px 色条**。
+- 连线：主干（连到章）2.4px、其余 1.6px，层次感来自线宽。
+- 文字宽度估算按中文 1.0 字宽（`×0.95`）而非 0.62，修掉说明文字溢出卡片。
+
+**交互修复（`renderer/css/core.css` + `renderer/js/core-ui.js`）**
+
+- **「点击后变透明」**：搜索未命中 `dim` 的 `opacity .28` 太透 → 提到 **.52** 且 hover 恢复 1；点节点时主动清除 `dim`。
+- **选中态补样式**：原来 `.mm-node.selected` 只有 class 没有样式 → 深色粗描边（`#263746` 2.6px）+ 阴影，**不改变填充色**，文字始终清晰。
+- 画布 `max-height` 62vh → **78vh**，图更占视野。
+
+**验证**：`node scripts/run-tests.js` 24/24 套件通过；`test/core-mindmap-v2.test.js` 100 项通过；版本同步 1.6.2（8 处一致）。
+
 ## v1.6.1 — 2026-11-14（已发布）
 
 对应两条核心要求补齐「语义重点识别」与「全篇幅自动整理」。

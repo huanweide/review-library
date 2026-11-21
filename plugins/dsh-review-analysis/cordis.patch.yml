@@ -7,9 +7,14 @@
 # 安全：这里只放路径，**绝不放 apiKey / token**。模型配置走工具参数 cfg 或环境变量
 #   DSH_LLM_BASE_URL / DSH_LLM_MODEL / DSH_LLM_API_KEY。
 # inject 与 index.js 的 export const inject 保持一致：等 tools / webServer 就绪再 apply。
+#
+# 2026-11-21 可移植化：projectRoot 不再写死作者本机的绝对路径（那份路径发到 GitHub
+# 等于让插件只能在作者机器上跑）。__AUTO__ 的解析顺序在 index.js#resolveProjectRoot：
+#   config > DSH_REVIEW_PROJECT_ROOT > 安装时生成的 project-root.json > 插件相对位置推导。
+# 本机安装由 npm run forms:sync 写 project-root.json，不需要手填任何路径。
 - insert:
     - id: review-analysis
       name: 'dsh-review-analysis'
       inject: ['tools', 'webServer']
       config:
-        projectRoot: 'C:/Users/Administrator/Desktop/agent program/复习资料图书馆'
+        projectRoot: '__AUTO__'

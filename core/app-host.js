@@ -116,11 +116,24 @@ async function invoke(core, action, payload, ctx) {
         // 每本附带资料清单（文件名/大小）：书内左栏要画「存放结构」，
         // 未分析的书没有 get 结果可用，只能从这里拿。只加字段，不改 list 的既有语义。
         const books = core.listBooks() || [];
+        // 今日待复习（2026-11-21）：书架是首页，用户来这里想知道「今天该学什么」，
+        // 不是「你有几本书」。判据对齐 Anki 的 Deck List（每副牌显示 due 数）。
+        // 只读 practice.json 里已有卡片，不触发任何写盘；没练过的书就是 0，不制造假数据。
         data = { books: books.map((b) => {
+          let dueCount = 0;
+          try {
+            const st = core.getPractice(b.id);
+            const cards = (st && st.cards) || {};
+            const now = Date.now();
+            Object.keys(cards).forEach((k) => {
+              const c = cards[k];
+              if (c && Number(c.dueAt) > 0 && Number(c.dueAt) <= now) dueCount++;
+            });
+          } catch (e) { dueCount = 0; }
           try {
             const full = core.getBook(b.id);
-            return full ? Object.assign({}, b, { files: full.files || [] }) : b;
-          } catch (e) { return b; }
+            return full ? Object.assign({}, b, { files: full.files || [], dueCount }) : Object.assign({}, b, { dueCount });
+          } catch (e) { return Object.assign({}, b, { dueCount }); }
         }) };
         break;
       }
@@ -147,24 +160,51 @@ async function invoke(core, action, payload, ctx) {
       case 'analyze': {
         const id = String(p.bookId || '');
         if (!id) throw new Error('analyze 需要 bookId');
+        // v5：先看图再出题（用户：「不要把图和题对应看错了」）。
+        // visionCfg 可选；看图失败只降级按图注配图，绝不挡住主分析。key 只在本次请求内存。
+        let visionStat = null;
+        if (p.visionCfg && typeof core.describeImages === 'function') {
+          try {
+            visionStat = await core.describeImages(id, p.visionCfg, { timeoutMs: p.timeoutMs || 90000 });
+          } catch (e) {
+            visionStat = { done: 0, skipped: 0, failed: 0, error: String((e && e.message) || e).slice(0, 200) };
+          }
+        }
         data = await core.analyze(id, {
           cfg: p.cfg || c.cfg || {},
           maxTokens: p.maxTokens,
           timeoutMs: p.timeoutMs,
+          // v6（2026-11-21）：可选第二轮递进深挖。前端勾了才跑；失败只标 status:error，
+          // 不新增 action（能力清单三端一致），不影响主分析结果。
+          deepDive: !!p.deepDive,
+          deepDiveCfg: p.deepDiveCfg || p.cfg || c.cfg || {},
         });
+        if (visionStat) data.visionStat = visionStat;
         break;
       }
       case 'get': {
         const id = String(p.bookId || '');
         if (!id) throw new Error('get 需要 bookId');
-        const a2 = core.getAnalysis(id);
-        if (!a2 || !a2.tree) return { ok: false, action: a, bookId: id, error: '该书尚无分析结果，请先整体分析' };
         // 附带书元数据（标题/资料清单）：书内工作区要画「存放结构」与资料树，
         // 又不能为此新增一个 action（能力清单必须与 DSH/CLI 保持一致）。
         // 只加字段、不改判据，旧调用方读 a.tree / a.questionIndex 不受影响。
         let book = null;
         try { book = core.getBook(id); } catch (e) { book = null; }
-        data = book ? Object.assign({}, a2, { book }) : a2;
+        // v4：附带原图清单（图 id / 图注 / 出处）。前端题目卡据此显示「看图」区，
+        // 不新增 action —— 能力清单必须与 DSH / CLI 三端一致，加 action 要三端同步。
+        let images = null;
+        try { if (book && typeof core.getImages === 'function') images = core.getImages(id); } catch (e) { images = null; }
+        const a2 = core.getAnalysis(id);
+        if (!a2 || !a2.tree) {
+          // 尚未分析也要能看图：图片是导入时就抽好的，跟分析无关。
+          // 失败响应照旧带 data（book/images），前端据此恢复左栏与「原图」页。
+          return {
+            ok: false, action: a, bookId: id,
+            error: '该书尚无分析结果，请先整体分析',
+            data: { book, images },
+          };
+        }
+        data = book ? Object.assign({}, a2, { book, images }) : a2;
         break;
       }
       case 'practice':
@@ -211,6 +251,8 @@ async function invoke(core, action, payload, ctx) {
           maxTokens: p.maxTokens,
           timeoutMs: p.timeoutMs,
           refresh: !!p.refresh,
+          // 只查缓存：页签探测用。没有就不生成，绝不因为「看了一眼」而花钱。
+          cachedOnly: !!p.cachedOnly,
         });
         break;
       }

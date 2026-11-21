@@ -84,13 +84,13 @@ lock 由 sync 写入时用 `JSON.parse` 复核顶层与根包版本，不进 che
 
 ## 密钥（安全）
 
-模型配置 `cfg = {baseURL, model, apiKey}` 只走：
+模型配置的**单一解析真源是 `core/settings.js`**（2026-11-21 起），优先级：本次请求显式传的 > `library/settings.json` > 环境变量。环境变量按宿主回落：
 
-- DSH：工具参数 `cfg` 或环境变量 `DSH_LLM_BASE_URL` / `DSH_LLM_MODEL` / `DSH_LLM_API_KEY`
+- 主程序：`SILICONFLOW_BASE_URL` / `SILICONFLOW_MODEL` / `SILICONFLOW_API_KEY`
+- DSH：`DSH_LLM_BASE_URL` / `DSH_LLM_MODEL` / `DSH_LLM_API_KEY`（也可在设置页保存）
 - 专家：`REVIEW_LLM_BASE_URL` / `REVIEW_LLM_MODEL` / `REVIEW_LLM_API_KEY`
-- 桌面端 / HTTP：前端 `localStorage`（仅本机浏览器），请求时转发
 
-**绝不写进** `cordis.patch.yml`、`plugin.json`、任何仓库文件、日志或错误文本。`lib/llm.js` 的 `scrub()` 会抹掉回显里的密钥。
+**绝不写进** `cordis.patch.yml`、`plugin.json`、任何仓库文件、日志或错误文本。用户在设置页主动保存的配置写进 `library/`（已 gitignore），前端只能拿到掩码；`lib/llm.js` 的 `scrub()` 抹掉回显里的密钥。
 
 ---
 
@@ -121,5 +121,6 @@ cp -r plugins/review-analysis ~/.workbuddy/plugins/marketplaces/my-experts/plugi
 
 ## 诚实边界
 
-- 本机 `electron.exe` 缺失（包安装损坏），真 Electron GUI 未跑；DSH 宿主也不由脚本重启。插件改动以 Node 侧加载 + 判别测试验证，GUI 实显待用户本机亲验。
-- `core/` 目前只在此发布仓库（`huanweide/review-library`）为 canonical。工作区另有一个开发副本 `agent program/复习资料图书馆/`，其 `core/` 是另一套实现（带 14/14 测试与两形态 e2e），**本轮未合并**，见交付小结的 KNOWN-LIMITATION。
+- 本机 `electron.exe` 缺失（包安装损坏），真 Electron GUI 未跑；DSH 宿主也不由脚本重启。插件改动以 Node 侧加载 + 真跑 Host 端点判别验证，GUI 实显待用户本机亲验。
+- 当前工作区就是发布仓库的工作副本，`core/` 是唯一 canonical；旧文中「另有未合并开发副本」的说法已过时。
+- DSH 面板里的 workbench 与内置浏览器里的 workbench 是同一份文件；插件静态清单漏列新模块会造成面板 404，`node tools/check-dsh-adapt.mjs` 锁死这一条。

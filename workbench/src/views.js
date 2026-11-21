@@ -8,6 +8,7 @@ import host from './host.js';
 import { go } from './router.js';
 import { el, h, clear, card, kv, badge, empty, loading, errorBox, btn, field, input } from './ui.js';
 import { mountBookspace } from './bookspace.js';
+import { loadSettings, saveSettings, credentialFields, testConnection, describeKeyState } from './llm-config.js';
 
 function $view(id) { return (get().views && get().views[id]) || {}; }
 
@@ -121,6 +122,16 @@ function viewLibrary(root, view) {
   if (d.error) return root.appendChild(errorBox(d.error, () => call('list', {}, 'library')));
 
   const books = (d.data && d.data.data && d.data.data.books) || (d.data && d.data.books) || [];
+  // 汇总「今日待复习」写进状态，标题栏据此显示入口（只读汇总，按书区分仍看每张卡片）。
+  // 必须延后 set：同步 set 会在本次渲染还没结束时就触发 subscribe→renderView，
+  // 于是这一遍的 appendChild 落到新容器里，界面出现两份书卡（2026-11-21 真机实测）。
+  const dueTotal = books.reduce((a, b) => a + (Number(b.dueCount) || 0), 0);
+  // 页头「待复习 N」点下去要真的到得了题：记住第一本有到期卡的书。
+  const dueBook = books.find((b) => Number(b.dueCount) > 0);
+  const dueBookId = dueBook ? dueBook.id : '';
+  if (Number(get().dueTotal || 0) !== dueTotal || String(get().dueBookId || '') !== dueBookId) {
+    setTimeout(() => set({ dueTotal, dueBookId }), 0);
+  }
   if (!books.length) {
     const box = el('div', { class: 'library-empty' }, [
       el('div', { class: 'bs-cta-art', text: '▤' }),
@@ -141,6 +152,8 @@ function viewLibrary(root, view) {
         el('div', { class: 'book-meta' }, [
           badge(b.analyzed ? '已分析' : '未分析', b.analyzed ? 'accent' : 'plain'),
           el('span', { class: 'sub', text: (b.fileCount == null ? 0 : b.fileCount) + ' 份资料' }),
+          // 今日待复习（2026-11-21）：书架第一眼要回答「今天该学什么」。
+          Number(b.dueCount) > 0 ? badge('待复习 ' + b.dueCount, 'accent') : null,
         ]),
       ]),
       el('div', { class: 'book-actions' }, [
@@ -195,10 +208,21 @@ function viewQuiz(root, view, params) {
   const id = needBook(root, 'quiz', params);
   if (!id) return;
   const d = $view('quiz');
+  const bookTitle = String(params.title || params.bookTitle || '这本书');
+  // 2026-11-21：练习页继承书内沉浸态（main.js 已对 BOOK_VIEWS 加 bs-focus），
+  // 顶部给一条回书的路，不再是「跳出去换了一个 App」。
   root.appendChild(el('div', { class: 'view-head' }, [
-    el('div', {}, [el('h2', { text: '练习题目' }), el('p', { class: 'sub', text: '书：' + id + ' · 先答后揭，判分后才下发答案与解析' })]),
+    el('div', {}, [
+      el('div', { class: 'bs-backline' }, [
+        el('a', { class: 'bs-back', href: '#/book?id=' + encodeURIComponent(id), text: '← 回到《' + bookTitle + '》' }),
+      ]),
+      el('h2', { text: '练习' }),
+      el('p', { class: 'sub', text: '先答后揭；答完会告诉你下次什么时候再见，可以改' }),
+    ]),
     el('div', { class: 'view-actions' }, [
-      btn('今日到期', () => go('due', { id }), 'ghost'),
+      // 同屏可切：做题时想起某个知识点，不用先退回书架再进书（2026-11-21）。
+      btn('看导图', () => go('book', { id }), 'ghost'),
+      btn('今日到期', () => go('due', { id, title: bookTitle }), 'ghost'),
       btn('刷新', () => call('quiz', { bookId: id }, 'quiz'), 'ghost'),
     ]),
   ]));
@@ -207,7 +231,15 @@ function viewQuiz(root, view, params) {
   const payload = d.data && d.data.data;
   const qs = (payload && payload.questions) || [];
   if (!qs.length) return root.appendChild(empty('没有可练的题目', '先做整体分析，或看看今日到期'));
+  renderQuizCards(root, id, qs);
+}
 
+/**
+ * 题目列表渲染（2026-11-21 抽出）：练习页与「今日到期」共用同一套题卡。
+ * 抽出的理由：到期页原来直接 dump 数据块，用户点「待复习 N」看到的是 JSON——
+ * 那不是复习，是调试。两个入口必须是同一个能做题的界面。
+ */
+function renderQuizCards(root, id, qs) {
   const sel = {};   // key -> 已选文本（仅本视图内存，不入状态树）
   const done = {};  // key -> 判分结果
   root.appendChild(el('div', { class: 'q-list' }, qs.map((q, i) => {
@@ -222,18 +254,23 @@ function viewQuiz(root, view, params) {
       if (!given) return go('attempt', { id, key }); // 简答题：走自由作答表单
       submit.disabled = true;
       const r = await host.action('attempt', { bookId: id, key, given });
-      submit.disabled = false;
-      if (!r || r.ok === false) return toast((r && r.error) || '提交失败', 'bad');
+      if (!r || r.ok === false) { submit.disabled = false; return toast((r && r.error) || '提交失败', 'bad'); }
       done[key] = r.data;
+      // 答完就把按钮定住：同一题不该出现第二个可点的「作答」（真机看着像还能再答一次）。
+      submit.textContent = '已作答';
       renderResult(r.data, optEls, resultBox, rateBox, id, key);
     }, 'primary sm');
     return el('div', { class: 'q-card' }, [
       el('div', { class: 'q-head' }, [
-        badge('第 ' + (i + 1) + ' 题', 'plain'),
+        // 全局题号（2026-11-21）：与题型页、概览页同一个号，学生才能说「第 13 题」。
+        badge('第 ' + (Number(q.seqNo) > 0 ? Number(q.seqNo) : i + 1) + ' 题', 'plain'),
         badge(String(q.type || '题目'), 'accent'),
-        el('span', { class: 'q-key', text: key.slice(0, 12) }),
+        q.subtype ? el('span', { class: 'q-sub', text: String(q.subtype) }) : null,
       ]),
       el('div', { class: 'q-stem', text: q.stem || '' }),
+      // 题目配图（2026-11-21）：图是题面的一部分，做题时必须在旁边。
+      // 复用书内同一套 .bs-inline-figs 样式，只是这里是练习态（点开放大）。
+      quizFigures(id, q),
       q.options && q.options.length ? el('div', { class: 'q-opts' }, q.options.map((o) => {
         const b = el('button', {
           class: 'q-opt', text: o,
@@ -255,6 +292,38 @@ function viewQuiz(root, view, params) {
 }
 
 // 判分结果就地展开：答案、分步解答、思路、坑点，以及四档自评（真写 SRS 排程）。
+/** 全屏看图（练习页用）。图字节不动，只放大显示。 */
+function openLightbox(url, caption) {
+  const mask = el('div', { class: 'bs-lightbox' }, [
+    el('img', { src: url, alt: caption || '题目配图' }),
+    el('div', { class: 'bs-lightbox-cap', text: caption || '资料原图 · 原样复现' }),
+  ]);
+  mask.addEventListener('click', () => mask.remove());
+  document.body.appendChild(mask);
+}
+
+/**
+ * 练习页的题目配图（2026-11-21）。
+ * 判据：题干写「根据图中」的题，做题页面必须看得到图——图是题面的一部分，不是答案。
+ * 所以在「作答」之前就渲染，点开可看原尺寸。
+ */
+function quizFigures(bookId, q) {
+  const ids = Array.isArray(q.imageIds) ? q.imageIds.filter(Boolean) : [];
+  if (!ids.length) return null;
+  const figs = ids.map((imageId) => {
+    const url = host.imageUrl(bookId, imageId);
+    if (!url) return el('div', { class: 'bs-q-fig-none', text: '题目配图（桌面端请在浏览器查看）' });
+    return el('button', {
+      class: 'bs-inline-fig',
+      title: '点开看原图尺寸',
+      onclick: () => openLightbox(url, '题目配图'),
+    }, [el('img', { src: url, alt: '题目配图', loading: 'lazy' })]);
+  });
+  return el('div', { class: 'bs-inline-figs' }, [
+    el('div', { class: 'bs-inline-figs-t', text: '这道题要看的图' }),
+  ].concat(figs));
+}
+
 function renderResult(data, optEls, box, rateBox, bookId, key) {
   const good = data.verdict === 'correct';
   const self = data.verdict === 'self';
@@ -277,15 +346,29 @@ function renderResult(data, optEls, box, rateBox, bookId, key) {
   }
   if (data.rationale) box.appendChild(el('div', { class: 'q-note', text: '思路：' + data.rationale }));
   if (data.pitfalls) box.appendChild(el('div', { class: 'q-note', text: '易错：' + data.pitfalls }));
-  box.appendChild(el('div', { class: 'q-note', text: '已排程，下次复习：' + (data.dueAt ? new Date(data.dueAt).toLocaleString('zh-CN') : '—') }));
+
+  // 排程结果说人话（2026-11-21，对齐 Anki「评分前显示下一个间隔」）：
+  // 先说「已按什么排程、多久后见」，再给可改的四档——用户既不用猜，也不用被迫多点一次。
+  const why = data.scheduledBy === 'auto-correct' ? '答对 · 记得'
+    : data.scheduledBy === 'auto-wrong' ? '答错 · 重来'
+      : data.scheduledBy === 'self' ? '按你的自评' : '已排程';
+  const cur = data.currentLabel || (data.dueAt ? new Date(data.dueAt).toLocaleString('zh-CN') : '—');
+  box.appendChild(el('div', { class: 'q-note q-sched', text: why + ' → ' + cur + '再见' }));
 
   rateBox.classList.remove('hidden');
-  rateBox.appendChild(el('span', { class: 'sub', text: '这次感觉：' }));
-  [['重来', 1], ['吃力', 2], ['会了', 3], ['太简单', 4]].forEach((pair) => {
-    rateBox.appendChild(btn(pair[0], async () => {
-      const r = await host.action('rate', { bookId, key, rating: pair[1] });
+  rateBox.appendChild(el('span', { class: 'sub', text: '觉得不准？改一档：' }));
+  const iv = Array.isArray(data.nextIntervals) && data.nextIntervals.length
+    ? data.nextIntervals
+    : [{ rating: 1, name: '重来', label: '' }, { rating: 2, name: '吃力', label: '' },
+       { rating: 3, name: '会了', label: '' }, { rating: 4, name: '太简单', label: '' }];
+  iv.forEach((x) => {
+    rateBox.appendChild(btn(String(x.name || '') + (x.label ? ' · ' + x.label : ''), async () => {
+      const r = await host.action('rate', { bookId, key, rating: x.rating });
       if (!r || r.ok === false) return toast((r && r.error) || '自评失败', 'bad');
-      toast('已重排下次复习：' + (r.data && r.data.dueAt ? new Date(r.data.dueAt).toLocaleString('zh-CN') : ''), 'ok');
+      const at = r.data && r.data.dueAt ? new Date(r.data.dueAt).toLocaleString('zh-CN') : '';
+      toast('已改成「' + (x.name || '') + '」：' + at + ' 再见', 'ok');
+      rateBox.innerHTML = '';
+      rateBox.appendChild(el('span', { class: 'sub', text: '已改为「' + (x.name || '') + '」· ' + at + ' 再见' }));
     }, 'ghost sm'));
   });
 }
@@ -294,17 +377,38 @@ function viewDue(root, view, params) {
   const id = needBook(root, 'due', params);
   if (!id) return;
   const d = $view('due');
+  const bookTitle = String(params.title || params.bookTitle || '这本书');
   root.appendChild(el('div', { class: 'view-head' }, [
-    el('div', {}, [el('h2', { text: '今日到期' }), el('p', { class: 'sub', text: '书：' + id })]),
-    btn('刷新', () => call('due', { bookId: id }, 'due'), 'ghost'),
+    el('div', {}, [
+      el('div', { class: 'bs-backline' }, [
+        el('a', { class: 'bs-back', href: '#/book?id=' + encodeURIComponent(id), text: '← 回到《' + bookTitle + '》' }),
+      ]),
+      el('h2', { text: '今日到期' }),
+      el('p', { class: 'sub', text: '今天该复习的题；答完会自动排下一次' }),
+    ]),
+    el('div', { class: 'view-actions' }, [
+      btn('练全部题', () => go('quiz', { id, title: bookTitle }), 'ghost'),
+      btn('看导图', () => go('book', { id }), 'ghost'),
+      btn('刷新', () => call('due', { bookId: id }, 'due'), 'ghost'),
+    ]),
   ]));
   if (d.loading) return root.appendChild(loading('取到期队列…'));
   if (d.error) return root.appendChild(errorBox(d.error, () => call('due', { bookId: id }, 'due')));
   const payload = d.data && d.data.data;
-  root.appendChild(card('到期概览', kv([
-    ['今日到期', payload && payload.dueCount], ['可取题目', payload && payload.questions && payload.questions.length],
-  ])));
-  root.appendChild(dataBlock(payload));
+  const qs = (payload && payload.questions) || [];
+  if (!qs.length) {
+    // 空队列不是错误：说清「现在没到期」，并给一条去练新题的路，不做假数据填充。
+    return root.appendChild(el('div', { class: 'bs-cta' }, [
+      el('div', { class: 'bs-cta-art', text: '✓' }),
+      el('h3', { text: '今天没有到期的题' }),
+      el('p', { text: '间隔重复按「该忘的时候再问」排程。想多练可以直接做全部题，不影响排程。' }),
+      el('div', { class: 'bs-cta-acts' }, [
+        btn('去练全部题', () => go('quiz', { id, title: bookTitle }), 'primary'),
+        btn('回到这本书', () => go('book', { id }), 'ghost'),
+      ]),
+    ]));
+  }
+  renderQuizCards(root, id, qs);
 }
 
 function viewPractice(root, view, params) {
@@ -403,26 +507,37 @@ function viewAnalyze(root, view, params) {
   const id = params.id || '';
   const d = $view('analyze');
   root.appendChild(el('div', { class: 'view-head' }, [
-    el('div', {}, [el('h2', { text: '整体分析' }), el('p', { class: 'sub', text: '大模型把整本书当一个整体；密钥只在本次请求内存里' })]),
+    el('div', {}, [el('h2', { text: '整体分析' }), el('p', { class: 'sub', text: '大模型把整本书当一个整体；密钥存在本机服务，不用每次填' })]),
   ]));
   if (!id) return root.appendChild(empty('先选一本书', '从书架进入'));
-  const base = input({ placeholder: 'API 地址（到 /v1）' });
-  const model = input({ placeholder: '模型名' });
-  const key = input({ type: 'password', placeholder: 'API 密钥（不落盘、不写日志）' });
+  // 已配置时表单只是「看一眼/临时改一下」，不再要求每次粘密钥（2026-11-21）。
+  const cfgBox = el('div', {}, [loading('正在读取模型配置…')]);
   root.appendChild(card('模型配置', [
-    field('API 地址', base), field('模型', model), field('密钥', key, '只在本次请求内存在，关闭页面即失效'),
-    el('div', { class: 'form-actions' }, [
-      btn('开始整体分析', async () => {
-        const cfg = { baseURL: base.value.trim(), model: model.value.trim(), apiKey: key.value };
-        if (!cfg.baseURL || !cfg.model || !cfg.apiKey) return toast('地址 / 模型 / 密钥都要填', 'bad');
-        toast('已提交，整本分析通常要 1–3 分钟', 'info');
-        const r = await call('analyze', { bookId: id, cfg }, 'analyze');
-        if (r.ok) { toast('分析完成', 'good'); go('book', { id }); }
-      }, 'primary'),
-    ]),
+    cfgBox,
     d.loading ? loading('模型正在整本分析…') : null,
     d.error ? el('div', { class: 'inline-error', text: d.error }) : null,
   ]));
+  (async () => {
+    const s = await loadSettings();
+    clear(cfgBox);
+    if (s && s.unsupported) cfgBox.appendChild(el('p', { class: 'para', text: '当前宿主没有配置存储（' + (s.error || '') + '），请手动填写地址与密钥。' }));
+    const fields = credentialFields(s);
+    cfgBox.appendChild(fields.node);
+    cfgBox.appendChild(el('div', { class: 'form-actions' }, [
+      btn('开始整体分析', async () => {
+        const r = fields.read();
+        if (!r.model) return fields.setHint('先选一个对话模型（点「找模型」或手填）', 'bad');
+        if (!r.apiKey && !(s && s.hasKey)) return fields.setHint('还没有密钥：填一个再开始', 'bad');
+        await saveSettings({ baseURL: r.baseURL, model: r.model, apiKey: r.apiKey || undefined });
+        const cfg = { baseURL: r.baseURL, model: r.model };
+        if (r.apiKey) cfg.apiKey = r.apiKey;
+        toast('已提交，整本分析通常要 1–3 分钟', 'info');
+        const res = await call('analyze', { bookId: id, cfg }, 'analyze');
+        if (res.ok) { toast('分析完成', 'good'); go('book', { id }); }
+      }, 'primary'),
+    ]));
+    fields.setHint(describeKeyState(s).text, describeKeyState(s).kind);
+  })();
 }
 
 function viewAttempt(root, view, params) {
@@ -456,9 +571,66 @@ function viewRate(root, view, params) {
 }
 
 /* ---------------- 系统视图 ---------------- */
+/**
+ * 模型与密钥卡片（2026-11-21）。
+ * 判据：这是全套应用唯一需要密钥的地方，必须在设置页有一等位置——
+ * 只藏在「分析」对话框里的配置，等于用户每次都要重新找一遍。
+ */
+async function mountLlmSettings(box) {
+  const s = await loadSettings(true);
+  clear(box);
+  if (s && s.unsupported) {
+    box.appendChild(el('p', { class: 'para', text: '当前宿主没有配置存储（' + (s.error || '') + '）：分析时仍需手动填地址与密钥。' }));
+    return;
+  }
+  const fields = credentialFields(s);
+  // 包一层 form：一是让密码框属于某个表单（浏览器不再报「Password field is not contained in a form」），
+  // 二是回车即保存，符合表单肌肉记忆。提交一律 preventDefault，保存逻辑只在按钮里。
+  const form = el('form', { class: 'llm-form' });
+  form.addEventListener('submit', (e) => e.preventDefault());
+  form.appendChild(fields.node);
+  const actions = el('div', { class: 'form-actions' }, [
+    btn('保存', async () => {
+      const r = fields.read();
+      if (!r.model) return fields.setHint('还要选一个对话模型（点「找模型」或手填）', 'bad');
+      fields.setHint('正在保存…', '');
+      const saved = await saveSettings({ baseURL: r.baseURL, model: r.model, visionModel: r.visionModel, apiKey: r.apiKey || undefined });
+      if (!saved || saved.ok === false) return fields.setHint('保存失败：' + ((saved && saved.error) || '未知原因'), 'bad');
+      fields.setHint('已保存。以后分析、生成考点大全都不再问你要密钥。', 'good');
+      toast('模型配置已保存', 'ok');
+      // 顶部横幅里那句「还没有密钥」也该跟着消失：重画设置页即可
+      setTimeout(() => { if (get().route === 'settings') go('settings'); }, 600);
+    }, 'primary'),
+    btn('测试连接', async () => {
+      const r = fields.read();
+      fields.setHint('正在用 ' + (r.model || '默认模型') + ' 发一次最小请求…', '');
+      const t = await testConnection(r);
+      if (t && t.ok) fields.setHint('连通正常：' + (t.model || r.model) + ' 可用。', 'good');
+      else fields.setHint('连不通：' + ((t && t.error) || '未知原因'), 'bad');
+    }, 'ghost'),
+    btn('清掉已存密钥', async () => {
+      const saved = await saveSettings({ clearKey: true });
+      if (!saved || saved.ok === false) return toast('清除失败', 'bad');
+      toast(saved.hasKey ? '已清除，改用环境变量里的密钥' : '已清除密钥', 'ok');
+      mountLlmSettings(box);
+    }, 'ghost sm'),
+  ]);
+  form.appendChild(actions);
+  form.appendChild(el('p', { class: 'field-hint', text:
+    '密钥只存在本机：优先读环境变量 SILICONFLOW_API_KEY；在这里填过一次后写进 library/settings.json（已在 .gitignore，不入库）。' +
+    '页面拿到的永远是掩码，不会回传原文。' }));
+  box.appendChild(form);
+}
+
 function viewSettings(root) {
   const s = get();
-  root.appendChild(el('div', { class: 'view-head' }, [el('div', {}, [el('h2', { text: '设置' }), el('p', { class: 'sub', text: '只影响本应用的显示，不改变统一核心任何数据' })])]));
+  root.appendChild(el('div', { class: 'view-head' }, [el('div', {}, [el('h2', { text: '设置' }), el('p', { class: 'sub', text: '外观只影响本应用；模型配置是全应用共用的' })])]));
+  const llmBox = el('div', {}, [loading('正在读取模型配置…')]);
+  root.appendChild(el('section', { class: 'card' }, [
+    el('div', { class: 'card-head' }, [el('h3', { text: '模型与密钥' })]),
+    el('div', { class: 'card-body' }, [llmBox]),
+  ]));
+  mountLlmSettings(llmBox);
   root.appendChild(card('外观', [
     el('div', { class: 'setting-row' }, [
       el('span', { text: '主题' }),
