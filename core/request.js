@@ -88,6 +88,10 @@ async function dispatch(core, path, method, body) {
       const d = await core.composeDocument(id, b.kind, { cfg: b.cfg || {}, maxTokens: b.maxTokens, timeoutMs: b.timeoutMs, refresh: !!b.refresh, cachedOnly: !!b.cachedOnly });
       return { status: 200, data: d };
     }
+    // 题卡只读聚合（2026-11-22）：与 app-host 的 cards action 同语义，不调模型、不写盘。
+    if (parts[2] === 'cards' && parts.length === 3 && m === 'GET') {
+      return { status: 200, data: core.listCards(id) };
+    }
     // 已生成文档只读。
     if (parts[2] === 'documents' && parts.length === 4 && m === 'GET') {
       const d = core.getDocument(id, parts[3]);

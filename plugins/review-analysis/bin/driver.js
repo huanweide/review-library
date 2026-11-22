@@ -147,6 +147,11 @@ async function main() {
       cfg, maxTokens: a.maxTokens, timeoutMs: a.timeoutMs, refresh: a.refresh === 'true',
     });
     out = { ok: true, action, bookId: a.bookId, kind: d.kind, stats: d.stats };
+  } else if (action === 'cards') {
+    // 题卡：逐讲分批产物只读聚合（不调模型，2026-11-22）。
+    if (!a.bookId) throw new Error('cards 需要 --bookId');
+    const r = core.listCards(a.bookId);
+    out = { ok: true, action, bookId: a.bookId, total: r.total, lessons: r.lessons };
   } else {
     throw new Error(caps.unsupported(action));
   }

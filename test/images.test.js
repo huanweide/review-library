@@ -4,7 +4,9 @@
 // 反假绿：全部用**真实样本文件**真解 zip、真取字节、真落盘。
 // 样本：
 //   PROCESS/ppt/考试复习包/最终考试包.pptx —— slide7 内嵌 2 张 PNG
-//   library/books/b_801c90e933dc/files/...答案-正态分布侦探.docx —— 同样 2 张 PNG（图注在图片后一段）
+//   test/fixtures/images-sample.docx（2026-11-22 固化夹具）—— 同样 2 张 PNG（图注在图片后一段）
+//   原样本取自已归档旧书 library/books/b_801c90e933dc，现按「判据不依赖会漂移的资产」
+//   纪律固化为夹具（同字节复制，sha 未变）。
 // 因此能同时验：抽取、rId 映射、图注定位、跨格式 SHA 去重。
 const fs = require('fs');
 const path = require('path');
@@ -21,7 +23,7 @@ function section(t) { console.log('\n--- ' + t + ' ---'); }
 function cleanup(d) { try { fs.rmSync(d, { recursive: true, force: true }); } catch (e) {} }
 
 const PPTX = path.join(ROOT, 'PROCESS/ppt/考试复习包/最终考试包.pptx');
-const DOCX = path.join(ROOT, 'library/books/b_801c90e933dc/files/685aa429a89d7266__答案-正态分布侦探.docx');
+const DOCX = path.join(ROOT, 'test/fixtures/images-sample.docx');
 
 (async () => {
   section('A · 真样本抽取');

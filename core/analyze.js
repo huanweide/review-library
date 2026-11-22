@@ -26,8 +26,12 @@ const QUESTION_TYPES = ['选择题', '填空题', '名词解释', '简答题', '
 // 整本语料上限：超出截断并在结果里显式标记（诚实标注，不假装无损）。
 // 2026-11-19：5 万 → 12 万。根因是真实考点资料（工程材料 8.1 万字符 / 31 节 / 229 个编号知识点）
 // 一超 5 万就被按文件均分截断，后半本知识点直接丢失，用户看到的就是「知识不齐」。
-// 12 万字符 ≈ 6-8 万 token，仍在主流模型 128K 上下文内；输入侧成本远低于输出，值得换完整覆盖。
-const MAX_CORPUS = 120000;
+// 2026-11-22：12 万 → 18 万。根因是图片型书（理论力学 24 份 PDF）语料全部来自视觉转录，
+// 全书实测约 17 万字符，超 12 万会被按文件均分截断，后半本知识点直接丢失。
+// 配套要求：主分析模型必须选 ≥192K 上下文（实际用 Qwen/Qwen3-30B-A3B-Instruct-2507，256K，
+// 输入 ≈12.5 万 token + 输出 4.8 万预算 < 256K）；128K 模型跑长书会输入溢出或输出被截断。
+// 依赖提示：上调 MAX_CORPUS 时同时检查主模型上下文，不要回调。
+const MAX_CORPUS = 190000;
 // 全书可读文本低于此值视为「几乎无文本」：纯图片/扫描件需视觉模型，短文本需补资料。
 const MIN_TEXT = 80;
 
@@ -109,7 +113,7 @@ const SYSTEM_PROMPT = `你是一位严谨的学科分析与出题专家。用户
   · source.anchor：**必须从全书内容里逐字抄一个现成锚点**，形如【P.3】（PDF 第 3 页）或【块2】/【块2-1】（第 2 个文本块）；不要自己编号、不要改格式。
   · source.quote：必须是**该锚点后面正文里的连续原文片段**，10-60 字，逐字照抄；程序会拿它和原文逐字校验，编造、改写、跨块拼接都会被标成「引文未命中」。
   · source.page：anchor 是【P.N】时填 N；anchor 是【块N】（无页码信息的资料）时填 0，不要猜页码。
-  · imageIds：**字符串数组**，只能填【原图清单】里真实出现的图 id。题干出现「如图 / 下图 / 图中 / 示意图 / 直方图 / 曲线图」或题目必须看图才能作答时，必须填对应图 id；纯文字题填 []。禁止编造 id，禁止把无关图一股脑塞给一道题。原图会由系统按 id 原样附在题目下方，你不用描述图的样子，也不用重画。
+  · imageIds：**字符串数组**，只能填【原图清单】里真实出现的图 id，或填语料中【页N】块开头标注的（图id=xxx）——图片型资料（课件/作业扫描页）的图 id 就写在语料里。题干出现「如图 / 下图 / 图中 / 示意图 / 直方图 / 曲线图」或题目必须看图才能作答时，必须填对应图 id；纯文字题填 []。禁止编造 id，禁止把无关图一股脑塞给一道题。原图会由系统按 id 原样附在题目下方，你不用描述图的样子，也不用重画。
   · stem / answer / solution / rationale 四项都不能为空。
 
 【一道合格题目的示例（照这个颗粒度写，不要照抄内容；示例刻意压成单行，你也必须这样输出）】
@@ -139,6 +143,18 @@ const SYSTEM_PROMPT = `你是一位严谨的学科分析与出题专家。用户
 
 // 归一化标题用于匹配：去空白 + 小写。
 function titleKey(s) { return String(s || '').replace(/\s+/g, '').toLowerCase(); }
+
+// 从语料里收集真实出现过的图 id（2026-11-22）。
+// 视觉转录语料的【页N】块开头带（图id=xxx），模型据此填 imageIds；
+// 白名单必须覆盖「语料内标注的 id」，否则纯图片书（原图清单无内容）会全部被剥掉。
+// 只认全/半角括号包裹的「图id=」，避免误收语料正文里的普通 id 字样。
+function collectImageIds(text) {
+  const out = [];
+  const re = /[（(]图id=([A-Za-z0-9_-]+)[）)]/g;
+  let m;
+  while ((m = re.exec(String(text || '')))) out.push(m[1]);
+  return Array.from(new Set(out));
+}
 
 // 换行常量：JS 字面量拼接用（避免在生成代码里写转义）。
 const JOIN_NL = String.fromCharCode(10);
@@ -217,8 +233,12 @@ function composeCorpus(fullText, maxChars) {
     ).join('\n\n');
     return { corpus: normalized, coverage, truncated: false, totalChars, keptChars: totalChars };
   }
-  // 预算按文件均分，保证「每个文件都有正文进语料」；文件内按块顺序取，尽量在句末软切。
-  const per = Math.max(300, Math.floor(cap / Math.max(1, groups.length)));
+  // 预算按「有文本的文件」均分，保证「每个有正文的文件都进语料」；文件内按块顺序取，尽量在句末软切。
+  // 2026-11-22：分母从 groups.length 改为非空文件数。图片型书（理论力学：24 份空文字层 PDF
+  // + 24 个视觉转录段）实测：空文件占掉一半名额，每个转录段被拦腰砍掉近一半正文，
+  // 而空文件本来一个字也领不走——预算不该为它们留位。
+  const nonEmptyCount = groups.filter(g => g.blocks.reduce((a, b) => a + b.text.length, 0) > 0).length;
+  const per = Math.max(300, Math.floor(cap / Math.max(1, nonEmptyCount)));
   const out = [];
   let kept = 0;
   groups.forEach((g, gi) => {
@@ -252,8 +272,21 @@ function buildMessages(bookTitle, fullText, files, imageDescriptions) {
   const composed = composeCorpus(fullText, MAX_CORPUS);
   // v4：图片清单进系统提示词。图 id 白名单来自真抽取的 images.json，
   // 没有图时明确写「无原图」，避免模型凭空编 imageIds。
-  const imgList = Array.isArray(imageDescriptions) && imageDescriptions.length
-    ? imageDescriptions.map((x) => '- ' + String(x).slice(0, 320)).join('\n')
+  // 2026-11-22 修：纯图片型书只做页级转录、没做 vision 描述，imageDescriptions 为空，
+  // 旧代码就对模型说「本书未抽到内嵌原图，imageIds 必须填 []」——可语料【页N】块里
+  // 明明带着（图id=xxx），白名单也收了 528 个。两处口径打架，模型照提示词填 []，
+  // 于是「图示桁架」这类题一道图都不带。改为也从语料收集 id 并明确告诉模型可用。
+  const described = Array.isArray(imageDescriptions) ? imageDescriptions : [];
+  const corpusIds = collectImageIds(composed.corpus);
+  const parts = [];
+  if (described.length) parts.push(described.map(x => '- ' + String(x).slice(0, 320)).join('\n'));
+  if (corpusIds.length) parts.push(
+    '- 语料【页N】块开头标有（图id=xxx），共 ' + corpusIds.length + ' 张真实原图可用。'
+    + '题干出现「如图 / 下图 / 图中 / 示意图 / 曲线图」时，必须填所在页块标注的图 id；'
+    + '样例：' + corpusIds.slice(0, 12).join('、')
+  );
+  const imgList = parts.length
+    ? parts.join('\n')
     : '- （本书未抽到内嵌原图，所有题目的 imageIds 必须填 []）';
   const sys = SYSTEM_PROMPT
     .replace('{{FILE_LIST}}', fileListBlock(files))
@@ -669,6 +702,8 @@ async function analyze(bookTitle, fullText, opts) {
     const m = String(d).match(/id=([A-Za-z0-9_-]+)/);
     if (m) knownImageIds.add(m[1]);
   });
+  // 2026-11-22：语料内标注的（图id=xxx）也算数——图片型书的图 id 就在转录语料里。
+  collectImageIds(raw).forEach((id) => knownImageIds.add(id));
   const messages = buildMessages(bookTitle, raw, o.files, imageDescriptions);
   // v2：一次 API 要装下 Q_RANGE.min-Q_RANGE.max 道带分步解答的题。按真模型实测 p95 完成长度加 ~25% headroom
   // （外查基准：finish_reason=length 不得解析半截 JSON，预算按实测而非猜测）。
@@ -717,7 +752,7 @@ async function analyze(bookTitle, fullText, opts) {
 
 module.exports = {
   analyze, validate, extractJson, buildMessages, measureQuality,
-  composeCorpus, parseCorpus, verifyQuotes, guard,
+  composeCorpus, parseCorpus, verifyQuotes, guard, collectImageIds,
   DEEP_DIVE_PROMPT, buildDeepDiveMessages, runDeepDive,
   SYSTEM_PROMPT, DEFAULT_THRESHOLDS,
   QUESTION_TYPES, MAX_CORPUS, MIN_TEXT

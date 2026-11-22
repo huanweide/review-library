@@ -62,7 +62,21 @@ try {
   derive = m.deriveOverview;
 } catch (e) { fail++; console.log('  ✗ B0 overview.mjs 可导入  → ' + String(e.message).slice(0, 160)); }
 if (derive) {
-  const real = JSON.parse(fs.readFileSync(path.join(ROOT, 'library/books/b_801c90e933dc/analysis.json'), 'utf8'));
+  // 不再读某一本真实书：书库按用户要求只留《理论力学》，概率统计那本已移进备份，
+  // 硬编码书 id 会让判别因「数据被整理」而假红。这里用确定的内存夹具验纯函数。
+  const real = {
+    tree: { id: 'n0', type: 'root', title: '判别用全书', children: [
+      { id: 'c1', type: 'chapter', title: '第一章 静力学', children: [
+        { id: 's1', type: 'section', title: '1.1 静力学公理', children: [
+          { id: 'p1', type: 'point', title: '二力平衡公理', desc: '两力大小相等方向相反', questionTypes: ['选择题'], children: [] },
+          { id: 'p2', type: 'point', title: '受力分析', desc: '隔离体画受力', questionTypes: ['简答题'], children: [] },
+        ] },
+      ] },
+    ] },
+    questionIndex: [{ type: '选择题', items: [{ title: '公理', path: ['第一章 静力学'], questions: [{ stem: '题1' }, { stem: '题2' }] }] }],
+    stats: { chapters: 1, sections: 1, points: 2, questionCount: 2 },
+    summary: '',
+  };
   const out = derive(real);
   ok('B1 返回结构化要点（4–6 条）', Array.isArray(out.points) && out.points.length >= 3 && out.points.length <= 6,
     '条数=' + (out.points || []).length);
@@ -81,7 +95,7 @@ if (derive) {
 console.log('[C] 接线：三端一致、不新增 action、前端可加载');
 ok('C1 概览页调用 deriveOverview', /deriveOverview\(/.test(BS) && !/a\.summary \|\| '（模型没有给摘要）'/.test(BS));
 ok('C2 新模块进 SW 清单', /\.\/src\/overview\.mjs/.test(SW));
-ok('C3 能力清单不变（12 项）', require(path.join(ROOT, 'core/capabilities.js')).ACTIONS.length === 12);
+ok('C3 能力清单含 cards（12 基础 + 1 题卡，2026-11-22）', require(path.join(ROOT, 'core/capabilities.js')).ACTIONS.length === 13);
 ok('C4 导图仍走确定性格子布局（未改力导向）', /NODE_W = 224, NODE_H = 58/.test(fs.readFileSync(path.join(ROOT, 'renderer/js/mindmap-layout.js'), 'utf8')));
 
 console.log('\n通过 ' + pass + ' / 失败 ' + fail);

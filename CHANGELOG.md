@@ -5,6 +5,27 @@
 DSH 插件与 WorkBuddy 专家的 manifest，以及 README 顶部定位行；`scripts/check-versions.mjs`
 挂在 `pretest` 上做漂移检测。发版 tag 必须与 `package.json` 严格一致（如 `v1.5.0`）。
 
+## v1.6.5 — 2026-11-22（未发布）
+
+理论力学全书拆解落地，以及一条被反复踩到的契约断链的根治。
+
+**全书分析（图片型书）**
+- 旧结果用 `Qwen/Qwen3-30B-A3B-Instruct-2507` 在旧语料阈值下跑出 2 章 / 3 点 / 0 题的空壳。换 `deepseek-ai/DeepSeek-V4.1-Flash` 重跑：4 章 / 15 节 / 39 点 / 5 类 14 题，质量门禁 `passed=true`，引文 14/14 全命中，185,977 字符语料零截断。
+- 图题断链：`buildMessages` 的图清单只看 vision 描述，图片型书只做转录时提示词会强制模型填 `imageIds=[]`。改为也收集语料 `（图id=xxx）`，真无图时才要求空。
+- 二次重跑遇 900s 服务端超时（不写盘、无数据损失）。新增 `scripts/attach-source-images.mjs`：按题目 `source.file + source.page` 精确匹配同源页图，只补「题干含图意词 且 imageIds 为空 且同页唯一图」的题，不做相似度猜图。4/4 命中，浏览器实测桁架题配图正确并带出处。
+
+**`cards` action 四处断点补齐**
+- `Core.listCards()` 生产端缺失、`capabilities.js` 的 `ACTIONS` 与 `CAPABILITIES` 双份手抄导致新能力被自己的 `has()` 拒绝、app-host switch 与 UI 元数据缺项、`request.js` 缺路由——逐一补齐。`ACTIONS` 改为从 `CAPABILITIES` 派生，根治「加一处漏一处」。
+- 新增判别 `test/core-cards.test.js`（11 项，含 app-host 真分发）与 `test/analyze-imageid-prompt.test.js`（6 项）。
+
+**过时断言修正（不是降标准）**
+- `app-unified`：12 个 action → 13；`core-http`：「空 cfg 必须 400」与「环境变量密钥自动补齐」冲突，改为「有 key 出真结果 / 无 key 才 400」；`check-overview`：硬编码已移走的概率统计书 → 内存夹具。
+
+**题卡批建**
+- 17 讲 / 125 题，预览页 16 份。`build-lesson-preview.mjs` 修补零 bug（`--lesson 1` 原去找 `lesson-1.json`，实际是 `lesson-01.json`）。
+
+**验证**：`npm test` 28/28；十组 check 全绿；5178 / 4090 均 200；真浏览器导图 / 概览 / 题型 / 题图截图均无 console error。
+
 ## v1.6.4 — 2026-11-21（未发布）
 
 maxloop 第二轮：**把「看得见但读不了」的两处修掉**。阶段零外查与逐字符证据见 `PROCESS/research-概览与导图可读性/best-practices.md`。

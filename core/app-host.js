@@ -56,6 +56,7 @@ const ACTION_UI = {
   rate:     { label: '四档自评',   hint: '重排下次复习时间',           needsBook: true  },
   mark:     { label: '标注重点',   hint: '语义标记资料重点，不手动分层', needsBook: true  },
   compose:  { label: '生成整理文档', hint: '考点大全 / 考纲',           needsBook: true  },
+  cards:    { label: '逐讲题卡',     hint: '读取按讲次批建的题卡，不调模型', needsBook: true  },
 };
 
 let warned = false;
@@ -254,6 +255,13 @@ async function invoke(core, action, payload, ctx) {
           // 只查缓存：页签探测用。没有就不生成，绝不因为「看了一眼」而花钱。
           cachedOnly: !!p.cachedOnly,
         });
+        break;
+      }
+      // 题卡只读聚合（2026-11-22）：产物已在 cards/lesson-NN.json，不调模型、不写盘。
+      case 'cards': {
+        const id = String(p.bookId || '').trim();
+        if (!id) throw new Error('cards 需要 bookId');
+        data = core.listCards(id);
         break;
       }
       default:

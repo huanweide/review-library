@@ -11,7 +11,7 @@
 // 不引入 protobuf / 代码生成 / 新依赖。
 //
 // 新增能力的固定顺序（漏任一步，test/core-capability-sync.test.js 的 J1 立即红）：
-//   1) 在 ACTIONS / CAPABILITIES 加一行；
+//   1) 在 CAPABILITIES 加一行（ACTIONS 从它派生，不再手抄第二份）；
 //   2) 在 core/index.js 加对应门面方法；
 //   3) 在 core/request.js 加对应路由（HTTP / Electron 两形态）；
 //   4) 在 plugins/review-analysis/bin/driver.js 与 plugins/dsh-review-analysis/index.js
@@ -40,12 +40,18 @@ const CAPABILITIES = [
   { action: 'get',       method: 'getAnalysis',   needsBook: true,  group: 'library' },
   { action: 'mark',      method: 'markFile',      needsBook: true,  group: 'library' },
   { action: 'compose',   method: 'composeDocument', needsBook: true, group: 'library' },
+  { action: 'cards',     method: 'listCards',       needsBook: true,  group: 'library' },
   { action: 'practice',  method: 'getPractice',   needsBook: true,  group: 'practice' },
   { action: 'quiz',      method: 'getQuiz',       needsBook: true,  group: 'practice' },
   { action: 'due',       method: 'getDue',        needsBook: true,  group: 'practice' },
   { action: 'attempt',   method: 'submitAttempt', needsBook: true,  group: 'practice' },
   { action: 'rate',      method: 'rateCard',      needsBook: true,  group: 'practice' },
 ];
+
+// 2026-11-22 修：ACTIONS 与 CAPABILITIES 原先各手抄一份。加 cards 时只加进 CAPABILITIES，
+// 而 has() 用的是 ACTION_SET(ACTIONS) → 新能力被自己的清单判成 unsupported（实测）。
+// 单一真源：ACTIONS 保留为兼容导出，内容从 CAPABILITIES 派生，杜绝两处漂移。
+ACTIONS.splice(0, ACTIONS.length, ...CAPABILITIES.map(c => c.action));
 
 const BY_ACTION = new Map(CAPABILITIES.map(c => [c.action, c]));
 const ACTION_SET = new Set(ACTIONS);

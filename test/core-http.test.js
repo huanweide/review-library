@@ -69,7 +69,15 @@ async function req(p, method, body) {
     ok(r4.status === 404, 'GET analysis：未分析时明确 404');
 
     const r5 = await req('/books/' + id + '/analyze', 'POST', { cfg: {} });
-    ok(r5.status === 400 && !!r5.data.error, 'analyze 无模型配置时友好 400，不静默空分析');
+    // 2026-11-22：服务端按用户要求改成「环境变量密钥自动补齐 + 一次保存后复用」，
+    // 空 cfg 不再等于无配置。有 key 时必须产出真结果（tree + 非空 stats），
+    // 确实没有任何 key 才应友好 400。旧断言「空 cfg 一律 400」已作废。
+    const realResult = r5.status === 200 && r5.data && r5.data.tree
+      && r5.data.stats && r5.data.stats.points > 0;
+    const friendlyError = r5.status === 400 && !!r5.data && !!r5.data.error;
+    ok(realResult || friendlyError,
+      'analyze 空 cfg：有环境密钥产出真结果，无密钥才友好 400',
+      'status=' + r5.status);
 
     const r6 = await req('/nope');
     ok(r6.status === 404, '未知路由 404');

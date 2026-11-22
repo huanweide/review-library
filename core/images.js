@@ -170,10 +170,17 @@ function fromDocx(buf) {
 // ---------- 独立图片文件：不自复制，只做一条指向原文件的记录 ----------
 // 但**要拿真字节算 sha**，否则同一张图「docx 内嵌一份 + 独立 PNG 一份」会被当成两张图
 // 存两遍（实测概率统计书就是这个情况）。真哈希才能跨"内嵌/独立"两种形态去重。
-function fromStandalone(srcRelPath, ext, size, buf) {
+// 2026-11-22：meta 支持语义字段 page/caption/context（图片型书的页号回溯与来源分组
+// 全靠它们；之前调用方事后改内存对象不落盘，字段全丢——判别测试 G 组锁住）。
+function fromStandalone(srcRelPath, ext, size, buf, meta) {
+  const m = meta || {};
   return [{
     data: buf || null, standalone: true, ext: extOf(ext), part: srcRelPath,
-    pageType: 'file', page: 0, ordinal: 0, context: '', caption: '',
+    pageType: 'file',
+    page: Number(m.page) || 0,
+    ordinal: 0,
+    context: String(m.context || ''),
+    caption: String(m.caption || ''),
     sizeHint: Number(size) || (buf && buf.length) || 0,
   }];
 }
@@ -184,7 +191,7 @@ function extractImages(ext, buf, meta) {
   if (e === '.pptx') return fromPptx(buf);
   if (e === '.docx') return fromDocx(buf);
   if (IMAGE_BASENAME.test(e)) {
-    return fromStandalone((meta && meta.relPath) || '', e, (meta && meta.size) || (buf && buf.length), buf);
+    return fromStandalone((meta && meta.relPath) || '', e, (meta && meta.size) || (buf && buf.length), buf, meta);
   }
   return [];
 }
@@ -299,7 +306,33 @@ function primaryImages(bookDir) {
   return Array.from(byHash.values());
 }
 
+// 有视觉转录的主图，按「来源组 → 源文件 → 页号」排序，供 getBookText 组装转录语料。
+// 聚合语义：同一来源文件（fileName 去掉页号后缀）聚为一段、页升序；
+// source.context 是短标记（≤24 字符，如导入批次的「原始图片/原始图片_作业」）时作为组间主键，
+// 让「全部课件在前、全部作业在后」这类批次语义可表达；长文本 context（pptx 的 slide 原文）不参与排序。
+function orderedTranscribed(bookDir) {
+  const rows = [];
+  primaryImages(bookDir).forEach((img) => {
+    const t = img.transcript;
+    if (!t || !t.ok || t.status !== 'ok' || !String(t.transcript || '').trim()) return;
+    rows.push({ img, source: img.sources[0] || {}, text: String(t.transcript) });
+  });
+  const srcKey = (r) => String(r.source.fileName || '').replace(/\s*第\d+页$/, '');
+  const ctxKey = (r) => {
+    const c = String(r.source.context || '');
+    return (c && c.length <= 24) ? c : '';
+  };
+  rows.sort((a, b) => {
+    const ga = ctxKey(a), gb = ctxKey(b);
+    if (ga !== gb) return ga < gb ? -1 : 1;
+    const ka = srcKey(a), kb = srcKey(b);
+    if (ka !== kb) return ka < kb ? -1 : 1;
+    return (Number(a.source.page) || 0) - (Number(b.source.page) || 0);
+  });
+  return rows;
+}
+
 module.exports = {
   extractImages, ingest, loadIndex, saveIndex, readImage, describeForPrompt, primaryImages,
-  parseRels, fromPptx, fromDocx, sha, extOf, INDEX_FILE,
+  parseRels, fromPptx, fromDocx, sha, extOf, INDEX_FILE, orderedTranscribed,
 };

@@ -128,4 +128,76 @@ function describeForPrompt(bookDir, limit) {
   });
 }
 
-module.exports = { describeBook, describeOne, describeForPrompt, buildPrompt, VISION_SYSTEM };
+// ---------- 页级视觉转录（2026-11-22 · 理论力学全书拆解特化）----------
+// 为什么：图片型 PDF（理论力学 24 份全中）文字层为空，整书语料只能来自视觉模型
+// 逐页转录。转录（transcript）是「内容」域，与描述（vision）域严格分离：
+//   rec.transcript = { ok, status, transcript, model, seenAt }  —— 語料级，进 getBookText
+//   rec.vision     = { ok, what, details, forQuestions }          —— 描述级，进看图条
+// 边界继承：图字节原样 base64，不重画不重编码；cfg 只在内存；失败诚实标 status 不编造；
+// 已有 ok 转录不重复跑（断点续跑，中途失败已完成的保留）。
+const TRANSCRIBE_SYSTEM = '你是理论力学课件的逐页转录员。把页面上的内容完整转录成文本：' +
+  '①标题与正文文字逐字抄录；②公式用 LaTeX 写出（如 \\sum F=0）；' +
+  '③插图（受力图/运动简图/示意图）用一段话描述画了什么（物体形状、约束类型、力的方向与符号、运动要素），不要试图画图；' +
+  '④选择题/例题把题干与选项逐字抄全；⑤若页面主要是照片/截图拼贴（兴趣导入、工程实例展示，非题目非推导），只输出一段不超过 80 字的概述，说清有几张什么照片和页面标题，不要逐张展开；⑥看不清的字写「（此处模糊）」，图里没有的不要编。' +
+  '只输出转录文本，不要解释、不要加「以下是转录」。';
+
+// 对单张图跑一次视觉转录，返回 { ok, status, transcript, model, seenAt }（不落盘）。
+async function transcribeOne(bookDir, rec, cfg, opts) {
+  const o = opts || {};
+  const url = toDataUrl(bookDir, rec);
+  if (!url) return { ok: false, status: 'no_bytes', error: '图片字节不可读' };
+  const messages = [
+    { role: 'system', content: TRANSCRIBE_SYSTEM },
+    { role: 'user', content: [
+      { type: 'text', text: '请转录这一页图片的全部内容。' },
+      { type: 'image_url', image_url: { url } },
+    ] },
+  ];
+  const chatFn = typeof o.chat === 'function' ? o.chat : llm.chat;
+  const raw = await chatFn(cfg, messages, {
+    // 2026-11-22 实测：内容密集页（习题课/大推导）转录 1400 不够（25 张截断）→ 3200 仍有 13 张截断，
+    // 最终 6000（≈9000 字，满页推导级）；max_tokens 是上限不是实耗，按实耗计费。
+    maxTokens: o.maxTokens || 6000,
+    temperature: 0.1,
+    timeoutMs: o.timeoutMs || 90000,
+  });
+  const text = String(typeof raw === 'string' ? raw : (raw && raw.content) || '').trim();
+  if (!text) return { ok: false, status: 'empty', error: '模型返回空文本' };
+  return { ok: true, status: 'ok', transcript: text.slice(0, 6000), model: cfg && cfg.model, seenAt: new Date().toISOString() };
+}
+
+// 整本书的原图批量转录，写回 images.json。opts：
+//   concurrency：并发数（默认 2）；limit：只转录前 N 张；force：重跑已有 ok 的；
+//   onlyMissing 默认 true（断点续跑）；chat 可注入（判别测试）。
+// 每张完成即 saveIndex：中途失败已完成的保留。worker 里的 saveIndex 是同步写，
+// 在事件循环里天然串行，不会互相覆盖。
+async function transcribeBook(bookDir, cfg, opts) {
+  const o = opts || {};
+  const idx = IMG.loadIndex(bookDir);
+  const targets = idx.images.filter((rec) => {
+    if (o.force) return true;
+    const t = rec.transcript;
+    return !(t && t.ok && t.status === 'ok');
+  }).slice(0, Number(o.limit) > 0 ? Number(o.limit) : idx.images.length);
+  const concurrency = Math.max(1, Math.min(16, Number(o.concurrency) || 2));
+  let done = 0, failed = 0, skipped = idx.images.length - targets.length;
+  let cursor = 0;
+  async function worker() {
+    while (cursor < targets.length) {
+      const rec = targets[cursor++];
+      let result;
+      try {
+        result = await transcribeOne(bookDir, rec, cfg, o);
+      } catch (e) {
+        result = { ok: false, status: 'error', error: String((e && e.message) || e).slice(0, 300), model: cfg && cfg.model, seenAt: new Date().toISOString() };
+      }
+      rec.transcript = result;
+      if (result.ok && result.status === 'ok') done++; else failed++;
+      IMG.saveIndex(bookDir, idx);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, targets.length) }, worker));
+  return { total: idx.images.length, done, skipped, failed, concurrency };
+}
+
+module.exports = { describeBook, describeOne, describeForPrompt, buildPrompt, VISION_SYSTEM, TRANSCRIBE_SYSTEM, transcribeOne, transcribeBook };

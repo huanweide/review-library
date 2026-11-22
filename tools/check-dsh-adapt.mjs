@@ -4,8 +4,11 @@
  *
  *   node tools/check-dsh-adapt.mjs
  *
- * baseline 直接取 git HEAD 的插件源码（不是备份文件），所以没有"造一个假旧版"的嫌疑：
- * 旧版缺 settings/models 端点、缺新增的 workbench 模块、patch 写死作者本机路径。
+ * baseline 用固化夹具 test/fixtures/dsh-index-legacy.js（= 引入 DSH 适配前最后一版
+ * 5a150cd 的真实源码，字节原样），**不再取 git HEAD**：
+ * HEAD 会随提交前移，一旦新版进了 HEAD，"旧版必须没有 X" 这类对照断言就会集体失真
+ * （2026-11-22 搬迁后重跑时真实踩到：HEAD 已是新版，A1–A4 假红 4 条）。
+ * 夹具是历史事实的拷贝，不依赖任何一次后续提交。
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -27,15 +30,17 @@ const ok = (name, cond, extra = '') => {
   else { fail++; console.log('  ✗ ' + name + (extra ? '  → ' + String(extra).slice(0, 200) : '')); }
 };
 
-let HEAD = '';
-try { HEAD = execFileSync('git', ['show', 'HEAD:plugins/dsh-review-analysis/index.js'], { cwd: ROOT, encoding: 'utf8' }); }
-catch (e) { HEAD = ''; }
+const LEGACY_FILE = path.join(ROOT, 'test', 'fixtures', 'dsh-index-legacy.js');
+let LEGACY = '';
+try { LEGACY = fs.readFileSync(LEGACY_FILE, 'utf8'); } catch (e) { LEGACY = ''; }
 
-console.log('[A] baseline（git HEAD 旧版）必须是红的，否则这条判别没有分辨力');
-ok('A1 旧版没有 settings 端点', !/\/review-analysis\/api\/settings/.test(HEAD));
-ok('A2 旧版没有 models 端点', !/\/review-analysis\/api\/models/.test(HEAD));
-ok('A3 旧版没托管新模块', !/src\/overview\.mjs/.test(HEAD) && !/src\/llm-config\.js/.test(HEAD));
-ok('A4 旧版 projectRoot 只能手工给', !/resolveProjectRoot/.test(HEAD));
+console.log('[A] baseline（固化旧版夹具）必须是红的，否则这条判别没有分辨力');
+// 夹具缺失会让 A1–A4 因空串而「全绿」——那是假绿，必须先钉住夹具本身。
+ok('A0 旧版夹具存在且非空', LEGACY.length > 5000, LEGACY ? LEGACY.length + ' 字节' : '缺失');
+ok('A1 旧版没有 settings 端点', !!LEGACY && !/\/review-analysis\/api\/settings/.test(LEGACY));
+ok('A2 旧版没有 models 端点', !!LEGACY && !/\/review-analysis\/api\/models/.test(LEGACY));
+ok('A3 旧版没托管新模块', !!LEGACY && !/src\/overview\.mjs/.test(LEGACY) && !/src\/llm-config\.js/.test(LEGACY));
+ok('A4 旧版 projectRoot 只能手工给', !!LEGACY && !/resolveProjectRoot/.test(LEGACY));
 
 console.log('[B] 当前 DSH 插件：所有 DSH 版本共用同一套能力');
 ok('B1 注册 settings / settings:test / models 三个端点',

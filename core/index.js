@@ -19,7 +19,7 @@ const practiceLib = require('./practice');
 const documentsLib = require('./documents');
 
 // 版本号唯一真源 = 根 package.json 的 version；本常量由 scripts/sync-versions.mjs 机械同步，禁止手改。
-const CORE_VERSION = '1.6.4';
+const CORE_VERSION = '1.6.5';
 
 class Core {
   constructor(root) {
@@ -87,6 +87,30 @@ class Core {
       const segs = extract.segmentText(t, { name: f.name, ext: f.ext });
       parts.push('【文件：' + f.name + '】\n' + segs.map(s => s.anchor + s.text).join('\n'));
     });
+    // 视觉转录语料（2026-11-22）：图片型资料（理论力学 24 份 PDF 全中）文字层为空，
+    // 整书语料必须来自视觉模型逐页转录。有 transcript 的主图按「来源组 → 源文件 → 页号」
+    // 聚合拼接：段头【文件：视觉转录·<源名>】，块锚点【页N】（analyze 的 ANCHOR_LINE 原生支持，
+    // 不与 PDF 的【P.N】混用），块尾（图id=<imgId>）供 imageIds 白名单与题图关联。
+    // 没转录的图不进语料（行为不变，老书零迁移）。
+    const bookDir = this.store._bookDir(id);
+    const rows = imagesLib.orderedTranscribed(bookDir);
+    if (rows.length) {
+      const srcKey = (r) => String(r.source.fileName || '').replace(/\s*第\d+页$/, '') || ('图' + r.img.id);
+      const ctxKey = (r) => {
+        const c = String(r.source.context || '');
+        return (c && c.length <= 24) ? c : '';
+      };
+      const groups = new Map();
+      rows.forEach((r) => {
+        const gk = ctxKey(r) + '/' + srcKey(r);
+        if (!groups.has(gk)) groups.set(gk, { name: srcKey(r), pages: [] });
+        groups.get(gk).pages.push({ page: Number(r.source.page) || 0, text: r.text, imgId: r.img.id });
+      });
+      groups.forEach((g) => {
+        parts.push('【文件：视觉转录·' + g.name + '】\n' +
+          g.pages.map(p => '【页' + (p.page || 1) + '】（图id=' + p.imgId + '）' + p.text).join('\n'));
+      });
+    }
     return parts.join('\n\n');
   }
 
@@ -176,6 +200,47 @@ class Core {
   // 原始过程状态（供统计 / 调试 / 判别测试跨实例回读）。
   getPractice(id) {
     return practiceLib.normalizeState(this.store.getPractice(id));
+  }
+
+  // 题卡只读聚合（2026-11-22）：逐讲批建产物 cards/lesson-NN.json → { lessons, total }。
+  // 为什么在这里：core/capabilities.js 已声明 cards→listCards、driver 也在调，
+  // 但生产端一度不存在（typeof Core.prototype.listCards === undefined），
+  // app-host 分发直接判 unsupported——典型的「消费端写了、生产端没提供」。
+  // 契约：只读、不调模型；坏文件单独标注 error 不拖垮整批；文件名白名单防目录穿越；
+  // failed.json 是失败台账不是题卡，不进列表。
+  listCards(id) {
+    const book = this.store.getBook(id);
+    if (!book) throw new Error('书不存在：' + id);
+    const dir = path.join(this.store._bookDir(id), 'cards');
+    let names = [];
+    try { names = fs.readdirSync(dir); }
+    catch (e) { return { lessons: [], total: 0 }; }
+    const lessons = [];
+    for (const name of names) {
+      const m = /^lesson-(\d+)\.json$/.exec(name);
+      if (!m) continue;
+      let d;
+      try { d = JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8')); }
+      catch (e) {
+        lessons.push({ file: name, error: '题卡文件解析失败：' + (e && e.message || e) });
+        continue;
+      }
+      const kps = Array.isArray(d.knowledgePoints) ? d.knowledgePoints : [];
+      const cards = kps.reduce((n, kp) => n + (Array.isArray(kp && kp.cards) ? kp.cards.length : 0), 0);
+      lessons.push({
+        lesson: Number(d.lesson || m[1]),
+        seq: d.seq == null ? null : Number(d.seq),
+        title: String(d.title || ''),
+        date: String(d.date || ''),
+        block: String(d.block || ''),
+        knowledgePoints: kps.length,
+        cards,
+        generatedAt: String(d.generatedAt || ''),
+        file: name,
+      });
+    }
+    lessons.sort((a, b) => (a.lesson || 0) - (b.lesson || 0));
+    return { lessons, total: lessons.reduce((n, l) => n + (l.cards || 0), 0) };
   }
 
   // 今日到期题目（脱敏）。now 可注入，判别测试不依赖真实时间。

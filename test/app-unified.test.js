@@ -52,7 +52,9 @@ function makeAnalysis() {
 
   // ① 唯一真源
   const canonical = CAPS.ACTIONS.slice();
-  ok(canonical.length === 12, '唯一真源 capabilities.js 有 12 个 action', '实际 ' + canonical.length);
+  // 13 = 12 项基础能力 + cards（2026-11-22 理论力学逐讲题卡）。写死数字是防误删守卫，
+  // 加能力时请同步这里；cards 的真实契约由下面的集合一致性断言覆盖。
+  ok(canonical.length === 13, '唯一真源 capabilities.js 有 13 个 action', '实际 ' + canonical.length);
 
   // ② APP 协议 manifest（HTTP / Electron / DSH 三宿主都返回同一份）
   const mHttp = HOST.manifest('http', { version: '1.5.2' });
