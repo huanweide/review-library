@@ -241,6 +241,7 @@ async function invoke(core, action, payload, ctx) {
         const patchArg = {};
         if (typeof p.focus === 'boolean') patchArg.focus = p.focus;
         if (typeof p.note === 'string') patchArg.note = p.note;
+        if (typeof p.name === 'string') patchArg.name = p.name;
         data = core.markFile(id, fid, patchArg);
         break;
       }

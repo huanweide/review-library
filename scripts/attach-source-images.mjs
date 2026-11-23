@@ -49,7 +49,9 @@ rows.forEach((r) => {
   byPage.get(key).push(String(r.img.id));
 });
 
-const wantsImage = (q) => /如图|下图|图中|图示|示意图|曲线图|直方图|曲线/.test(String(q && q.stem || ''));
+// 图意词（2026-11-23 需求7）：补「受力图 / 受力分析图 / 画出…图 / 内力 / 机构图」——
+// 旧正则漏了这些，导致「要求画出 AB 杆、AC 杆及整体的受力图」这类必看图的题被判成纯文字题。
+const wantsImage = (q) => /如图|下图|图中|图示|示意图|曲线图|直方图|曲线|受力图|受力分析图|画.{0,8}图|内力图|机构图|结构图|简图/.test(String(q && q.stem || ''));
 const report = [];
 let filled = 0;
 

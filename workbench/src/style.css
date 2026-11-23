@@ -281,8 +281,17 @@ code,pre{font-family:var(--mono)}
 .mm-chip.on{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600}
 .mm-badge text{pointer-events:none}
 .mm-bar .btn.on{border-color:var(--brand);color:var(--brand)}
-.mm-canvas{padding:14px;overflow:auto;max-height:460px}
-.mm-canvas svg{max-width:100%;height:auto;display:block}
+.mm-canvas{padding:14px;overflow:auto;max-height:460px;position:relative;cursor:grab}
+.mm-canvas.dragging{cursor:grabbing}
+/* 无界草图视口（2026-11-23 需求1）：transform 只在这一层，canvas 仍管滚动兜底 */
+.mm-viewport{transform-origin:0 0;will-change:transform;display:inline-block;min-width:100%}
+.mm-canvas svg{max-width:100%;height:auto;display:block;transform-origin:0 0}
+/* 丝滑出现：整棵淡入 + 节点按序微延迟长出来，替代旧的瞬间整棵替换 */
+.mm-canvas svg.mm-enter{animation:mm-fade .28s ease-out both}
+.mm-canvas svg.mm-enter g.mm-node{animation:mm-node-in .3s cubic-bezier(.2,.7,.3,1) both}
+@keyframes mm-fade{from{opacity:.55}to{opacity:1}}
+@keyframes mm-node-in{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+.mm-zoom{min-width:28px;padding:4px 7px;font-size:13px;line-height:1}
 .mm-outline-row{display:flex;align-items:center;gap:8px;font-size:12.5px;padding:3px 0;color:var(--ink-2)}
 .mm-outline-row .dot{width:7px;height:7px;border-radius:50%;flex:0 0 7px}
 .raw-box{margin-top:14px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:10px 12px}
@@ -399,9 +408,33 @@ body.bs-focus .sidebar{display:none}
 .bs-q{background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:11px 13px}
 .bs-q-head{display:flex;align-items:center;gap:7px;margin-bottom:7px}
 .bs-q-stem{font-size:13px;line-height:1.7;margin-bottom:8px}
-.bs-q-opts{display:flex;flex-direction:column;gap:4px;margin-bottom:9px}
-.bs-q-opt{font-size:12px;color:var(--ink-2);background:var(--surface-2);border-radius:6px;padding:5px 9px}
-.bs-q-acts{display:flex;align-items:center;gap:10px}
+.bs-q-opts{display:flex;flex-direction:column;gap:5px;margin-bottom:9px}
+/* 选项可点（2026-11-23 需求4）：从死文本改成按钮，选中态用主色描边+淡底，不靠颜色暗示对错 */
+.bs-q-opt{display:block;width:100%;text-align:left;font:12px var(--sans);color:var(--ink-2);
+  background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:6px 10px;
+  cursor:pointer;transition:border-color .12s,background .12s}
+.bs-q-opt:hover{border-color:var(--brand)}
+.bs-q-opt.picked{border-color:var(--brand);background:var(--brand-wash,rgba(52,87,213,.08));color:var(--ink)}
+.bs-q-acts{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+/* 判分反馈 */
+.bs-verdict{margin-top:9px;font-size:12px;line-height:1.6;padding:7px 10px;border-radius:6px;border:1px solid var(--line)}
+.bs-verdict.hidden{display:none}
+.bs-verdict.correct{color:var(--good, #1a7f4b);border-color:var(--good, #1a7f4b)}
+.bs-verdict.wrong{color:var(--bad, #b1362c);border-color:var(--bad, #b1362c)}
+.bs-verdict.warn{color:var(--muted)}
+/* 思路点拨（不给答案）：与答案区视觉区分，用引导色不解题 */
+.bs-hintbox{margin-top:10px;border:1px solid var(--line);border-left:3px solid var(--brand);
+  border-radius:0 7px 7px 0;padding:9px 12px;display:flex;flex-direction:column;gap:9px;background:var(--surface-2)}
+.bs-hintbox.hidden{display:none}
+.bs-hintrow-t{font-size:11px;font-weight:650;color:var(--brand-ink);margin-bottom:2px;
+  letter-spacing:.04em;text-transform:uppercase}
+.bs-hintrow-b{font-size:12px;color:var(--ink-2);line-height:1.75}
+/* 教学化答案分层 */
+.bs-ans-sec{display:flex;flex-direction:column;gap:4px;margin-top:3px}
+.bs-ans-sec-t{font-size:10.5px;font-weight:650;color:var(--muted);letter-spacing:.05em}
+.bs-step{display:flex;gap:8px;align-items:flex-start}
+.bs-stepno{flex:0 0 18px;height:18px;border-radius:50%;background:var(--brand);color:#fff;
+  font:10px/18px var(--mono);text-align:center}
 /* 图题并置（2026-11-20 用户纠正）：图是拿来懂题做题的，必须和题目同屏。
    字节原样不动，只用 CSS 限制显示高度（300px）——既看得出图、又不让大图横插乱排版；
    点一下开 lightbox 看全尺寸。单开页签＝图和题分家，已取消。 */
@@ -440,8 +473,7 @@ body.bs-focus .sidebar{display:none}
 .bs-src{font:10px var(--mono);color:var(--muted)}
 .bs-ans{margin-top:10px;border-top:1px dashed var(--line);padding-top:9px;display:flex;flex-direction:column;gap:5px}
 .bs-ans-line{font-size:12.5px;font-weight:650}
-.bs-sol{display:flex;flex-direction:column;gap:4px}
-.bs-step{font-size:12px;color:var(--ink-2);line-height:1.7;padding-left:9px;border-left:2px solid var(--line)}
+.bs-sol{display:flex;flex-direction:column;gap:6px}
 .bs-note{font-size:11.5px;color:var(--muted);line-height:1.7}
 .bs-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-bottom:12px}
 .bs-card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
@@ -618,3 +650,39 @@ body.bs-focus .sidebar{display:none}
 .tb-due{border-color:var(--brand);background:var(--brand-soft,var(--surface-2));
   color:var(--brand-ink);font-weight:650}
 .tb-due:hover{background:var(--brand);color:#fff}
+
+/* 就地资料阅读器（2026-11-23 需求6）：浮层 + 原字节预览 + 就地改名 */
+.rd-mask{position:fixed;inset:0;z-index:130;background:rgba(10,14,22,.72);
+  display:flex;align-items:center;justify-content:center;padding:3vh 3vw}
+.rd-panel{display:flex;flex-direction:column;width:min(1100px,96vw);height:min(94vh,940px);
+  background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;
+  box-shadow:0 18px 60px rgba(0,0,0,.35)}
+.rd-head{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line);
+  background:var(--surface-2)}
+.rd-badge{font:10px var(--mono);color:var(--brand-ink);background:var(--brand-soft,var(--surface));
+  border:1px solid var(--line);border-radius:4px;padding:3px 6px;letter-spacing:.05em}
+.rd-title-input{flex:1;min-width:120px;font:14px var(--sans);color:var(--ink);font-weight:600;
+  background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 9px}
+.rd-title-input:focus{outline:none;border-color:var(--brand)}
+.rd-spacer{flex:0 0 4px}
+.rd-x{border:0;background:none;color:var(--muted);font-size:22px;line-height:1;cursor:pointer;padding:0 4px}
+.rd-x:hover{color:var(--ink)}
+.rd-sub{font-size:10.5px;color:var(--muted);padding:6px 14px;border-bottom:1px dashed var(--line)}
+.rd-frame{flex:1;width:100%;border:0;background:#fff;min-height:0}
+.rd-imgwrap{flex:1;min-height:0;overflow:auto;display:flex;align-items:flex-start;justify-content:center;
+  padding:16px;background:var(--surface-2)}
+.rd-img{max-width:100%;height:auto;cursor:zoom-in;border-radius:6px;box-shadow:0 2px 12px rgba(0,0,0,.12)}
+.rd-text{flex:1;min-height:0;overflow:auto;margin:0;padding:14px 16px;white-space:pre-wrap;
+  word-break:break-word;font:12px/1.7 var(--mono);color:var(--ink);background:var(--surface)}
+.rd-fallback{flex:1;min-height:0;display:flex;flex-direction:column;background:#fff}
+.rd-fallback-t{font-size:12px;color:#211e19;margin:8px 12px 0}
+.rd-fallback-h{font-size:11px;color:#6b7688;margin:4px 12px 8px}
+.rd-lightbox{position:fixed;inset:0;z-index:140;background:rgba(10,14,22,.92);
+  display:flex;align-items:center;justify-content:center;cursor:zoom-out;padding:24px}
+.rd-lightbox img{max-width:94vw;max-height:92vh;object-fit:contain;background:#fff}
+
+/* 考点重要幻灯片（2026-11-23 需求7）：控制条 + 重点页视觉强化 */
+.bs-slide-ctrl{display:flex;align-items:center;gap:10px;padding:8px 0 10px;flex-wrap:wrap}
+.bs-slide-key{border-left:3px solid var(--brand);padding-left:10px}
+.bs-doc-point.key .bs-doc-detail{font-weight:600;color:var(--ink)}
+.bs-doc-nav-item.on{border-color:var(--brand);color:var(--brand-ink)}

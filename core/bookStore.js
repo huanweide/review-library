@@ -236,6 +236,12 @@ class BookStore {
     const p = patchArg || {};
     if (typeof p.focus === 'boolean') rec.focus = p.focus;
     if (typeof p.note === 'string') rec.note = p.note.slice(0, 300);
+    // 改名（2026-11-23 需求6）：只改书目里的展示名，不动磁盘上的物理文件。
+    // fileId 是身份，路径按 fileId 定位，所以改名不影响读取/分析/引用；空名/超长名一律拒绝。
+    if (typeof p.name === 'string') {
+      const nm = p.name.trim();
+      if (nm && nm.length <= 120) rec.name = nm;
+    }
     book.updatedAt = nowIso();
     this._saveBook(book);
     return rec;

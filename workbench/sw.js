@@ -7,13 +7,13 @@
 // 早先是缓存优先，结果改完 JS 刷新页面仍跑旧代码，被误判成「修了没生效」。
 // 这个应用是本地服务形态、按需离线，网络优先才是正确取舍：在线永远拿最新，
 // 断网才回落到缓存壳；缓存同时被静默更新，安装态也不会落后。
-const CACHE = 'tiandao-workbench-v27';
+const CACHE = 'tiandao-workbench-v30';
 const SHELL = [
   './', './index.html', './manifest.webmanifest', './icons/icon.svg',
   './icons/icon-192.png', './icons/icon-512.png',
   './src/style.css', './src/main.js', './src/host.js', './src/state.js',
   './src/router.js', './src/ui.js', './src/views.js', './src/shell.js',
-  './src/bookspace.js', './src/mindmap.js', './src/llm-config.js', './src/overview.mjs',
+  './src/bookspace.js', './src/mindmap.js', './src/llm-config.js', './src/overview.mjs', './src/study-hint.mjs', './src/map-viewport.mjs', './src/reader.mjs',
 ];
 
 self.addEventListener('install', e => {

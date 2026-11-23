@@ -151,7 +151,13 @@ ok('E15 host 有 settings/models 传输方法', /async settings\(patch\)/.test(H
 console.log('[F] Service Worker：新模块必须进清单，否则用户看不到改动');
 const SW = fs.readFileSync(path.join(ROOT, 'workbench/sw.js'), 'utf8');
 ok('F1 llm-config.js 在缓存清单里', /\.\/src\/llm-config\.js/.test(SW));
-ok('F2 缓存版本已升到 v27', /tiandao-workbench-v27/.test(SW), (SW.match(/tiandao-workbench-v\d+/) || [''])[0]);
+// F2 用「版本下限」而非硬编码某一版：每次升 SW 都改测试既脆弱又会假红。
+// 基线是 v27（概览/导图可读性那轮），本轮新增模块后再升只高不低。
+const swVer = Number((SW.match(/tiandao-workbench-v(\d+)/) || [])[1] || 0);
+ok('F2 缓存版本 >= v27（基线，只升不降）', swVer >= 27, '实际 v' + swVer);
+ok('F3 新增 study-hint.mjs 在缓存清单里（漏列即 404 白屏）', /\.\/src\/study-hint\.mjs/.test(SW));
+ok('F4 新增 map-viewport.mjs 在缓存清单里（漏列即导图失效）', /\.\/src\/map-viewport\.mjs/.test(SW));
+ok('F5 新增 reader.mjs 在缓存清单里（漏列即阅读器白屏）', /\.\/src\/reader\.mjs/.test(SW));
 
 console.log('[G] 降级：宿主没有配置接口时不许假装已配置');
 ok('G1 Electron 形态返回 unsupported 而不是抛错', /unsupported: true/.test(HOSTJS));

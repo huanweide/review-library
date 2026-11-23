@@ -2,6 +2,7 @@
 // 判据：布局算法只有一份 —— renderer/js/mindmap-layout.js（UMD 纯函数）。
 // 这里只负责「加载它 / 提供主题色 / 把点击事件接到业务回调」，绝不另写排版。
 import { el } from './ui.js';
+import { zoomAt, panBy, resetView, normalizeView, cssTransform } from './map-viewport.mjs';
 
 let layoutPromise = null;
 
@@ -63,8 +64,11 @@ function liveIds(node, acc) {
 export function mountMindmap(holder, tree, opts) {
   const o = opts || {};
   const state = { mode: o.mode || 'right' };
+  // 无界草图视口（2026-11-23 需求1）：transform 加在 viewport 层，canvas 仍管滚动兜底。
+  let view = resetView();
   const bar = el('div', { class: 'mm-bar' });
   const canvas = el('div', { class: 'mm-canvas' + (o.height ? ' fixed' : '') });
+  const viewport = el('div', { class: 'mm-viewport' });
 
   // 单章聚焦（2026-11-19）：全书 5 章 30 节 229 点竖排 ≈ 1.7 万像素，一屏永远只看得到一章。
   // 用户要「界面很全」——整体缩小没用（字会糊），「一次只摊开一章」才真能看全：
@@ -100,10 +104,45 @@ export function mountMindmap(holder, tree, opts) {
   function syncChips() { chips.forEach((b) => b.classList.toggle('on', b.dataset.cid === chapterId)); }
 
   if (o.height) canvas.style.maxHeight = o.height;
+  canvas.appendChild(viewport);
   holder.appendChild(bar);
   buildChips();
   if (chips.length) holder.appendChild(chBar);
   holder.appendChild(canvas);
+
+  // ---- 无界草图：滚轮缩放 + 拖拽平移 + 工具条 ----
+  function applyView() { viewport.style.transform = cssTransform(view); }
+  function setView(v) { view = v; applyView(); persistMapState(); }
+  // 滚轮以光标为锚缩放。preventDefault 防止页面跟着滚（画布内缩放优先）。
+  canvas.addEventListener('wheel', (e) => {
+    if (!viewport.firstChild) return;
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    setView(zoomAt(view, e.clientX - rect.left, e.clientY - rect.top, e.deltaY < 0 ? 1.12 : 1 / 1.12));
+  }, { passive: false });
+  // 拖拽平移：按住空白处拖（点在节点上不拖，避免和点击冲突）。
+  let dragging = null;
+  canvas.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || e.target.closest('g.mm-node') || e.target.closest('button')) return;
+    dragging = { x: e.clientX, y: e.clientY, tx: view.tx, ty: view.ty };
+    canvas.setPointerCapture(e.pointerId);
+    canvas.classList.add('dragging');
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    setView({ scale: view.scale, tx: dragging.tx + (e.clientX - dragging.x), ty: dragging.ty + (e.clientY - dragging.y) });
+  });
+  const endDrag = () => { dragging = null; canvas.classList.remove('dragging'); };
+  canvas.addEventListener('pointerup', endDrag);
+  canvas.addEventListener('pointercancel', endDrag);
+  const zoomBtn = (label, fn, title) => {
+    const b = el('button', { class: 'btn ghost sm mm-zoom', text: label, title: title || label, onclick: fn });
+    bar.appendChild(b);
+    return b;
+  };
+  zoomBtn('＋', () => setView(zoomAt(view, canvas.clientWidth / 2, canvas.clientHeight / 2, 1.2)), '放大');
+  zoomBtn('－', () => setView(zoomAt(view, canvas.clientWidth / 2, canvas.clientHeight / 2, 1 / 1.2)), '缩小');
+  zoomBtn('适应', () => setView(resetView()), '复位到 100%');
 
   // ---- 大树折叠（2026-11-19）----
   // 根因：229 个知识点的书全量渲染 → 画布高 229×76≈1.7 万像素，被容器 max-height 一压
@@ -119,6 +158,7 @@ export function mountMindmap(holder, tree, opts) {
       depthCap: Number(depthCap) || 0,
       mode: state.mode,
       allOpen: foldBtn.dataset.open === '1',
+      view: { scale: view.scale, tx: view.tx, ty: view.ty },
     });
   }
   // 恢复：默认层级来自分析结果（o.defaultDepth，数据层可配），交互态来自本地存储。
@@ -136,6 +176,7 @@ export function mountMindmap(holder, tree, opts) {
       Array.from(bar.children).forEach((x) => { if (x.dataset && x.dataset.mode) x.classList.toggle('on', x.dataset.mode === state.mode); });
     }
     if (saved.allOpen) { foldBtn.dataset.open = '1'; foldBtn.textContent = '收起到章节'; }
+    if (saved.view) { view = normalizeView(saved.view); applyView(); }
   }
 
   function countLeaves(n) {
@@ -243,13 +284,19 @@ export function mountMindmap(holder, tree, opts) {
       if (!depthCap) depthCap = pickDepth(root);
       const view = depthCap >= 99 ? root : foldTree(root, depthCap, 0);
       const layout = ML.layoutTree(view, state.mode);
-      canvas.innerHTML = ML.toSvg(layout, themeColors());
-      const svg = canvas.querySelector('svg');
+      viewport.innerHTML = ML.toSvg(layout, themeColors());
+      applyView();
+      const svg = viewport.querySelector('svg');
       if (svg) {
         svg.removeAttribute('width');
         svg.removeAttribute('height');
         svg.style.width = '100%';
         svg.style.height = 'auto';
+        // 丝滑出现（需求1）：整棵淡入而不是瞬间弹出；节点按序微延迟，展开一支时像「长出来」。
+        svg.classList.add('mm-enter');
+        svg.querySelectorAll('g.mm-node').forEach((g, i) => {
+          g.style.animationDelay = Math.min(i * 8, 260) + 'ms';
+        });
         paintBadges(svg, layout);
         // 折叠角标提示：被收起的节点显示「还有 N 个」，并给可展开的手型
         svg.querySelectorAll('g.mm-node').forEach((g) => {
@@ -283,7 +330,7 @@ export function mountMindmap(holder, tree, opts) {
         }
       }
     } catch (e) {
-      canvas.innerHTML = '';
+      viewport.innerHTML = '';
       canvas.appendChild(el('p', { class: 'sub', text: '导图渲染失败：' + String(e.message || e) }));
     }
   }
@@ -293,10 +340,10 @@ export function mountMindmap(holder, tree, opts) {
     ML = m;
     restoreMapState();
     syncChips();
-    canvas.innerHTML = '';
+    viewport.innerHTML = '';
     paint();
   }).catch((e) => {
-    canvas.innerHTML = '';
+    viewport.innerHTML = '';
     // 宿主没托管共用模块时的诚实降级：画大纲，而不是假装有导图
     canvas.appendChild(el('p', { class: 'sub', text: '导图模块不可用（' + String(e.message || e) + '），已降级为大纲：' }));
     const walk = (n, depth) => el('div', {}, [

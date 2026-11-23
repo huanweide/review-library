@@ -19,7 +19,7 @@ const practiceLib = require('./practice');
 const documentsLib = require('./documents');
 
 // 版本号唯一真源 = 根 package.json 的 version；本常量由 scripts/sync-versions.mjs 机械同步，禁止手改。
-const CORE_VERSION = '1.6.5';
+const CORE_VERSION = '1.7.0';
 
 class Core {
   constructor(root) {

@@ -138,8 +138,16 @@ async function handleApi(req, res, u) {
         '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
         '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp',
         '.tif': 'image/tiff', '.tiff': 'image/tiff', '.pdf': 'application/pdf',
+        // 文档类（2026-11-23 需求6 阅读器）：inline 让浏览器在 iframe 里预览而不是强制下载。
+        '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        '.txt': 'text/plain; charset=utf-8', '.md': 'text/plain; charset=utf-8',
       }[ext] || 'application/octet-stream';
-      res.writeHead(200, { 'Content-Type': imgMime, 'Cache-Control': 'private, max-age=60' });
+      const inline = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.pdf', '.docx', '.xlsx', '.pptx', '.txt', '.md'].includes(ext);
+      const headers = { 'Content-Type': imgMime, 'Cache-Control': 'private, max-age=60' };
+      if (inline) headers['Content-Disposition'] = 'inline';
+      res.writeHead(200, headers);
       return res.end(buf);
     }
     // 内嵌原图回读（2026-11-20）：返回 images.json 里登记的**原字节**，不加工不重画。

@@ -246,5 +246,11 @@ function makeAnalysis() {
 
   try { fs.rmSync(TMP, { recursive: true, force: true }); } catch (e) {}
   console.log('\n=== 判别测试：' + passed + ' 通过 / ' + failed + ' 失败 ===');
-  process.exit(failed ? 1 : 0);
+  // Windows + Node v24：进程里只要碰过 fetch（undici），硬 process.exit() 会在
+  // uv_async 收尾阶段抛 `!(handle->flags & UV_HANDLE_CLOSING)`（实测 exit 3221226505），
+  // 断言其实全绿却被判失败。改为设置退出码让事件循环自然收干。
+  // 兜底：5 秒还没退出就硬退（避免残留 handle 把门禁挂死）。
+  process.exitCode = failed ? 1 : 0;
+  const hardStop = setTimeout(() => process.exit(failed ? 1 : 0), 5000);
+  hardStop.unref();
 })().catch(e => { console.error('FATAL ' + (e && e.stack || e)); process.exit(1); });
