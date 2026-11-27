@@ -164,6 +164,13 @@ code,pre{font-family:var(--mono)}
 .book-actions{display:flex;flex-direction:column;gap:5px}
 
 /* 题目 */
+.q-filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.q-filter{font-size:12px;padding:6px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);color:var(--ink-2);cursor:pointer}
+.q-filter:hover{background:var(--surface-3)}
+.q-filter.on{border-color:var(--brand);color:var(--brand-ink);background:var(--brand-soft)}
+.verdict-box{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+.verdict-head{display:flex;align-items:center;gap:9px;padding:8px 0}
+.verdict-steps{padding-left:20px;line-height:1.8;font-size:13px;color:var(--ink-2)}
 .q-list{display:flex;flex-direction:column;gap:10px}
 .q-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;box-shadow:var(--shadow)}
 .q-head{display:flex;align-items:center;gap:9px;margin-bottom:8px}
@@ -386,6 +393,9 @@ body.bs-focus .sidebar{display:none}
 .mm-wrap.grow .mm-canvas svg{max-height:none}
 .mm-canvas g.mm-foldable rect{stroke-dasharray:5 3}
 .mm-canvas g.mm-foldable:hover rect{filter:brightness(.97)}
+/* 用户结构层：拖拽换父时的落点提示 */
+.mm-canvas g.mm-drop rect{stroke:var(--brand);stroke-width:3;stroke-dasharray:5 3}
+.mm-canvas g.mm-node:hover rect{filter:brightness(.97)}
 .bs-outline{display:flex;flex-direction:column;gap:1px;max-width:860px}
 .bs-ol-bar{display:flex;align-items:center;gap:10px;max-width:860px;margin-bottom:8px}
 .bs-ol-bar .bs-find{margin-top:0;max-width:340px}

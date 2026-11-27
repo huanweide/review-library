@@ -81,6 +81,60 @@ function findQuestion(analysis, key) {
   return flatten(analysis, false).find(q => q.key === key) || null;
 }
 
+// ---------- 逐讲 / 作业题卡并进练习题库（2026-11-27）----------
+// 背景：147 道原题卡此前只在书内题型页「看思路/看答案」，不进 quiz、不判分、不进 SRS；
+// 学生最想做的课后原题反而做不了。卡片本来就带 answer + solution（4 步推导），
+// 缺的是这条接线，不是重新分析一遍。这里复用同一套 questionKey / 判分 / SRS，
+// 不另写一套——和「玩家与 NPC 走同一批函数」同理。
+//
+// 判分口径（诚实）：只有结构化后确实带 options + answerKey 的题才 auto 判分
+// （本轮 146 题里仅 1 道能从原文严格抽出可区分选项）。其余走 Anki 正统的
+// 「先自答 → 对照答案 → 四档自评 → SRS」，不是把没判不了的题硬标成可判分。
+// 无定论的题（excludedFromQuiz）不进练习——答案都没有，不能拿它考学生。
+function flattenCards(cardData, publicOnly) {
+  const out = [];
+  const lessons = (cardData && Array.isArray(cardData.lessons)) ? cardData.lessons : [];
+  lessons.forEach((L) => {
+    if (!L || L.error) return;
+    (Array.isArray(L.content) ? L.content : []).forEach((kp) => {
+      (Array.isArray(kp && kp.cards) ? kp.cards : []).forEach((c) => {
+        if (!c || !c.stem || c.excludedFromQuiz) return;
+        const type = String(c.type || '');
+        const opts = Array.isArray(c.options) ? c.options.slice() : [];
+        const src = (c && c.source) || {};
+        const base = {
+          key: questionKey(c),
+          type,
+          subtype: String(c.tag || ((kp && kp.name) || '')),
+          stem: String(c.stem),
+          options: opts,
+          imageIds: Array.isArray(c.imageIds) ? c.imageIds.map(String).filter(Boolean).slice(0, 4) : [],
+          // 来源维度：练习页可按「全部/作业/讲次/全局题」筛，跟题型页的作业入口同源。
+          origin: String(src.kind || '') === 'assignment' ? '作业' : '讲次',
+          lessonNo: Number(src.lesson) || 0,
+          needsReview: c.needsReview === true,
+          auto: AUTO_TYPES.has(type) && opts.length > 0 && !!c.answerKey,
+        };
+        if (!publicOnly) {
+          // 原 answer 原样下发：parseAnswer 已支持「A（1,3,5）：…」这种中文答案格式，
+          // 不再派生一个「A. A（…）」的重复前缀（磁盘原文也不动）。
+          base.answer = String(c.answer || '');
+          base.solution = Array.isArray(c.solution) ? c.solution.slice() : [];
+          base.rationale = String(c.rationale || '');
+          base.pitfalls = String(c.pitfalls || '');
+          base.source = src;
+        }
+        out.push(base);
+      });
+    });
+  });
+  return out;
+}
+function findCardQuestion(cardData, key) {
+  if (typeof key !== 'string' || !/^[a-f0-9]{16}$/.test(key)) return null;
+  return flattenCards(cardData, false).find(q => q.key === key) || null;
+}
+
 // ---------- 判分 ----------
 // 从「B. 8 个 —— 理由」里解析出选项字母与选项文本（供中文作答归一）。
 function parseAnswer(q) {
@@ -89,7 +143,8 @@ function parseAnswer(q) {
   let letter = '';
   // 末尾 `|$` 不能漏：模型经常只写「B」不带标点。normalizeGiven 早就支持纯字母，
   // 这里少一个 `$` 会让「标准答案是纯字母」的题永远判不了卷、全退化成人工自评（2026-11-21 实测）。
-  const m = answer.match(/^\s*([A-Ha-h])\s*[.．、:：)）]|^\s*([A-Ha-h])\s*$/);
+  // 选项字母后允许中文括号（题卡原文形如「A（1,3,5）：速度方向为1…」）。
+  const m = answer.match(/^\s*([A-Ha-h])\s*(?:[.．、:：)（(]|\)|）)|^\s*([A-Ha-h])\s*$/);
   if (m) letter = (m[1] || m[2] || '').toUpperCase();
   // 判断题可能只写「错误 —— 理由」不带字母：从答案首个中文结论反查选项。
   let label = '';
@@ -331,6 +386,6 @@ function summarize(state, now, validKeys) {
 
 module.exports = {
   PRACTICE_VERSION, AUTO_TYPES, LEECH_THRESHOLD, MAX_GIVEN,
-  questionKey, flatten, findQuestion, parseAnswer, normalizeGiven, gradeOne,
+  questionKey, flatten, findQuestion, flattenCards, findCardQuestion, parseAnswer, normalizeGiven, gradeOne,
   emptyState, normalizeState, attempt, rate, dueKeys, summarize
 };

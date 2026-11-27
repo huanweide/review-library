@@ -103,8 +103,16 @@
       this._timer = setTimeout(async () => {
         if (st) st.textContent = '搜索中…';
         let rows = [], err = '';
-        try { rows = await API.extra.search(q.trim(), 80); } catch (e) { err = String(e && e.message || e); }
-        if (st) st.textContent = err ? ('搜索失败：' + err) : ('命中 ' + rows.length + ' 条');
+        let meta = null;
+        try {
+          const r = await API.extra.search(q.trim(), 80);
+          // 兼容老宿主：旧版返回数组，新版返回 {items,total,truncated}。
+          if (Array.isArray(r)) rows = r;
+          else { rows = (r && r.items) || []; meta = r; }
+        } catch (e) { err = String(e && e.message || e); }
+        const omitted = meta && meta.truncated ? Math.max(0, (meta.total || 0) - rows.length) : 0;
+        if (st) st.textContent = err ? ('搜索失败：' + err)
+          : ('命中 ' + (meta && meta.total ? meta.total : rows.length) + ' 条' + (omitted ? '，只显示前 ' + rows.length + ' 条（还有 ' + omitted + ' 条未显示）' : ''));
         if (!list) return;
         if (!rows.length) { list.innerHTML = '<div class="extra-empty">没有命中。换个关键词试试（支持资料正文里出现的词）。</div>'; return; }
         // v0.7：后端 searchAll 本来返回了命中项 id，旧版渲染时丢掉，点结果只到 tab 首屏。

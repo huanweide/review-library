@@ -283,7 +283,8 @@ async function handleApi(req, res, u) {
     // ===== v0.6：全局搜索 / 知识图谱 / 学习报告 / 挖空 / 整库备份 =====
     if (parts[1] === 'search' && parts.length === 2 && method === 'POST') {
       const m = JSON.parse(await readBody(req) || '{}');
-      return send(res, 200, searchLib.searchAll(store, m.q, { limit: m.limit }));
+      // 带 total/truncated 回传：前端要明确告诉用户「还有 N 条未显示」，不能静默截断。
+      return send(res, 200, searchLib.searchAllWithMeta(store, m.q, { limit: m.limit }));
     }
     if (parts[1] === 'graph' && parts[2] && parts.length === 3 && method === 'GET') {
       return send(res, 200, graphLib.buildGraph(store.getAnalysis(parts[2]) || {}));

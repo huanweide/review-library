@@ -92,6 +92,19 @@ async function dispatch(core, path, method, body) {
     if (parts[2] === 'cards' && parts.length === 3 && m === 'GET') {
       return { status: 200, data: core.listCards(id) };
     }
+    // 用户结构层（2026-11-27）：GET 读 / POST 写 structure.json，与 app-host 同语义。
+    if (parts[2] === 'structure' && parts.length === 3) {
+      if (m === 'GET') return { status: 200, data: core.getStructure(id) };
+      if (m === 'POST') return { status: 200, data: core.saveStructure(id, b.layer || b) };
+    }
+    // 本机快照（2026-11-27）：GET 列表 / POST 创建或恢复，与 app-host 同语义。
+    if (parts[2] === 'snapshot' && parts.length === 3) {
+      if (m === 'GET') return { status: 200, data: { items: core.listSnapshots(id) } };
+      if (m === 'POST') {
+        if (b.snapshotId) return { status: 200, data: core.restoreSnapshot(id, b.snapshotId) };
+        return { status: 200, data: core.saveSnapshot(id, b.label) };
+      }
+    }
     // 已生成文档只读。
     if (parts[2] === 'documents' && parts.length === 4 && m === 'GET') {
       const d = core.getDocument(id, parts[3]);

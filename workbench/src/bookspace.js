@@ -17,6 +17,8 @@ import { loadSettings, saveSettings, credentialFields, credentialDialog, readine
 import { deriveOverview } from './overview.mjs';
 import { answerLetter, optionLetter, judge, splitDesc, hintFor } from './study-hint.mjs';
 import { openReader } from './reader.mjs';
+import { withRename, withMove, emptyLayer } from './structure-layer.mjs';
+import { buildExamPackHtml } from './exam-pack.mjs';
 
 const TABS = [
   { id: 'map', label: '思维导图' },
@@ -202,6 +204,7 @@ export async function mountBookspace(root, bookId, params) {
     quiz: null,
     practice: null,
     cards: null,        // 逐讲/作业题卡（Core.listCards 的 content 含题本体），题型页的讲解卡区块
+    structure: null,    // 用户结构层（2026-11-27）：模型树只读底稿，人的改动另存 structure.json
     openCards: {},      // 题卡第一级分组（讲次/作业组）展开态（key=文件名，默认全收起）
     closedCardSubs: {}, // 题卡第二级题型分组手动收起态（key=文件名::题型，默认全展开）
     book: null,
@@ -293,6 +296,9 @@ export async function mountBookspace(root, bookId, params) {
       // 题卡（2026-11-23）：逐讲卡 lesson-NN + 作业卡 assignment-NNN 同口聚合，content 里带题本体。
       const c = await host.action('cards', { bookId: S.id });
       S.cards = (c && c.ok) ? c.data : null;
+      // 用户结构层：与题卡同批读，导图挂的是模型树 + 这层改动的叠加，analysis.json 不动。
+      const su = await host.action('structure', { bookId: S.id });
+      S.structure = (su && su.ok) ? su.data : null;
     } catch (e) {
       S.err = String(e.message || e);
     }
@@ -593,6 +599,8 @@ export async function mountBookspace(root, bookId, params) {
     const acts = el('div', { class: 'bs-acts' });
     acts.appendChild(btn(S.analysis ? '重新分析' : '开始分析', openAnalyze, 'primary sm'));
     if (S.analysis) acts.appendChild(btn('去练习', () => go('quiz', { id: S.id, title: (S.book && S.book.title) || '' }), 'ghost sm'));
+    if (S.analysis) acts.appendChild(btn('考点包', exportExamPack, 'ghost sm'));
+    if (S.analysis) acts.appendChild(btn('快照', openSnapshots, 'ghost sm'));
     railEl.appendChild(acts);
   }
 
@@ -641,6 +649,99 @@ export async function mountBookspace(root, bookId, params) {
     return true;
   }
 
+  // 考点包（2026-11-27）：一份 HTML 同时当考前打印件、可复用导出、人可读备份。
+  // 题图内嵌 base64（最多 60 张），下载后脱离 app 也能看——否则「导出」了却看不到题图。
+  async function exportExamPack() {
+    try {
+      const ids = new Set();
+      ((S.cards && S.cards.lessons) || []).forEach((L) => (L.content || []).forEach((kp) =>
+        (kp.cards || []).forEach((c) => (c.imageIds || []).forEach((id) => ids.add(String(id))))));
+      const imgs = new Map();
+      await Promise.all([...ids].slice(0, 60).map(async (id) => {
+        try {
+          const url = host.imageUrl(S.id, id);
+          if (!url) return;
+          const r = await fetch(url);
+          if (!r.ok) return;
+          const b = await r.blob();
+          const data = await new Promise((res) => {
+            const fr = new FileReader();
+            fr.onload = () => res(String(fr.result));
+            fr.onerror = () => res('');
+            fr.readAsDataURL(b);
+          });
+          if (data) imgs.set(id, data);
+        } catch (e) { /* 单张图失败不挡整包，仍留原 URL */ }
+      }));
+      const countNodes = (n) => 1 + (n.children || []).reduce((s, c) => s + countNodes(c), 0);
+      const html = buildExamPackHtml({
+        book: S.book, analysis: S.analysis, cards: S.cards, structure: S.structure,
+        imageUrl: (id) => imgs.get(String(id)) || host.imageUrl(S.id, id),
+        stats: {
+          chapterCount: ((S.analysis.tree && S.analysis.tree.children) || []).length,
+          pointCount: Math.max(0, countNodes(S.analysis.tree) - 1),
+          cardCount: (S.cards && S.cards.total) || 0,
+        },
+      });
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = (((S.book && S.book.title) || 'book') + '-考点包.html').replace(/[\\/:*?"<>|]/g, '_');
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      toast('考点包已下载（可打印 / 可复用 / 可读备份）', 'ok');
+    } catch (e) { toast('考点包生成失败：' + String(e.message || e), 'bad'); }
+  }
+
+  // 本机快照（2026-11-27）：改结构前自动留一份，这里给手动留档与恢复入口。
+  // 恢复会覆盖当前书数据，属于不可逆动作——必须先 confirm，不静默执行。
+  async function openSnapshots() {
+    const mask = el('div', { class: 'bs-mask' });
+    const list = el('div', { class: 'bs-qlist' });
+    const close = () => mask.remove();
+    const cancel = btn('关闭', close, 'ghost');
+    cancel.type = 'button';
+    const dlg = el('div', { class: 'bs-dialog bs-dialog-wide' }, [
+      el('h3', { text: '本机快照' }),
+      el('p', { class: 'bs-sub', text: '只在这台电脑的 library/_snapshots/，不联网、不上传。改导图结构前会自动留一份；恢复会覆盖当前书的数据，先确认。' }),
+      list,
+      el('div', { class: 'bs-dialog-acts' }, [
+        cancel,
+        btn('留一份现在的快照', async () => {
+          const r = await host.action('snapshot', { bookId: S.id, create: true, label: '手动' });
+          if (r && r.ok !== false) { toast('已留快照', 'ok'); await fill(); }
+          else toast('留快照失败：' + ((r && r.error) || '未知原因'), 'bad');
+        }, 'primary'),
+      ]),
+    ]);
+    mask.appendChild(dlg);
+    document.body.appendChild(mask);
+    mask.addEventListener('click', (e) => { if (e.target === mask) close(); });
+    async function fill() {
+      list.innerHTML = '';
+      const r = await host.action('snapshot', { bookId: S.id });
+      const items = (r && r.ok !== false && r.data && r.data.items) || [];
+      if (!items.length) list.appendChild(el('p', { class: 'bs-hint', text: '还没有快照。点「留一份现在的快照」开始。' }));
+      items.forEach((it) => {
+        const restore = btn('恢复这一版', async () => {
+          if (!window.confirm('恢复到 ' + it.id + '？当前结构、练习与题卡会被这一版覆盖。')) return;
+          const rr = await host.action('snapshot', { bookId: S.id, snapshotId: it.id });
+          if (rr && rr.ok !== false) { toast('已恢复到 ' + it.id, 'ok'); close(); await load(); render(); }
+          else toast('恢复失败：' + ((rr && rr.error) || '未知原因'), 'bad');
+        }, 'ghost sm');
+        list.appendChild(el('div', { class: 'bs-tcard' }, [
+          el('div', { class: 'bs-tcard-head' }, [
+            el('span', { class: 'bs-tname', text: it.id + ' · ' + String(it.label || '') }),
+            el('span', { class: 'bs-sub', text: String(it.at || '') + ' · ' + Number(it.files || 0) + ' 文件' }),
+            restore,
+          ]),
+        ]));
+      });
+    }
+    await fill();
+  }
+
   function renderMap(body) {
     if (needAnalysis(body)) return;
     body.classList.add('mapmode');
@@ -651,6 +752,21 @@ export async function mountBookspace(root, bookId, params) {
       // 默认层可由分析结果里的 mapView.defaultDepth 指定（数据层可配），没给就按规模自动。
       storageKey: 'book:' + S.id,
       defaultDepth: (S.analysis && S.analysis.mapView && S.analysis.mapView.defaultDepth) || 0,
+      // 用户结构层：模型树只读底稿，右键改名 / 拖拽换父 / 一键恢复都写 structure.json，
+      // 不碰 analysis.json。节点 id 不变，题卡挂接与讲解定位不丢。
+      structure: S.structure || emptyLayer(),
+      onStructureChange: async (change) => {
+        let next = S.structure || emptyLayer();
+        if (change.op === 'rename') next = withRename(next, change.id, change.title);
+        else if (change.op === 'move') next = withMove(next, change.id, change.parent);
+        else if (change.op === 'reset') next = emptyLayer();
+        else return;
+        const r = await host.action('structure', { bookId: S.id, layer: next });
+        if (!r || r.ok === false) { toast('结构保存失败：' + ((r && r.error) || '未知原因'), 'bad'); return; }
+        S.structure = r.data;
+        toast(change.op === 'reset' ? '已恢复模型结构' : '结构已保存，刷新后仍在', 'ok');
+        render();
+      },
       // 节点角标 = 这个知识点挂了几道题（交叉索引最轻的一层：只给信号，不塞正文）
       badgeOf: (node) => {
         const e = pointIndex().get(String(node && node.id));

@@ -13,13 +13,14 @@ const path = require('path');
 const { BookStore } = require('./bookStore');
 const extract = require('./extract');
 const imagesLib = require('./images');
+const snapshotLib = require('../lib/snapshot');
 const visionLib = require('./image-vision');
 const analyzeLib = require('./analyze');
 const practiceLib = require('./practice');
 const documentsLib = require('./documents');
 
 // 版本号唯一真源 = 根 package.json 的 version；本常量由 scripts/sync-versions.mjs 机械同步，禁止手改。
-const CORE_VERSION = '1.7.3';
+const CORE_VERSION = '1.8.0';
 
 class Core {
   constructor(root) {
@@ -189,7 +190,10 @@ class Core {
   getQuiz(id, opts) {
     const a = this.store.getAnalysis(id);
     if (!a || !Array.isArray(a.questionIndex)) throw new Error('请先完成整体分析，再开始练习');
-    const questions = practiceLib.flatten(a, true);
+    // 2026-11-27：逐讲 / 作业题卡并进练习题库。两张来源用同一套脱敏契约与 key，
+    // 学生最想做的课后原题不再只躺在题型页里「看思路/看答案」。
+    const cards = this.listCards(id);
+    const questions = practiceLib.flatten(a, true).concat(practiceLib.flattenCards(cards, true));
     // 统计与列表同源：只认当前分析结果里还存在的题目 key（重分析换题后旧卡留作历史，不进统计）。
     const validKeys = new Set(questions.map(q => q.key));
     const state = practiceLib.normalizeState(this.store.getPractice(id));
@@ -249,13 +253,63 @@ class Core {
     return { lessons, total: lessons.reduce((n, l) => n + (l.cards || 0), 0) };
   }
 
+  // 用户结构层（2026-11-27）：模型树只读底稿，人的改名/换父/删除另存 structure.json。
+  // 为什么不放 localStorage：换浏览器/清缓存就没了，且导出/备份拿不到；
+  // 为什么不改 analysis.json：那是模型产物，重分析会覆盖，且题目挂点靠 id 不靠显示名。
+  getStructure(id) {
+    const book = this.store.getBook(id);
+    if (!book) throw new Error('书不存在：' + id);
+    const file = path.join(this.store._bookDir(id), 'structure.json');
+    try {
+      const d = JSON.parse(fs.readFileSync(file, 'utf8'));
+      return {
+        version: 1,
+        renames: (d && d.renames && typeof d.renames === 'object') ? d.renames : {},
+        moves: (d && d.moves && typeof d.moves === 'object') ? d.moves : {},
+        deleted: Array.isArray(d && d.deleted) ? d.deleted : [],
+        updatedAt: String((d && d.updatedAt) || ''),
+      };
+    } catch (e) {
+      return { version: 1, renames: {}, moves: {}, deleted: [], updatedAt: '' };
+    }
+  }
+
+  // 本机快照：只写 library/_snapshots/，保留最近 5 份。root 从 store 推导，避免两处配置漂移。
+  _snapRoot() { return path.dirname(this.store.root); }
+  saveSnapshot(id, label) { return snapshotLib.saveSnapshot(this._snapRoot(), id, label); }
+  listSnapshots(id) { return snapshotLib.listSnapshots(this._snapRoot(), id); }
+  restoreSnapshot(id, snapshotId) {
+    const r = snapshotLib.restoreSnapshot(this._snapRoot(), id, snapshotId);
+    this.store.clearCache && this.store.clearCache();
+    return r;
+  }
+
+  saveStructure(id, layer) {
+    const book = this.store.getBook(id);
+    if (!book) throw new Error('书不存在：' + id);
+    // 变更前自动留一份：用户改节点名/换父之前的状态可回退。快照失败不挡改动本身。
+    try { this.saveSnapshot(id, '结构变更前'); } catch (e) { /* 快照失败不阻断用户操作 */ }
+    const b = layer && typeof layer === 'object' ? layer : {};
+    const clean = {
+      version: 1,
+      renames: (b.renames && typeof b.renames === 'object') ? b.renames : {},
+      moves: (b.moves && typeof b.moves === 'object') ? b.moves : {},
+      deleted: Array.isArray(b.deleted) ? b.deleted : [],
+      updatedAt: String(b.updatedAt || new Date().toISOString()),
+    };
+    const file = path.join(this.store._bookDir(id), 'structure.json');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify(clean, null, 2) + '\n', 'utf8');
+    return clean;
+  }
+
   // 今日到期题目（脱敏）。now 可注入，判别测试不依赖真实时间。
   getDue(id, opts) {
     const a = this.store.getAnalysis(id);
     if (!a || !Array.isArray(a.questionIndex)) return { questions: [], dueCount: 0 };
     const now = (opts && opts.now) || Date.now();
     const state = practiceLib.normalizeState(this.store.getPractice(id));
-    const all = practiceLib.flatten(a, true);
+    const all = practiceLib.flatten(a, true).concat(practiceLib.flattenCards(this.listCards(id), true));
     const validKeys = new Set(all.map(q => q.key));
     const keys = practiceLib.dueKeys(state, now, validKeys);
     const set = new Set(keys);
@@ -271,7 +325,8 @@ class Core {
     const a = this.store.getAnalysis(id);
     if (!a || !Array.isArray(a.questionIndex)) throw new Error('尚无分析结果');
     const b = body && typeof body === 'object' ? body : {};
-    const q = practiceLib.findQuestion(a, b.key);
+    // 两种来源都找：全局自编题在 analysis，147 道原题卡在 cards/。
+    const q = practiceLib.findQuestion(a, b.key) || practiceLib.findCardQuestion(this.listCards(id), b.key);
     if (!q) throw new Error('题目不存在或已随重新分析改变，请刷新练习列表');
     const now = (opts && opts.now) || Date.now();
     const state = this.store.getPractice(id);

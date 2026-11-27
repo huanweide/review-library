@@ -221,7 +221,21 @@ function viewQuiz(root, view, params) {
   const payload = d.data && d.data.data;
   const qs = (payload && payload.questions) || [];
   if (!qs.length) return root.appendChild(empty('没有可练的题目', '先做整体分析，或看看今日到期'));
-  renderQuizCards(root, id, qs);
+  // 来源筛选（2026-11-27）：原题卡并进题库后共 158 题，不分组学生找不到自己要做的作业。
+  // 判据与书内题卡同源：卡片题 origin=作业/讲次，全局自编题没有 origin。
+  const origin = String(params.origin || '全部');
+  const ORIGINS = ['全部', '作业', '讲次', '全局题'];
+  const countOf = (o) => qs.filter((q) => o === '全部' ? true
+    : o === '全局题' ? !q.origin : q.origin === o).length;
+  root.appendChild(el('div', { class: 'q-filters' }, ORIGINS.map((o) => el('button', {
+    class: 'q-filter' + (origin === o ? ' on' : ''),
+    text: o + ' ' + countOf(o),
+    onclick: () => go('quiz', { id, title: bookTitle, origin: o }),
+  }))));
+  const shown = qs.filter((q) => origin === '全部' ? true
+    : origin === '全局题' ? !q.origin : q.origin === origin);
+  if (!shown.length) return root.appendChild(empty('这一组还没有题目', '换个来源看看，或先做整体分析'));
+  renderQuizCards(root, id, shown);
 }
 
 /**
@@ -532,30 +546,72 @@ function viewAnalyze(root, view, params) {
 
 function viewAttempt(root, view, params) {
   const { id, key } = params;
-  const given = input({ placeholder: '你的作答（选择题可填 A/B/C/D）' });
-  root.appendChild(el('div', { class: 'view-head' }, [el('div', {}, [el('h2', { text: '提交作答' }), el('p', { class: 'sub', text: '书：' + (id || '—') })]), btn('← 题目', () => go('quiz', { id }), 'ghost')]));
+  const title = String(params.title || '这本书');
+  const origin = String(params.origin || '全部');
+  const back = () => go('quiz', { id, title, origin });
+  root.appendChild(el('div', { class: 'view-head' }, [
+    el('div', {}, [el('h2', { text: '作答' }), el('p', { class: 'sub', text: '先自己答，再对照解析；开放题按四档自评排下次复习' })]),
+    btn('← 题目', back, 'ghost'),
+  ]));
   if (!id || !key) return root.appendChild(empty('缺少书 id 或题目 key', '从题目列表点「作答」进来'));
-  root.appendChild(card('作答', [
+  // 题面从练习页已有的脱敏列表里取（answer 不在此处泄露）；不在就诚实说，不造一个空壳。
+  const q = (((($view('quiz') || {}).data || {}).data || {}).questions || []).find((x) => x.key === key);
+  if (!q) return root.appendChild(empty('这道题不在当前列表里', '回练习页刷新后再点作答'));
+  root.appendChild(card('题目 · ' + String(q.type || '') + (q.origin ? ' · ' + q.origin : ''), [
+    el('div', { class: 'q-stem', text: q.stem || '' }),
+    quizFigures(id, q),
+  ]));
+  const given = input({ placeholder: (q.options && q.options.length) ? '填 A/B/C/D' : '写下你的答案（公式、结论都行）' });
+  root.appendChild(card('你的作答', [
     field('答案', given),
-    el('div', { class: 'form-actions' }, [btn('提交并判分', async () => {
-      const r = await call('attempt', { bookId: id, key, given: given.value }, 'attempt');
-      if (r.ok) go('rate', { id, key });
+    el('div', { class: 'form-actions' }, [btn('提交并看解析', async () => {
+      // call() 内部 setViewData 会触发整页重绘，提交后不要往手里的 DOM 节点塞结果——
+      // 那个节点已经脱离文档（本项目反复踩的坑）。结果由下面渲染时从 view data 读。
+      await call('attempt', { bookId: id, key, given: given.value }, 'attempt');
     }, 'primary')]),
   ]));
-  const d = $view('attempt');
-  if (d.data) { root.appendChild(el('div', { class: 'section-title', text: '判分结果（答案此时才到达客户端）' })); root.appendChild(dataBlock(d.data.data)); }
+  const resultBox = el('div', { class: 'verdict-box' });
+  root.appendChild(resultBox);
+  const cached = $view('attempt');
+  const result = (cached && cached.data && cached.data.ok !== false && cached.data.data) || null;
+  if (result && result.verdict) renderVerdict(resultBox, result, { id, key, title, origin });
+}
+
+/**
+ * 订正区（2026-11-27）：答案只在提交后才下发，这里按「对不对 / 参考答案 / 分步解答 /
+ * 为什么这么想 / 最容易错」五层摊开——retrievalpractice.org 的原话是 elaborate feedback
+ * 越充分越有效；把答案塞进 JSON 代码块不算给了反馈。没有的字段就不显示，不编空话。
+ */
+function renderVerdict(box, d, ctx) {
+  box.innerHTML = '';
+  if (!d) return;
+  const verdict = d.verdict === 'correct' ? '答对了' : (d.verdict === 'wrong' ? '答错了' : '已记录 · 请自评');
+  box.appendChild(el('div', { class: 'verdict-head' }, [
+    badge(verdict, d.verdict === 'correct' ? 'ok' : (d.verdict === 'wrong' ? 'bad' : 'accent')),
+    el('span', { class: 'sub', text: (d.mode === 'auto' ? '自动判分' : '开放题 · 四档自评') + ' · 下次复习 ' + String(d.currentLabel || '—') }),
+  ]));
+  if (d.answer) box.appendChild(card('参考答案', [el('div', { class: 'para', text: String(d.answer) })]));
+  if (Array.isArray(d.solution) && d.solution.length) {
+    box.appendChild(card('分步解答', el('ol', { class: 'verdict-steps' },
+      d.solution.map((s) => el('li', { text: String(s) })))));
+  }
+  if (d.rationale) box.appendChild(card('为什么这么想', [el('div', { class: 'para', text: String(d.rationale) })]));
+  if (d.pitfalls) box.appendChild(card('最容易错', [el('div', { class: 'para', text: String(d.pitfalls) })]));
+  box.appendChild(el('div', { class: 'form-actions' }, [
+    btn('四档自评 →', () => go('rate', ctx), 'primary'),
+  ]));
 }
 
 function viewRate(root, view, params) {
   const { id, key } = params;
-  root.appendChild(el('div', { class: 'view-head' }, [el('div', {}, [el('h2', { text: '四档自评' }), el('p', { class: 'sub', text: '重排下次复习时间' })]), btn('← 题目', () => go('quiz', { id }), 'ghost')]));
+  root.appendChild(el('div', { class: 'view-head' }, [el('div', {}, [el('h2', { text: '四档自评' }), el('p', { class: 'sub', text: '重排下次复习时间' })]), btn('← 题目', () => go('quiz', { id, origin: params.origin, title: params.title }), 'ghost')]));
   if (!id || !key) return root.appendChild(empty('缺少书 id 或题目 key'));
   const labels = [['重来', 1], ['吃力', 2], ['会了', 3], ['太简单', 4]];
   root.appendChild(card('这一题掌握得怎么样', [
     el('div', { class: 'rate-row' }, labels.map(([label, n]) =>
       btn(label, async () => {
         const r = await call('rate', { bookId: id, key, rating: n }, 'rate');
-        if (r.ok) { toast('已记录，下次复习时间已重排', 'good'); go('quiz', { id }); }
+        if (r.ok) { toast('已记录，下次复习时间已重排', 'good'); go('quiz', { id, origin: params.origin, title: params.title }); }
       }, 'ghost'))),
   ]));
 }

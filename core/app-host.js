@@ -57,6 +57,8 @@ const ACTION_UI = {
   mark:     { label: '标注重点',   hint: '语义标记资料重点，不手动分层', needsBook: true  },
   compose:  { label: '生成整理文档', hint: '考点大全 / 考纲',           needsBook: true  },
   cards:    { label: '题卡（讲次+作业）',     hint: '读取按讲次批建的题卡与作业卡，不调模型', needsBook: true  },
+  structure:{ label: '用户结构层', hint: '改名/换父另存，模型树保持只读', needsBook: true  },
+  snapshot: { label: '本机快照',   hint: '本机留档与恢复，不联网不上传',   needsBook: true  },
 };
 
 let warned = false;
@@ -263,6 +265,22 @@ async function invoke(core, action, payload, ctx) {
         const id = String(p.bookId || '').trim();
         if (!id) throw new Error('cards 需要 bookId');
         data = core.listCards(id);
+        break;
+      }
+      // 用户结构层（2026-11-27）：只有这一条写书级文件；analysis.json 只读不写。
+      case 'structure': {
+        const id = String(p.bookId || '').trim();
+        if (!id) throw new Error('structure 需要 bookId');
+        data = p.layer ? core.saveStructure(id, p.layer) : core.getStructure(id);
+        break;
+      }
+      // 本机快照（2026-11-27）：恢复是不可逆动作，调用方必须先向用户确认。
+      case 'snapshot': {
+        const id = String(p.bookId || '').trim();
+        if (!id) throw new Error('snapshot 需要 bookId');
+        if (p.snapshotId) data = core.restoreSnapshot(id, p.snapshotId);
+        else if (p.label || p.create) data = core.saveSnapshot(id, p.label);
+        else data = { items: core.listSnapshots(id) };
         break;
       }
       default:

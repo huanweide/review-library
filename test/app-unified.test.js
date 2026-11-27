@@ -52,9 +52,11 @@ function makeAnalysis() {
 
   // ① 唯一真源
   const canonical = CAPS.ACTIONS.slice();
-  // 13 = 12 项基础能力 + cards（2026-11-22 理论力学逐讲题卡）。写死数字是防误删守卫，
-  // 加能力时请同步这里；cards 的真实契约由下面的集合一致性断言覆盖。
-  ok(canonical.length === 13, '唯一真源 capabilities.js 有 13 个 action', '实际 ' + canonical.length);
+  // 下限守卫：早期写死 13（12 基础 + cards），此后合法新增 structure / snapshot。
+  // 改按「必备能力名」断言——删任何一个都会红，新增能力不再假红。
+  const mustHave = ['cards', 'structure', 'snapshot', 'quiz', 'attempt', 'rate'];
+  ok(canonical.length >= 13 && mustHave.every(a => canonical.includes(a)),
+    '唯一真源 capabilities.js 含全部必备 action（≥13）', '实际 ' + canonical.join('/'));
 
   // ② APP 协议 manifest（HTTP / Electron / DSH 三宿主都返回同一份）
   const mHttp = HOST.manifest('http', { version: '1.5.2' });

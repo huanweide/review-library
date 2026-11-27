@@ -5,6 +5,37 @@
 DSH 插件与 WorkBuddy 专家的 manifest，以及 README 顶部定位行；`scripts/check-versions.mjs`
 挂在 `pretest` 上做漂移检测。发版 tag 必须与 `package.json` 严格一致（如 `v1.5.0`）。
 
+## v1.8.0 — 2026-11-27（发布）
+
+三类人群统一计划的**剩余四项全部实施**。命题不变：把「一本书的分析结果」升级成「一份可改、可做、可存、可带的考点资产」。
+
+### 第 2 项 · 题卡结构化 + 进练习题库
+- **先纠正上一轮的口径错误**：23 个卡片 JSON / 146 题其实**都有 `answer` 和 `solution`（4 步推导）**，我此前说「answer 零命中」是错的。真正缺的是 `options` / `rationale` / `pitfalls` 和「进练习题库」这条接线。
+- `scripts/structure-cards.mjs`（dry-run 默认，`--write` 才落盘，幂等）：从原文确定性派生 `rationale` 144 题、`pitfalls` 15 题；**只从「选项：A…；B…；」严格抽到 1 题的 options**，其余绝不编选项；2 题答案明写「暂无定论/需复核」→ `excludedFromQuiz` 不进练习。
+- `core/practice.js` 新增 `flattenCards/findCardQuestion`，`Core.getQuiz/getDue/submitAttempt` 合并卡片题——**156 题**（12 全局 + 124 讲次 + 20 作业），脱敏列表零答案泄露，与全局题共用一套 key / 判分 / SRS。
+- 判分诚实分两条：1 道能自动判的自动判（`parseAnswer` 新增认「A（1,3,5）」中文括号格式）；其余走 Anki 正统的「自答 → 对照 → 四档自评 → SRS」，不是降级。
+- 练习页加来源筛选（全部/作业/讲次/全局题）；作答页补题面与原图；订正区按「参考答案 / 分步解答 / 为什么这么想 / 最容易错 / 四档自评」五层摊开——早期把答案塞进 JSON 代码块不算反馈。
+
+### 第 1 项 · 用户结构层（可改可存可恢复）
+- 新增 `workbench/src/structure-layer.mjs` 纯函数层：改名 / 换父 / 删除只写 `structure.json`，**analysis.json 一个字节都不动**；节点 id 稳定，题卡挂接与讲解定位不丢。
+- 安全闸门：环检测（不能把父节点移到自己后代）、不存在 id 忽略、根不可删、脏字段归一化。
+- 导图交互：右键改名、拖拽换父（落点高亮，超过 6px 才算拖，单击仍走展开/讲解）、「恢复模型结构」按钮（不可逆，先 confirm）。章聚焦和导出都吃叠加后的树，不会「全书改了名、点进去又变回去」。
+- 三端注册：新增 `structure` action（capabilities / request / app-host），APP manifest 的 UI 元数据同步补齐。
+
+### 第 4 项 · 考点包 + 两处静默失效
+- `workbench/src/exam-pack.mjs`：一份 HTML 同时当考前打印件、可复用导出、人可读备份。内容＝用户结构 + 每点一句话考点 + 原题卡（答案/分步/为什么/易错）+ 原图；题图内嵌 base64（≤60 张），下载后脱离 app 仍可见；带 `@media print` 一键打印/另存 PDF。输入全部转义。
+- `lib/backup.js` 白名单补 `visionModel` / `deepDive` / `tickEveryRounds`——此前备份恢复后这三个静默回默认，UI 却称「设置已还原」；apiKey 仍永不入包。
+- `lib/search.js` 新增 `searchAllWithMeta`：先扫全量再截断，搜索页明确显示「还有 N 条未显示」；老接口 `searchAll` 仍返回数组，协议不变。
+
+### 第 5 项 · 本机快照（保守版）
+- `lib/snapshot.js`：改结构前自动在 `library/_snapshots/<bookId>/` 留一份（book/analysis/practice/structure/cards），保留最近 5 份；书内「快照」浮层可手动留档与恢复，恢复前 confirm。**只在本机，不联网不上传**。
+- 时间戳到毫秒（秒级会让同秒两次快照互相覆盖）；正则兼容早期秒级目录。
+
+### 验证与诚实边界
+- 门禁 `run-tests` **30/30**；十三组判别全绿（新增 `check-card-practice` 23 / `check-structure-layer` 22 / `check-exam-pack` 24）；版本 8/8、形态 18/18；Edge headless 统一验收 **14/14**（156 题渲染、作业筛选、作答页题面与图、订正五层、右键改名刷新保留、恢复模型结构、考点包/快照入口、console 0 error）。
+- 修了三处「判别假红」：旧断言写死 action 数量 13、APP manifest 缺两条 UI 元数据、快照恢复断言把「变更前快照」误当成「刚改的那版」——都按当前真实契约改，未放宽标准（回退会红）。
+- **没做到**：①「可判分 ≥100」实测只有 1 道能从原文严格抽出选项，其余 143 走自评——不编选项；②导图只做改名/换父/恢复，未做新增节点与删除入口；③考点包是单向导出，无 HTML 回导（回退靠本机快照）；④快照不防硬盘物理损坏，不宣称「数据安全」；⑤ DSH 宿主内点验仍卡 DSH 未运行。SW v37。
+
 ## v1.7.3 — 2026-11-27（发布）
 
 三类人群统一计划里的**第 3 项「作业入口接线」**落地。动手前先纠正上一轮的报告错误：真机走查当时没点进「题型」页签就断言"界面无作业入口"，是**假阳性**——5 份作业卡原本就在题型页最底部（3+3+2+7+7=22 题），可展开看题。真问题是埋得太深：27 个折叠组里混着 5 份作业，默认全收起，学生找不到。

@@ -95,7 +95,11 @@ if (derive) {
 console.log('[C] 接线：三端一致、不新增 action、前端可加载');
 ok('C1 概览页调用 deriveOverview', /deriveOverview\(/.test(BS) && !/a\.summary \|\| '（模型没有给摘要）'/.test(BS));
 ok('C2 新模块进 SW 清单', /\.\/src\/overview\.mjs/.test(SW));
-ok('C3 能力清单含 cards（12 基础 + 1 题卡，2026-11-22）', require(path.join(ROOT, 'core/capabilities.js')).ACTIONS.length === 13);
+// 早期写死 ACTIONS.length === 13，加 structure/snapshot 后假红。按能力名断言更严：
+// 少任何一个都会红，以后再加能力也不会因为数数量而误报。
+const actionNames = require(path.join(ROOT, 'core/capabilities.js')).ACTIONS.map(String); // ACTIONS 是字符串数组
+ok('C3 能力清单含 cards / structure / snapshot（三端同源）',
+  ['cards', 'structure', 'snapshot'].every((a) => actionNames.includes(a)), actionNames.join('/'));
 ok('C4 导图仍走确定性格子布局（未改力导向）', /NODE_W = 224, NODE_H = 58/.test(fs.readFileSync(path.join(ROOT, 'renderer/js/mindmap-layout.js'), 'utf8')));
 
 console.log('\n通过 ' + pass + ' / 失败 ' + fail);

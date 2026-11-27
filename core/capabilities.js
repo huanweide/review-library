@@ -41,6 +41,10 @@ const CAPABILITIES = [
   { action: 'mark',      method: 'markFile',      needsBook: true,  group: 'library' },
   { action: 'compose',   method: 'composeDocument', needsBook: true, group: 'library' },
   { action: 'cards',     method: 'listCards',       needsBook: true,  group: 'library' },
+  // 用户结构层（2026-11-27）：GET 读 structure.json，POST 带 {layer} 落盘。不调模型。
+  { action: 'structure', method: 'getStructure',    needsBook: true,  group: 'library' },
+  // 本机快照（2026-11-27）：GET 列表 / POST 不带 snapshotId 留一份 / 带 snapshotId 恢复。
+  { action: 'snapshot',  method: 'saveSnapshot',    needsBook: true,  group: 'library' },
   { action: 'practice',  method: 'getPractice',   needsBook: true,  group: 'practice' },
   { action: 'quiz',      method: 'getQuiz',       needsBook: true,  group: 'practice' },
   { action: 'due',       method: 'getDue',        needsBook: true,  group: 'practice' },

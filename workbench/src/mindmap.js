@@ -3,6 +3,7 @@
 // 这里只负责「加载它 / 提供主题色 / 把点击事件接到业务回调」，绝不另写排版。
 import { el } from './ui.js';
 import { zoomAt, panBy, resetView, normalizeView, cssTransform } from './map-viewport.mjs';
+import { applyStructure, emptyLayer } from './structure-layer.mjs';
 
 let layoutPromise = null;
 
@@ -74,19 +75,25 @@ export function mountMindmap(holder, tree, opts) {
   // 用户要「界面很全」——整体缩小没用（字会糊），「一次只摊开一章」才真能看全：
   // 顶栏给一行章名，点哪章只画那一章的节与知识点，高度落回一屏可滚；「全书」回到总览。
   let chapterId = '';
+  let suppressClick = false; // 拖拽换父后浏览器补发的 click 要吃掉，否则会误开讲解面板
+  // 用户结构层（2026-11-27）：底稿是模型树，改名/换父/删除另存 layer，画的时候才叠上去。
+  // 章聚焦也吃同一份结果，否则「我把这章改名了」在全书视图变了、点进去又变回原名。
+  let userLayer = o.structure || emptyLayer();
+  const baseRoot = () => applyStructure(tree, userLayer);
   const chapterTree = () => {
-    const kids = (tree && Array.isArray(tree.children)) ? tree.children : [];
+    const kids = (baseRoot() && Array.isArray(baseRoot().children)) ? baseRoot().children : [];
     if (!chapterId) return null;
     const ch = kids.find((c) => String(c.id) === chapterId);
     if (!ch) { chapterId = ''; return null; }
     // 章自己当根：布局器按 depth 上色，root 实心正好表示「这就是当前这一章」
     return { id: ch.id, title: ch.title, desc: ch.desc || '', children: ch.children || [] };
   };
-  const viewRoot = () => chapterTree() || tree;
+  const viewRoot = () => chapterTree() || baseRoot();
   const chBar = el('div', { class: 'mm-chapters' });
   const chips = [];
   function buildChips() {
-    const kids = (tree && Array.isArray(tree.children)) ? tree.children : [];
+    const base = baseRoot();
+    const kids = (base && Array.isArray(base.children)) ? base.children : [];
     if (kids.length < 2) return;              // 只有一章时不加一条没用的导航
     const mk = (label, id) => {
       const b = el('button', {
@@ -227,6 +234,18 @@ export function mountMindmap(holder, tree, opts) {
   });
   foldBtn.dataset.open = '0';
   bar.appendChild(foldBtn);
+  // 恢复模型结构：用户改动可丢，原分析永不被改。不可逆动作先问一次。
+  if (o.onStructureChange) {
+    bar.appendChild(el('button', {
+      class: 'btn ghost sm mm-reset',
+      text: '恢复模型结构',
+      title: '丢掉所有改名/换父/删除，回到模型原样（会先问一次）',
+      onclick: () => {
+        if (!window.confirm('恢复模型结构会丢掉你改过的名字和顺序，确定吗？')) return;
+        o.onStructureChange({ op: 'reset' });
+      },
+    }));
+  }
   if (o.extraBar) bar.appendChild(o.extraBar);
 
   let ML = null;
@@ -306,6 +325,8 @@ export function mountMindmap(holder, tree, opts) {
           g.style.cursor = 'pointer';
           if (canExpand) g.classList.add('mm-foldable');
           g.addEventListener('click', () => {
+            // 拖拽结束时浏览器还会补一个 click，吃掉它，别把「换位」当成「点开讲解」
+            if (suppressClick) { suppressClick = false; return; }
             // 有收起子节点：第一下先「展开这一支」；已是叶子再走业务回调（讲解面板）
             if (canExpand) {
               expanded.add(String(id));
@@ -318,6 +339,55 @@ export function mountMindmap(holder, tree, opts) {
             if (r) r.setAttribute('stroke-width', '3');
             if (node && o.onPick) o.onPick(node, g);
           });
+          if (o.onStructureChange) {
+            // 右键改名：只改显示名，不动 id / desc / children，题卡挂接和讲解定位都不受影响。
+            g.addEventListener('contextmenu', (e) => {
+              e.preventDefault();
+              const cur = String((node && node.title) || '');
+              const name = window.prompt('改节点名（只改显示名，不动原分析）', cur);
+              if (name && name.trim() && name.trim() !== cur) {
+                o.onStructureChange({ op: 'rename', id, title: name.trim() });
+              }
+            });
+            // 拖拽换父：按下 → 移动超 6px 才算拖（单击仍走原来的展开/讲解），
+            // 松开时用 elementFromPoint 找落点节点，确认后才写 layer。不自己造坐标。
+            g.addEventListener('pointerdown', (e) => {
+              if (e.button !== 0) return;
+              e.stopPropagation();
+              const sx = e.clientX, sy = e.clientY;
+              let dragging = false;
+              const hitNode = (x, y) => {
+                const hit = document.elementFromPoint(x, y);
+                const tg = hit && hit.closest ? hit.closest('g.mm-node') : null;
+                return tg && tg.getAttribute('data-id') !== id ? tg : null;
+              };
+              const move = (ev) => {
+                if (!dragging && Math.hypot(ev.clientX - sx, ev.clientY - sy) > 6) dragging = true;
+                if (!dragging) return;
+                svg.querySelectorAll('g.mm-node.mm-drop').forEach((x) => x.classList.remove('mm-drop'));
+                const tg = hitNode(ev.clientX, ev.clientY);
+                if (tg) tg.classList.add('mm-drop');
+              };
+              const up = (ev) => {
+                document.removeEventListener('pointermove', move);
+                document.removeEventListener('pointerup', up);
+                svg.querySelectorAll('g.mm-node.mm-drop').forEach((x) => x.classList.remove('mm-drop'));
+                if (!dragging) return;
+                suppressClick = true;
+                const tg = hitNode(ev.clientX, ev.clientY);
+                const to = tg && tg.getAttribute('data-id');
+                if (!to) return;
+                const target = (layout.nodes || []).find((n) => String(n.id) === to);
+                const fromName = String((node && node.title) || '');
+                const toName = String((target && target.title) || to);
+                if (window.confirm('把「' + fromName + '」移到「' + toName + '」下面？')) {
+                  o.onStructureChange({ op: 'move', id, parent: to });
+                }
+              };
+              document.addEventListener('pointermove', move);
+              document.addEventListener('pointerup', up);
+            });
+          }
         });
         if (pendingFocus) {
           const g = svg.querySelector('g.mm-node[data-id="' + pendingFocus + '"]');
@@ -357,12 +427,15 @@ export function mountMindmap(holder, tree, opts) {
 
   return {
     setMode: (m) => { state.mode = m; paint(); persistMapState(); },
+    // 外部保存成功后回填 layer 并重画；模型树本身不动。
+    setStructure: (layer) => { userLayer = layer || emptyLayer(); paint(); },
     repaint: () => { depthCap = 0; expanded.clear(); foldBtn.textContent = '展开全部'; foldBtn.dataset.open = '0'; paint(); persistMapState(); },
     // 从别处（考点大全 / 题型 / 提纲）跳进来时用：切到它所在的那一章 + 展开祖先链 + 滚动高亮
     focus: (id) => {
-      const kids = (tree && Array.isArray(tree.children)) ? tree.children : [];
+      const base = baseRoot();
+      const kids = (base && Array.isArray(base.children)) ? base.children : [];
       const isChapter = kids.some((c) => String(c.id) === String(id));
-      const chain = ancestorsOf(tree, id, []);
+      const chain = ancestorsOf(base, id, []);
       // 目标在哪个章就切到哪一章：不切的话节点根本不在当前画面上，「跳过去」就是假的
       chapterId = isChapter ? String(id) : ((chain && chain[1]) || '');
       if (chain) chain.forEach((a) => expanded.add(a));
