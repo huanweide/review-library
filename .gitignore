@@ -50,3 +50,8 @@ PROCESS/gen_*.py
 PROCESS/考纲全覆盖*.html
 PROCESS/考纲全覆盖*.md
 PROCESS/research-workbench整体优化/verification-aligned.html
+
+# 2026-11-27 发版清理：maxloop 走查截图 / GIF 关键帧是过程产物（1.4M + 1.2M），
+# 结论已写进 CHANGELOG 与计划台账；正式演示 GIF 放 docs/screenshots/（入库）。
+PROCESS/maxloop-体验满分/walk/
+PROCESS/体验升级-2026-11-23/gif-frames/

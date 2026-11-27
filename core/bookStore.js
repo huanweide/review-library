@@ -304,11 +304,11 @@ class BookStore {
   }
 }
 
-// 文档类型白名单：只允许 digest / syllabus，杜绝任意字符串拼路径。
+// 文档类型白名单：只允许 digest / syllabus / slides / review-guide，杜绝任意字符串拼路径。
 function docKind(kind) {
   const k = String(kind || '');
-  if (!['digest', 'syllabus', 'slides'].includes(k)) {
-    throw new Error('未知文档类型：' + kind + '（可用 digest=考点大全 / syllabus=考纲 / slides=考试幻灯片）');
+  if (!['digest', 'syllabus', 'slides', 'review-guide'].includes(k)) {
+    throw new Error('未知文档类型：' + kind + '（可用 digest=考点大全 / syllabus=考纲 / slides=考试幻灯片 / review-guide=复习总纲）');
   }
   return k;
 }

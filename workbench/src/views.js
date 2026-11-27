@@ -34,40 +34,42 @@ function dataBlock(data) {
 /* ---------------- 启动台：真实状态 + 形态地图 ---------------- */
 function viewHome(root) {
   const s = get(), st = s.state || {}, m = s.manifest || {};
-  const hostLabel = s.host.label + (s.host.kind ? ' · ' + s.host.kind : '');
   const online = s.online;
+  const hd = $view('home');
+  const books = ((hd.data && hd.data.data && hd.data.data.books) || []);
+  // 学生指标：今日到期（list 每本带 dueCount）、已分析书数、资料总数；能力数/视图数是开发者指标，移到「形态与架构」页
+  const dueTotal = books.reduce((n, b) => n + (Number(b.dueCount) || 0), 0);
+  const fileTotal = books.reduce((n, b) => n + (Number(b.fileCount) || 0), 0);
+  const analyzedBooks = books.filter(b => b.analyzed).length;
 
   root.appendChild(el('div', { class: 'hero' }, [
-    el('div', { class: 'hero-kicker', text: 'TIANDAO WORKBENCH · 统一应用' }),
-    el('h1', { text: '一个应用，五种形态' }),
+    el('div', { class: 'hero-kicker', text: '天道书阁 · 备考工作台' }),
+    el('h1', { text: '把书读成题，把题练到会。' }),
     el('p', { class: 'hero-p', text:
-      '这不是网页，是统一复习项目的应用形态。界面由 core/app-host.js 的清单驱动，' +
-      '所有动作回到同一个 core/；桌面端、内置浏览器、DSH 插件、Skills/CLI 读的是同一份书与分析产物。' }),
+      '课件和作业整本分析成思维导图、题卡与考点；练习先答后揭，答完按记忆曲线排下次复习时间。' }),
     el('div', { class: 'hero-chips' }, [
       badge(online ? '服务在线' : '服务离线', online ? 'good' : 'bad'),
-      badge(hostLabel, 'plain'),
-      badge('协议 v' + (m.protocol || '-'), 'plain'),
-      badge('能力 ' + (m.actions || []).length + ' 项', 'plain'),
     ]),
   ]));
 
   const stats = [
-    { n: st.bookCount != null ? st.bookCount : '—', l: '本书' },
-    { n: st.analyzedCount != null ? st.analyzedCount : '—', l: '已分析' },
-    { n: st.actionCount != null ? st.actionCount : '—', l: '个能力' },
-    { n: (m.views || []).length, l: '个视图' },
+    { n: dueTotal, l: '今日到期' },
+    { n: books.length ? (analyzedBooks + ' / ' + books.length) : '—', l: '已分析书' },
+    { n: fileTotal, l: '份资料' },
   ];
   root.appendChild(el('div', { class: 'stats' }, stats.map(x =>
     el('div', { class: 'stat' }, [el('strong', { text: String(x.n) }), el('span', { text: x.l })]))));
 
-  // 最近的书：打开应用第一屏就能继续读，不用先点书架再找
-  const hd = $view('home');
-  const recent = ((hd.data && hd.data.data && hd.data.data.books) || []).slice(0, 4);
+  // 最近的书：打开应用第一屏就能继续读，不用先点书架再找；有待复习的先亮出来
+  const recent = books.slice(0, 4);
   if (recent.length) {
     root.appendChild(el('div', { class: 'section-title', text: '继续' }));
     root.appendChild(el('div', { class: 'grid' }, recent.map((b) =>
-      el('button', { class: 'tile', onclick: () => go('book', { id: b.id }) }, [
-        el('div', { class: 'tile-title', text: b.title || b.id }),
+      el('button', { class: 'tile' + (recent.length <= 2 ? ' span2' : ''), onclick: () => go('book', { id: b.id }) }, [
+        el('div', { class: 'tile-title' }, [
+          el('span', { text: b.title || b.id }),
+          (Number(b.dueCount) > 0 ? el('span', { class: 'tile-due', text: '待复习 ' + b.dueCount }) : null),
+        ].filter(Boolean)),
         el('div', { class: 'tile-desc', text: (b.analyzed ? '已分析' : '未分析') + ' · ' + (b.fileCount == null ? 0 : b.fileCount) + ' 份资料' }),
         el('div', { class: 'tile-arrow', text: '→' }),
       ]))));
@@ -76,9 +78,8 @@ function viewHome(root) {
   root.appendChild(el('div', { class: 'section-title', text: '快速开始' }));
   const quick = [
     { v: 'library', t: '打开书架', d: '看全部书，建新书、导入资料' },
-    { v: 'quiz', t: '开始练习', d: '先答后揭，答案不会提前下发' },
+    { v: 'quiz', t: '开始练习', d: '先自己答，再对答案和讲解' },
     { v: 'due', t: '今日到期', d: '今天该复习的卡' },
-    { v: 'about', t: '形态与架构', d: '五种形态为什么是同一个东西' },
   ];
   root.appendChild(el('div', { class: 'grid' }, quick.map(q =>
     el('button', { class: 'tile', onclick: () => go(q.v) }, [
@@ -87,16 +88,7 @@ function viewHome(root) {
       el('div', { class: 'tile-arrow', text: '→' }),
     ]))));
 
-  root.appendChild(el('div', { class: 'section-title', text: '能力清单（运行时来自统一核心）' }));
-  const caps = m.capabilities || [];
-  root.appendChild(el('div', { class: 'cap-list' }, caps.map(c =>
-    el('div', { class: 'cap-row' }, [
-      el('code', { class: 'cap-action', text: c.action }),
-      el('span', { class: 'cap-label', text: c.label || c.method }),
-      el('span', { class: 'cap-hint', text: c.hint || '' }),
-      badge(c.group === 'practice' ? '学习闭环' : '资料', c.group === 'practice' ? 'accent' : 'plain'),
-    ]))));
-
+  // 能力清单（action 名/code）是开发者视角：已移出首页，完整信息在「关于与形态地图」页。
   if (!online) {
     root.appendChild(el('div', { class: 'notice' , html:
       '<b>宿主服务未连接。</b> 真功能需要后端 <code>core/app-host.js</code>。' +
@@ -108,16 +100,14 @@ function viewHome(root) {
 function viewLibrary(root, view) {
   const d = $view('library');
   root.appendChild(el('div', { class: 'view-head' }, [
-    el('div', {}, [el('h2', { text: '书架' }), el('p', { class: 'sub', text: '统一核心 core/ 的书库；与桌面端统一核心、DSH 插件、Skills/CLI 完全同源' })]),
+    el('div', {}, [el('h2', { text: '书架' }), el('p', { class: 'sub', text: '你的书都在这里；桌面端与插件导入的书会自动出现' })]),
     el('div', { class: 'view-actions' }, [
       btn('刷新', () => call('list', {}, 'library'), 'ghost'),
       btn('＋ 新建书', () => go('create'), 'primary'),
     ]),
   ]));
   root.appendChild(el('div', { class: 'notice', html:
-    '<b>书库边界</b>：本应用读的是统一核心 <code>core/</code> 的书库。' +
-    '旧版全功能工作台（<code>index.html</code> / <code>lib/store.js</code>）是另一套元数据格式、共用目录但刻意不合并，' +
-    '那里的书不会出现在这里。在 DSH / 桌面端统一核心 / Skills 里建的书会立刻出现。' }));
+    '<b>书库边界</b>：这里只显示统一核心的书。旧版工作台的书不会出现；在桌面端或插件里建的书会立刻出现。' }));
   if (d.loading) return root.appendChild(loading('读取书库…'));
   if (d.error) return root.appendChild(errorBox(d.error, () => call('list', {}, 'library')));
 
@@ -217,7 +207,7 @@ function viewQuiz(root, view, params) {
         el('a', { class: 'bs-back', href: '#/book?id=' + encodeURIComponent(id), text: '← 回到《' + bookTitle + '》' }),
       ]),
       el('h2', { text: '练习' }),
-      el('p', { class: 'sub', text: '先答后揭；答完会告诉你下次什么时候再见，可以改' }),
+      el('p', { class: 'sub', text: '先答题再看答案；答完自动排下次复习时间，也可以自己调' }),
     ]),
     el('div', { class: 'view-actions' }, [
       // 同屏可切：做题时想起某个知识点，不用先退回书架再进书（2026-11-21）。
@@ -353,7 +343,7 @@ function renderResult(data, optEls, box, rateBox, bookId, key) {
     : data.scheduledBy === 'auto-wrong' ? '答错 · 重来'
       : data.scheduledBy === 'self' ? '按你的自评' : '已排程';
   const cur = data.currentLabel || (data.dueAt ? new Date(data.dueAt).toLocaleString('zh-CN') : '—');
-  box.appendChild(el('div', { class: 'q-note q-sched', text: why + ' → ' + cur + '再见' }));
+  box.appendChild(el('div', { class: 'q-note q-sched', text: why + ' · 下次复习：' + cur }));
 
   rateBox.classList.remove('hidden');
   rateBox.appendChild(el('span', { class: 'sub', text: '觉得不准？改一档：' }));
@@ -366,9 +356,9 @@ function renderResult(data, optEls, box, rateBox, bookId, key) {
       const r = await host.action('rate', { bookId, key, rating: x.rating });
       if (!r || r.ok === false) return toast((r && r.error) || '自评失败', 'bad');
       const at = r.data && r.data.dueAt ? new Date(r.data.dueAt).toLocaleString('zh-CN') : '';
-      toast('已改成「' + (x.name || '') + '」：' + at + ' 再见', 'ok');
+      toast('已改成「' + (x.name || '') + '」· 下次复习 ' + at, 'ok');
       rateBox.innerHTML = '';
-      rateBox.appendChild(el('span', { class: 'sub', text: '已改为「' + (x.name || '') + '」· ' + at + ' 再见' }));
+      rateBox.appendChild(el('span', { class: 'sub', text: '已改为「' + (x.name || '') + '」· 下次复习 ' + at }));
     }, 'ghost sm'));
   });
 }
@@ -401,7 +391,7 @@ function viewDue(root, view, params) {
     return root.appendChild(el('div', { class: 'bs-cta' }, [
       el('div', { class: 'bs-cta-art', text: '✓' }),
       el('h3', { text: '今天没有到期的题' }),
-      el('p', { text: '间隔重复按「该忘的时候再问」排程。想多练可以直接做全部题，不影响排程。' }),
+      el('p', { text: '答完的题会按记忆曲线自动安排下次复习；想多练可以直接做全部题，不影响排程。' }),
       el('div', { class: 'bs-cta-acts' }, [
         btn('去练全部题', () => go('quiz', { id, title: bookTitle }), 'primary'),
         btn('回到这本书', () => go('book', { id }), 'ghost'),

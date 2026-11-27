@@ -22,7 +22,8 @@ const arg = (name, def) => {
   return i >= 0 ? process.argv[i + 1] : def;
 };
 const LESSONS = String(arg('lesson') || '').split(',').map(Number).filter(Boolean);
-if (!LESSONS.length) { console.error('缺少 --lesson 12,16'); process.exit(1); }
+const ASSIGNS = String(arg('assignments') || arg('assignment') || '').split(',').map(Number).filter(Boolean);
+if (!LESSONS.length && !ASSIGNS.length) { console.error('缺少 --lesson 或 --assignments'); process.exit(1); }
 
 const bookDir = path.join(ROOT, 'library', 'books', BOOK);
 const cardsDir = path.join(bookDir, 'cards');
@@ -34,7 +35,7 @@ const esc = (s) => String(s == null ? '' : s)
   .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 // 出处 → file:/// 链接（空格与中文由 encodeURI 处理；#page=N 由浏览器 PDF 查看器原生跳页）
-const pdfDirOf = (kind) => (kind === 'classroom' ? SRC + '/课堂题目PDF' : SRC + '/课件PDF');
+const pdfDirOf = (kind) => (kind === 'classroom' ? SRC + '/课堂题目PDF' : kind === 'assignment' ? SRC + '/作业题目PDF' : SRC + '/课件PDF');
 function sourceHref(card) {
   const pdf = card.source && card.source.pdf;
   const page = Number(card.source && card.source.page) || 0;
@@ -84,7 +85,8 @@ function cardHtml(c, lessonNo) {
     ? '<ol class="solution">' + c.solution.map(s => '<li>' + esc(s) + '</li>').join('') + '</ol>' : '';
   const href = sourceHref(c);
   const page = Number(c.source && c.source.page) || 0;
-  const srcText = '第 ' + lessonNo + ' 讲 · 第 ' + (page || '—') + ' 页';
+  const isHw = c.source && c.source.kind === 'assignment';
+  const srcText = isHw ? '作业 · 第 ' + (page || '—') + ' 页' : '第 ' + lessonNo + ' 讲 · 第 ' + (page || '—') + ' 页';
   const link = href ? '<a href="' + href + '" target="_blank" rel="noopener">' + esc(srcText) + ' ↗</a>' : esc(srcText);
   const verified = c.source && c.source.quoteVerified ? '<span class="verified">✓ 原文已核</span>' : '';
   return [
@@ -103,7 +105,10 @@ function cardHtml(c, lessonNo) {
 
 function lessonHtml(doc) {
   const lessonNo = doc.lessonNo || doc.lesson;
-  const name = String(doc.title || '').replace(/^\d+/, '') || doc.title;
+  const isHwDoc = doc.kind === 'assignment';
+  const name = isHwDoc ? String(doc.title || '') : (String(doc.title || '').replace(/^\d+/, '') || doc.title);
+  const title = isHwDoc ? ('作业 · ' + name) : ('第 ' + lessonNo + ' 讲 · ' + name);
+  const hwRef = (isHwDoc && Array.isArray(doc.lessonRef) && doc.lessonRef.length) ? ('对应讲次：第 ' + doc.lessonRef.join('、') + ' 讲 · ') : '';
   const total = (doc.stats && doc.stats.cards) || doc.knowledgePoints.reduce((s, k) => s + k.cards.length, 0);
   // 知识点排序：有题卡的在前、无卡的在后（各自保持模型给出的相对顺序）——
   // 首屏必须能同时看到总结与带图题卡（验收：一屏内四要素齐）；无卡知识点照常出总结。
@@ -124,14 +129,14 @@ function lessonHtml(doc) {
     '<!doctype html>',
     '<html lang="zh-CN"><head><meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width,initial-scale=1">',
-    '<title>理论力学 · 第 ' + lessonNo + ' 讲 · 题卡</title>',
+    '<title>理论力学 · ' + esc(title) + ' · 题卡</title>',
     '<style>' + CSS + '</style>',
     '</head><body>',
     '<header><span class="block">' + esc(doc.block || '') + '</span>',
-    '<h1>第 ' + lessonNo + ' 讲 · ' + esc(name) + '</h1>',
+    '<h1>' + esc(title) + '</h1>',
     '<span class="count">' + total + ' 题 · ' + doc.knowledgePoints.length + ' 个知识点</span></header>',
     '<main>' + sections + '</main>',
-    '<footer>题卡来自「复习资料图书馆」逐讲拆解（cards/lesson-' + esc(doc.lesson) + '.json）；题图一律为课件/课堂题原图，未重绘。</footer>',
+    '<footer>题卡来自「复习资料图书馆」' + (isHwDoc ? '作业拆解（cards/assignment-' + esc(doc.lesson) + '.json）；' + hwRef : '逐讲拆解（cards/lesson-' + esc(doc.lesson) + '.json）；') + '题图一律为课件/课堂题原图，未重绘。</footer>',
     '</body></html>',
   ].join('\n');
 }
@@ -151,4 +156,17 @@ for (const n of LESSONS) {
   fs.renameSync(tmp, out);
   const cards = doc.knowledgePoints.reduce((s, k) => s + k.cards.length, 0);
   console.log('DONE lesson ' + n + ': ' + out + '（' + cards + ' 题 / ' + doc.knowledgePoints.length + ' 知识点）');
+}
+
+for (const n of ASSIGNS) {
+  const f = path.join(cardsDir, 'assignment-' + n + '.json');
+  if (!fs.existsSync(f)) { console.error('assignment-' + n + '.json 不存在，跳过'); continue; }
+  const doc = JSON.parse(fs.readFileSync(f, 'utf8'));
+  const html = lessonHtml(doc);
+  const out = path.join(previewDir, 'assignment-' + n + '.html');
+  const tmp = out + '.' + process.pid + '.tmp';
+  fs.writeFileSync(tmp, html, 'utf8');
+  fs.renameSync(tmp, out);
+  const cards = doc.knowledgePoints.reduce((s, k) => s + k.cards.length, 0);
+  console.log('DONE assignment ' + n + ': ' + out + '（' + cards + ' 题 / ' + doc.knowledgePoints.length + ' 知识点）');
 }

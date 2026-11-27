@@ -51,7 +51,13 @@ rows.forEach((r) => {
 
 // 图意词（2026-11-23 需求7）：补「受力图 / 受力分析图 / 画出…图 / 内力 / 机构图」——
 // 旧正则漏了这些，导致「要求画出 AB 杆、AC 杆及整体的受力图」这类必看图的题被判成纯文字题。
+// 二档判据（2026-11-23 用户实测反馈）：题干没写图意词但题目本身靠图才能做的几何/计算题
+//（偏心轮、组合梁、机构运动……）也会漏。这类题无法从字面完美判别，改用题型兜底：
+// 计算题/综合应用题/选择题/填空题只要出处页有图就补整页图（原页就是这道题的出处，
+// 学生看原页一定能找到题图）；判断题/名词解释等纯概念题不补。
 const wantsImage = (q) => /如图|下图|图中|图示|示意图|曲线图|直方图|曲线|受力图|受力分析图|画.{0,8}图|内力图|机构图|结构图|简图/.test(String(q && q.stem || ''));
+// 题型兜底：这些题型默认依赖出处页上下文；纯概念题型（判断/名词解释）不补。
+const TYPE_NEEDS_PAGE = new Set(['计算题', '综合应用题', '选择题', '填空题']);
 const report = [];
 let filled = 0;
 
@@ -59,7 +65,10 @@ let filled = 0;
   (g.items || []).forEach((it) => {
     (it.questions || []).forEach((q) => {
       const ids = Array.isArray(q.imageIds) ? q.imageIds.map(String) : [];
-      if (ids.length || !wantsImage(q)) return;
+      const byWord = wantsImage(q);
+      // 题型在分组层（questionIndex[].type），题目对象本身无 type 字段（practice.js:10 契约）
+      const byType = TYPE_NEEDS_PAGE.has(String(g.type || ''));
+      if (ids.length || (!byWord && !byType)) return;
       const src = q.source || {};
       const key = pdfTitle(src.file) + '|' + Number(src.page);
       const candidates = byPage.get(key) || [];
@@ -69,7 +78,7 @@ let filled = 0;
       }
       q.imageIds = [candidates[0]];
       filled++;
-      report.push({ seq: q.seqNo, stem: String(q.stem).slice(0, 36), key, imageId: candidates[0], status: 'ok' });
+      report.push({ seq: q.seqNo, stem: String(q.stem).slice(0, 36), key, imageId: candidates[0], status: 'ok', via: byWord ? '图意词' : '题型兜底' });
     });
   });
 });

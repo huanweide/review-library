@@ -86,7 +86,7 @@ export function openReader(bookId, file, onChange) {
         el('span', { class: 'rd-spacer' }),
         el('button', { class: 'rd-x', text: '×', title: '关闭', onclick: () => mask.remove() }),
       ]),
-      el('div', { class: 'rd-sub', text: '原字节预览 · 未重编码 · 改名只影响书名，不影响原文与引用' }),
+      el('div', { class: 'rd-sub', text: '原始文件预览；改名只改书内显示名，不动文件内容与引用' }),
       body,
     ]),
   ]);

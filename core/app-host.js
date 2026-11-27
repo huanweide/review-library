@@ -56,7 +56,7 @@ const ACTION_UI = {
   rate:     { label: '四档自评',   hint: '重排下次复习时间',           needsBook: true  },
   mark:     { label: '标注重点',   hint: '语义标记资料重点，不手动分层', needsBook: true  },
   compose:  { label: '生成整理文档', hint: '考点大全 / 考纲',           needsBook: true  },
-  cards:    { label: '逐讲题卡',     hint: '读取按讲次批建的题卡，不调模型', needsBook: true  },
+  cards:    { label: '题卡（讲次+作业）',     hint: '读取按讲次批建的题卡与作业卡，不调模型', needsBook: true  },
 };
 
 let warned = false;

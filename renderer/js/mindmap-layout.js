@@ -20,7 +20,7 @@
   // 依据见天道书院 PROCESS/research-导图视觉美化/best-practices.md（≤5-6 主色、低饱和、同色系分层）。
   const BRANCH_COLORS = ['#4E8098', '#C17450', '#5C8D6B', '#7C6A9C', '#A6803E', '#A85F6E'];
   // 尺寸对齐书院：卡片放大到能放「标题 + 一行说明」，字号按层级（见 toSvg 的 typeFs）。
-  const NODE_W = 224, NODE_H = 58, GAP_X = 56, GAP_Y = 18, PAD = 28;
+  const NODE_W = 224, NODE_H = 58, GAP_X = 56, GAP_Y = 18, PAD = 44;
   /** 层级字号：root 20 / 章 16 / 节 14 / 点及以下 13（书院同款落差，不许全 12px） */
   function typeFs(depth) { return depth === 0 ? 20 : depth === 1 ? 16 : depth === 2 ? 14 : 13; }
 

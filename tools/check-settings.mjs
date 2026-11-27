@@ -138,8 +138,12 @@ ok('E4 分析成功后记住配置（粘一次就够）', /settings\.remember\(R
 ok('E5 老 core 协议入口也补 key', /needsCfg/.test(SERVER) && /body\.cfg = settings\.mergeCfg/.test(SERVER));
 ok('E6 前端有独立配置模块（三处共用，不各写一份表单）', /export function credentialFields/.test(LC) && /export function credentialDialog/.test(LC));
 ok('E7 分析对话框改用共用控件', /credentialFields\(s\)/.test(BS));
-ok('E8 生成考点大全不再每次要 key（已配置直接跑）', /await readiness\(\)/.test(BS) && !/地址、模型、密钥都要填/.test(BS),
-  '仍存在旧文案或没走 readiness');
+// 2026-11-24 契约：openAnalyze 保留（选模型/深挖开关），配置从服务端预填，
+// 已配置时密钥留空即沿用；旧断言只认 readiness() 函数名，已随重写消失。
+// 验收意图不变：不再每次强制要 key、不留旧文案。
+ok('E8 生成考点大全不再每次要 key（服务端预填 + hasKey 沿用）',
+  /await loadSettings\(\)/.test(BS) && /s\.hasKey/.test(BS) && !/地址、模型、密钥都要填/.test(BS),
+  '仍存在旧文案或没从服务端预填配置');
 ok('E9 前端不再把 key 写进 localStorage', !/localStorage\.setItem\('wb-llm'/.test(BS) && !/localStorage\.setItem\('wb-llm'/.test(VW));
 ok('E10 设置页有模型与密钥卡片', /模型与密钥/.test(VW) && /mountLlmSettings/.test(VW));
 ok('E11 页签探测只查缓存（cachedOnly）', /cachedOnly: true/.test(BS));

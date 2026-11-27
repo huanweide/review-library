@@ -151,19 +151,22 @@ ok('C2 练习页有「回到这本书」的真链接',
 // 同屏可切「题型/考点/导图」，不用先退回书架再进书
 ok('C3 练习页可横向切到书内其它页（看导图/回书）', /go\('book',\s*\{\s*id/.test(VW.slice(VW.indexOf('viewQuiz'), VW.indexOf('function viewDue'))) || /看导图|看题型/.test(VW));
 
-console.log('\n[E] 分析后自动补齐考点大全与考纲（不是用户手动点）');
+console.log('\n[E] 分析后不自动补整理文档；复习总纲按需生成（2026-11-24 契约）');
+// 2026-11-21 的旧契约是「analyze 成功后自动 compose digest+syllabus」。
+// 11-24 产品收敛：原 digest/syllabus 页签合并为「复习总纲」，必须按章分批生成才能防截断，
+// 改走 scripts/build-review-guide.mjs；分析链里只保留 cachedOnly 探测，绝不静默花钱。
+// bookspace.js:1638 有决策注释。旧断言测的是已废弃行为，按新契约重写为反向断言。
 const analyzeIdx = BS.indexOf("action('analyze'");
 const afterAnalyze = analyzeIdx >= 0 ? BS.slice(analyzeIdx, analyzeIdx + 2600) : '';
 ok('E0 找得到 analyze 调用', analyzeIdx > 0, '锚点缺失');
-ok('E1 analyze 成功回调里自动补齐产物', /autoCompose\(/.test(afterAnalyze),
-  'analyze 之后 2600 字符内没有 autoCompose（当前仍靠用户手动点生成）');
-const acIdx = BS.indexOf('async function autoCompose');
-const acBody = acIdx >= 0 ? BS.slice(acIdx, acIdx + 1600) : '';
-ok('E2 两个 kind 都覆盖（digest 与 syllabus）', /digest/.test(acBody) && /syllabus/.test(acBody), acBody.slice(0, 120));
-ok('E3 自动生成失败不挡主分析（compose 后面紧跟 catch）', (function () {
-  const ci = acBody.indexOf("action('compose'");
-  return ci > 0 && acBody.indexOf('catch', ci) > ci;
-})(), 'compose 之后没有 catch');
+ok('E1 分析成功回调里不再自动 compose（避免静默花钱/截断）', !/autoCompose\(/.test(afterAnalyze),
+  'analyze 之后仍存在 autoCompose，11-24 的收敛决策被回退');
+ok('E2 决策有落地注释 + 总纲走独立构建脚本',
+  /分析后不再自动补整理文档/.test(BS) && /build-review-guide\.mjs/.test(BS),
+  '缺决策注释或缺 build-review-guide.mjs 指引');
+ok('E3 页签探测只读缓存（cachedOnly），不因切页签触发生成',
+  /action\('compose',\s*\{[^}]*kind:\s*'review-guide'[^}]*cachedOnly:\s*true/.test(BS),
+  'review-guide 探测未带 cachedOnly: true');
 
 console.log('\n[F] 书架显示今日待复习');
 const HOST = fs.readFileSync(path.join(ROOT, 'core/app-host.js'), 'utf8');

@@ -73,6 +73,14 @@ let threw = false;
 try { core.listCards('不存在的书'); } catch (e) { threw = true; }
 ok(threw, 'L11 书不存在时报错，不返回空壳骗调用方');
 
+// 2026-11-23 扩：作业卡同口聚合（kind=assignment，lessonNo=100+seq 排在讲卡之后）。
+fs.writeFileSync(path.join(dir, 'assignment-101.json'), JSON.stringify(lesson(101, 2, 3)), 'utf8');
+const withHw = core.listCards(book.id);
+const hwEntry = withHw.lessons.find(x => x.file === 'assignment-101.json');
+ok(hwEntry && hwEntry.kind === 'assignment', 'L12 作业卡进聚合且 kind=assignment');
+ok(withHw.total === 28, 'L13 total = 讲卡22 + 作业卡6（坏文件不计）', 'total=' + withHw.total);
+ok(withHw.lessons[withHw.lessons.length - 1].lesson === 101, 'L14 作业卡（101+）排序在讲卡之后', JSON.stringify(withHw.lessons.map(x => x.lesson)));
+
 console.log('\n通过 ' + pass + ' / 失败 ' + fail);
 process.exit(fail ? 1 : 0);
 })().catch((e) => { console.error('  ✗ 判别进程异常：' + (e && e.message || e)); process.exit(1); });

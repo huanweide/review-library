@@ -19,7 +19,7 @@ const practiceLib = require('./practice');
 const documentsLib = require('./documents');
 
 // 版本号唯一真源 = 根 package.json 的 version；本常量由 scripts/sync-versions.mjs 机械同步，禁止手改。
-const CORE_VERSION = '1.7.0';
+const CORE_VERSION = '1.7.1';
 
 class Core {
   constructor(root) {
@@ -150,8 +150,8 @@ class Core {
   async composeDocument(id, kind, opts) {
     const o = opts || {};
     const k = String(kind || '');
-    if (!['digest', 'syllabus', 'slides'].includes(k)) {
-      throw new Error('未知文档类型：' + kind + '（可用 digest=考点大全 / syllabus=考纲 / slides=考试幻灯片）');
+    if (!['digest', 'syllabus', 'slides', 'review-guide'].includes(k)) {
+      throw new Error('未知文档类型：' + kind + '（可用 digest=考点大全 / syllabus=考纲 / slides=考试幻灯片 / review-guide=复习总纲）');
     }
     if (!o.refresh) {
       const cached = this.store.getDocument(id, k);
@@ -203,6 +203,7 @@ class Core {
   }
 
   // 题卡只读聚合（2026-11-22）：逐讲批建产物 cards/lesson-NN.json → { lessons, total }。
+  // 2026-11-23 扩：作业卡 cards/assignment-NNN.json（lessonNo=100+seq，kind=assignment）同口聚合。
   // 为什么在这里：core/capabilities.js 已声明 cards→listCards、driver 也在调，
   // 但生产端一度不存在（typeof Core.prototype.listCards === undefined），
   // app-host 分发直接判 unsupported——典型的「消费端写了、生产端没提供」。
@@ -217,7 +218,8 @@ class Core {
     catch (e) { return { lessons: [], total: 0 }; }
     const lessons = [];
     for (const name of names) {
-      const m = /^lesson-(\d+)\.json$/.exec(name);
+      // 2026-11-23 扩：assignment-NNN.json（作业卡，lessonNo=100+seq）与讲卡同聚合，kind 字段区分来源。
+      const m = /^(lesson|assignment)-(\d+)\.json$/.exec(name);
       if (!m) continue;
       let d;
       try { d = JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8')); }
@@ -230,11 +232,15 @@ class Core {
       lessons.push({
         lesson: Number(d.lesson || m[1]),
         seq: d.seq == null ? null : Number(d.seq),
+        kind: m[1],
         title: String(d.title || ''),
         date: String(d.date || ''),
         block: String(d.block || ''),
         knowledgePoints: kps.length,
         cards,
+        // 2026-11-23 增：原样下发 knowledgePoints（含 cards 本体：stem/answer/solution/source 等），
+        // 前端题型页的题卡区块按节渲染题干。147 卡百余 KB，本地单机可接受。
+        content: kps,
         generatedAt: String(d.generatedAt || ''),
         file: name,
       });

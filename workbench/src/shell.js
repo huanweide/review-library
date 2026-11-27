@@ -89,7 +89,8 @@ function renderSidebar() {
   const groups = m.groups || [];
   const views = m.views || [];
   groups.forEach(g => {
-    const items = views.filter(v => v.group === g);
+    const items = views.filter(v => v.group === g && v.id !== 'attempt' && v.id !== 'rate');
+    // attempt/rate 是答题流程中的中转页（判分/自评后就地出现），不是独立页面，不进导航
     if (!items.length) return;
     dom.sidebar.appendChild(el('div', { class: 'nav-group' }, [
       el('div', { class: 'nav-group-title', text: g }),
@@ -106,7 +107,7 @@ function renderSidebar() {
     ]));
   });
   dom.sidebar.appendChild(el('div', { class: 'side-foot' }, [
-    el('div', { class: 'side-host', text: '宿主：' + s.host.label }),
+    el('div', { class: 'side-host', text: s.online ? '本地服务运行中' : '服务未连接' }),
     el('button', { class: 'side-install hidden', id: 'install-btn', text: '安装为应用', onclick: doInstall }),
   ]));
   updateInstallButton();
@@ -117,14 +118,11 @@ function renderStatusbar() {
   const s = get(), st = s.state || {}, m = s.manifest || {};
   clear(dom.statusbar);
   dom.statusbar.appendChild(el('div', { class: 'sb-left' }, [
-    el('span', { class: 'sb-item' + (s.online ? ' ok' : ' bad'), text: '● ' + (s.online ? '统一核心已连接' : '未连接') }),
+    el('span', { class: 'sb-item' + (s.online ? ' ok' : ' bad'), text: '● ' + (s.online ? '已连接' : '未连接') }),
     el('span', { class: 'sb-item', text: (st.bookCount != null ? st.bookCount : '—') + ' 本书' }),
-    el('span', { class: 'sb-item', text: (st.analyzedCount != null ? st.analyzedCount : '—') + ' 已分析' }),
   ]));
   dom.statusbar.appendChild(el('div', { class: 'sb-right' }, [
-    el('span', { class: 'sb-item', text: (m.actions || []).length + ' 能力' }),
-    el('span', { class: 'sb-item', text: '协议 v' + (m.protocol || '—') }),
-    el('span', { class: 'sb-item', text: s.host.kind }),
+    el('span', { class: 'sb-item', text: (m.app && m.app.version) ? 'v' + m.app.version : '' }),
   ]));
 }
 

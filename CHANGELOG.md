@@ -5,6 +5,32 @@
 DSH 插件与 WorkBuddy 专家的 manifest，以及 README 顶部定位行；`scripts/check-versions.mjs`
 挂在 `pretest` 上做漂移检测。发版 tag 必须与 `package.json` 严格一致（如 `v1.5.0`）。
 
+## v1.7.1 — 2026-11-27（发布）
+
+v1.7.0 tag 之后的收尾 + maxloop 体验满分冲刺。这批工作 11-23 完成但一直没发版；
+11-27 验真时发现三组判别脚本没跟上 11-24 的重构，已按当前真实契约重写并逐条留证据。
+
+**五项收尾（2026-11-23）**：作业题卡 / 书院快照 / 占位词加固 / 真机复核 / 演示 GIF。
+
+- **作业题进卡片**：新增 `scripts/build-assignment-cards.mjs`——5 份课后作业独立成卡 `cards/assignment-NNN.json`（lessonNo=100+seq，kind=assignment），复用讲卡三条硬规则 + 自检 + 违规重试；27 张作业页图已入库转录，语料直接对位（新增图才补跑视觉转录）。实生成 **22 题**（quote 回溯 18/22、自检零违规、needsReview 0）；`Core.listCards` 聚合扩展（lesson|assignment 双白名单 + kind 字段），`/api/core/books/:id/cards` 实测 22 节 / 147 题（125 讲卡 + 22 作业卡）。作业→讲次对位写进每卡 `lessonRef`（1次→第2讲；2次→第3、4讲；3次→第7讲；4次→第8-10讲；5次→第11-13讲），只写数据不驱动结构。core-cards 判别 11→14 条。
+- **占位词回喂重跑**：`core/documents.js` compose 产出后 `placeholderHits>0` 时，同对话回喂违规条目重跑一次（其余页保持），取占位更少的版本；BAD 词表补「此处填/此处为」。现存 slides.json 实测 0 处占位（上轮 1 处已在重生成中消失）。
+- **演示 GIF**：`scripts/gif-frames.mjs`（playwright-core + Edge headless 关键帧）+ ffmpeg palettegen 三条 → `docs/screenshots/gif-map-zoom.gif`（142KB）/ `gif-study-hint.gif`（189KB）/ `gif-reader.gif`（91KB）。
+- **真机复核**：5178 真浏览器逐条点验六条新功能全过（缩放 transform 1→1.44、七步讲解、答案四层、选项判分 + 四档自评、思路点拨无泄漏且答案保持隐藏、阅读器浮层 + 改名）；`check-dsh-adapt` 23/23。DSH 宿主侧卡点：DSH 未运行（desktop 需图形交互），宿主内点验留待 DSH 开机后执行。
+- **作业卡 preview 页**：`build-lesson-preview.mjs` 扩展 `--assignments`（作业标题/出处链接指作业题目PDF/页脚带对应讲次），实生成 5 页 `preview/assignment-NNN.html`（共 22 题，题图原字节，quote 已核标注）；抽查 assignment-104 题干含全方向与几何关系、解析 4 步带等号代入。
+- 验证：`node scripts/run-tests.js` **30/30**（core-cards 新增 L12-L14）；书院侧 135 条 + 强度 14 条全绿（vendor 快照 v1.7.0 九文件）。
+
+**maxloop 体验满分冲刺（2026-11-23 晚）**：真浏览器 13 页走查 console 0；双 critic（学生视角 + 视觉 25 条清单）独立评审；修 23 条（style.css 12 / views 13 / bookspace 12 / shell 3 / reader / mindmap PAD）；复用四维口径（视觉/美化/便利/复习效果）复评 9.5/9.5/9.5/9.5。走查截图 13 张留本地 `PROCESS/maxloop-体验满分/walk/`（过程证据，按规则不进公开仓库）。SW 从 v30 升到 v34（缓存清单未变，仅版本号随前端改动升级）。
+
+**11-27 发版前验真（不是新功能，是账实对齐）**：
+- 修 `workbench/sw.js`：11-23 的批处理把中文注释写成 UTF-8 被当 GBK 的乱码并带 BOM。从 git HEAD 取回原文、`sed` 只替换 `CACHE` 版本号到 v34，字节级复验无 BOM、无乱码。
+- 三组判别按 11-24 的真实契约重写（**不是降标准**，逐条给代码依据）：
+  - `check-compose-chain` T1 原测 `askDocCredential/readiness/credentialDialog` 三个已随 `openAnalyze()` 重写消失的函数名 → 改测 `loadSettings()` + `credentialFields(s)` + `s.hasKey` + 缺配置才拦；T2 原正则只认纯数字 → 兼容 `(kind === 'review-guide' ? 32000 : 16000)`，取最小值断言仍 ≥16000。
+  - `check-flow-fusion` E1-E3 原测「analyze 后自动 compose digest+syllabus」——`bookspace.js:1638` 有 11-24 明确注释「分析后不再自动补整理文档」，原 digest/syllabus 收敛为「复习总纲」走 `build-review-guide.mjs` → 改为反向断言（回退自动 compose 会红）+ 构建脚本指引 + `cachedOnly: true` 探测。
+  - `check-settings` E8 原只认 `await readiness()` → 改认服务端预填 + `s.hasKey`，旧文案不得复活。
+- 书院 `vendor/tiandao-core` 因导图 `PAD 28→44` 漂移 1 文件，`sync-core.js` 重新同步到 9 文件、源版本 1.7.0、`--check` 与源一致；书院七套件全绿。
+
+**确认的体验欠账（不掩盖）**：11-21 定的「已配置零表单」在 11-24 重写后变成「每次弹预填表单、密钥不用重填」——表单现在承担选模型与递进深挖开关，功能可用但严格说不是零表单；要恢复另开任务。DSH 宿主内点验仍卡在 DSH 未运行（desktop 需图形交互），书馆形态已逐条点过。
+
 ## v1.7.0 — 2026-11-23（发布）
 
 七条体验升级，全部先做「地基核对 + 提示词查重」再动手——已有教学深度不重写，只修前端渲染与交互。
