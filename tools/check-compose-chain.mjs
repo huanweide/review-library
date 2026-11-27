@@ -25,15 +25,21 @@ let pass = 0, fail = 0;
 const check = (ok, label, detail) => { console.log((ok ? '  ✓ ' : '  ✗ ') + label + (detail ? ' — ' + detail : '')); ok ? pass++ : fail++; };
 console.log('检查：' + bsPath + ' / ' + docPath + '\n');
 
-// T1：生成前从服务端读配置并预填，密钥由服务端补齐、不落 localStorage
-check(/async function openAnalyze\s*\(/.test(bs) && /await loadSettings\(\)/.test(bs) && /credentialFields\(s\)/.test(bs),
-  'T1a 分析对话框从服务端读配置并复用共用控件（openAnalyze + loadSettings + credentialFields）');
-check(/s\.hasKey/.test(bs) && /已保存的配置直接可用/.test(bs),
-  'T1b 已配置时不用再填密钥（hasKey 判断 + 预填文案）');
-check(/if\s*\(!v\.model\)/.test(bs) && /!v\.apiKey\s*&&\s*!\(s\s*&&\s*s\.hasKey\)/.test(bs),
-  'T1c 缺模型或缺密钥时才拦，不重复要已保存的密钥');
+// T1（2026-11-27 闭环）：llm-config.js 第 10 行的契约「已配置默认零表单」终于接线。
+// 已就绪 → readiness().ok → 不弹表单直接 runAnalysis；缺配置 → 共用 credentialDialog 弹一次。
+check(/async function openAnalyze\s*\(/.test(bs) && /await readiness\(\)/.test(bs) && /if \(r\.ok\)/.test(bs),
+  'T1a 先判 readiness，已配置走零表单分支');
+check(/return runAnalysis\(/.test(bs) && !/bs-dialog/.test(bs.slice(bs.indexOf('async function openAnalyze'), bs.indexOf('async function runAnalysis'))),
+  'T1b 已配置分支不构造任何对话框（零表单）');
+check(/await credentialDialog\(/.test(bs) && /if \(!cfg\) return/.test(bs),
+  'T1c 缺配置才弹一次共用对话框，取消即退出');
+check(/async function runAnalysis\(/.test(bs) && (bs.match(/runAnalysis\(/g) || []).length >= 3,
+  'T1d 两条入口共用同一份分析体，不留第二份分叉');
 check(!/localStorage\.setItem\('wb-llm'/.test(bs), 'T1d 前端不再把配置写进 localStorage');
-check(/dlg\.addEventListener\('submit'/.test(bs), 'T1e 分析对话框 form 有 submit 防刷新');
+// 分析对话框已移除，submit 防刷新由共用的 credentialDialog 与设置页负责（llm-config.js / views.js）。
+check(/dlg\.addEventListener\('submit'/.test(fs.readFileSync(path.join(ROOT, 'workbench', 'src', 'llm-config.js'), 'utf8'))
+  && /form\.addEventListener\('submit'/.test(fs.readFileSync(path.join(ROOT, 'workbench', 'src', 'views.js'), 'utf8')),
+  'T1e 共用对话框与设置页表单都有 submit 防刷新');
 
 // T2：默认 maxTokens >= 16000（含 11-24 的 review-guide 三元分支）
 const tail = doc.match(/maxTokens:\s*maxTokens\s*\|\|\s*([^,\n]+)/);

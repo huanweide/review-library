@@ -137,13 +137,16 @@ ok('E3 action 入口用 mergeCfg 补 key（前端可以不给）', /appHost\.inv
 ok('E4 分析成功后记住配置（粘一次就够）', /settings\.remember\(ROOT/.test(SERVER));
 ok('E5 老 core 协议入口也补 key', /needsCfg/.test(SERVER) && /body\.cfg = settings\.mergeCfg/.test(SERVER));
 ok('E6 前端有独立配置模块（三处共用，不各写一份表单）', /export function credentialFields/.test(LC) && /export function credentialDialog/.test(LC));
-ok('E7 分析对话框改用共用控件', /credentialFields\(s\)/.test(BS));
-// 2026-11-24 契约：openAnalyze 保留（选模型/深挖开关），配置从服务端预填，
-// 已配置时密钥留空即沿用；旧断言只认 readiness() 函数名，已随重写消失。
-// 验收意图不变：不再每次强制要 key、不留旧文案。
-ok('E8 生成考点大全不再每次要 key（服务端预填 + hasKey 沿用）',
-  /await loadSettings\(\)/.test(BS) && /s\.hasKey/.test(BS) && !/地址、模型、密钥都要填/.test(BS),
-  '仍存在旧文案或没从服务端预填配置');
+// 2026-11-27：分析对话框已删，缺配置时复用 llm-config 的 credentialDialog；
+// 设置页仍用 credentialFields 渲染同一套控件（三处共用，不是三份表单）。
+ok('E7 缺配置复用共用对话框 + 设置页共用控件',
+  /await credentialDialog\(/.test(BS) && /credentialFields\(s\)/.test(VW));
+// 2026-11-27：llm-config 第 10 行「已配置默认零表单」终于接进 openAnalyze：
+// readiness().ok 直接跑、缺配置才弹共用对话框；深挖开关挪到设置页，能力没丢。
+ok('E8 已配置零表单，不再每次要 key（readiness + 设置页深挖开关）',
+  /await readiness\(\)/.test(BS) && /if \(r\.ok\)/.test(BS) && /async function runAnalysis\(/.test(BS)
+  && /deep\.checked/.test(VW) && !/地址、模型、密钥都要填/.test(BS),
+  'readiness 未接线、或设置页缺深挖开关、或旧文案复活');
 ok('E9 前端不再把 key 写进 localStorage', !/localStorage\.setItem\('wb-llm'/.test(BS) && !/localStorage\.setItem\('wb-llm'/.test(VW));
 ok('E10 设置页有模型与密钥卡片', /模型与密钥/.test(VW) && /mountLlmSettings/.test(VW));
 ok('E11 页签探测只查缓存（cachedOnly）', /cachedOnly: true/.test(BS));

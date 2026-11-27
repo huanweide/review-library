@@ -1558,89 +1558,70 @@ export async function mountBookspace(root, bookId, params) {
   }
 
   async function openAnalyze() {
-    // 配置从服务端读（2026-11-21）：已配好就把值预填、密钥只显示掩码，
-    // 用户点「开始分析」即可，不必再粘一次。
-    const s = await loadSettings();
-    const fields = credentialFields(s);
-    const ready = !!(s && s.ok !== false && s.hasKey && s.model);
-    // 递进深挖（2026-11-21）：可选第二轮，按章产出「最容易卡住 + 跨点串联」。
-    // 默认不勾——主分析已够用；勾了多花一次请求，失败也会单独标注、不挡主结果。
-    const deepDive = el('input', { class: 'bs-check', type: 'checkbox' });
-    deepDive.checked = !!(s && s.deepDive);
-    const status = el('div', { class: 'bs-hint' });
-    const mask = el('div', { class: 'bs-mask' });
-    const cancelBtn = btn('取消', close, 'ghost');
-    cancelBtn.type = 'button'; // 不想在取消时再触发一次表单提交（控制台噪声）
-    const dlg = el('form', { class: 'bs-dialog bs-dialog-wide' }, [
-      el('h3', { text: S.analysis ? '重新分析这本书' : '分析这本书' }),
-      el('p', { class: 'bs-sub', text: ready
-        ? '模型会把整本书当作一个整体读一遍，生成思维导图、提纲与题型分类。已保存的配置直接可用，不必再填密钥。'
-        : '模型会把整本书当作一个整体读一遍，生成思维导图、提纲与题型分类。密钥填一次就记住。' }),
-      fields.node,
-      el('label', { class: 'bs-field' }, [
-        el('span', { text: '递进深挖（可选，多一次请求）' }),
-        el('span', { class: 'bs-check-row' }, [deepDive, el('span', { class: 'bs-hint', text: '按章总结最容易卡住的点 + 必须串起来看的知识点，视图谱页和讲解面板可见' })]),
-      ]),
-      status,
-      el('div', { class: 'bs-dialog-acts' }, [
-        cancelBtn,
-        btn('开始分析', run, 'primary'),
-      ]),
-    ]);
-    mask.appendChild(dlg);
-    document.body.appendChild(mask);
-    function close() { mask.remove(); }
-    mask.addEventListener('click', (e) => { if (e.target === mask) close(); });
-    dlg.addEventListener('submit', (e) => { e.preventDefault(); run(); });
-    async function run() {
-      const v = fields.read();
-      if (!v.model) { status.textContent = '先选一个对话模型（点「找模型」或手填）'; return; }
-      if (!v.apiKey && !(s && s.hasKey)) { status.textContent = '还没有密钥：填一个 sk- 开头的密钥'; return; }
-      // 存下来：地址/模型/视觉模型必存；密钥只在这次填了才写（留空＝沿用）
-      const saved = await saveSettings({ baseURL: v.baseURL, model: v.model, visionModel: v.visionModel, apiKey: v.apiKey || undefined, deepDive: !!deepDive.checked });
-      if (!saved || saved.ok === false) { status.textContent = '保存配置失败：' + ((saved && saved.error) || '未知原因'); return; }
-      const payloadCfg = { baseURL: v.baseURL, model: v.model };
-      if (v.apiKey) payloadCfg.apiKey = v.apiKey;
-      const t0 = Date.now();
-      let alive = true;
-      const tick = setInterval(() => { if (alive) status.textContent = '分析中…已 ' + Math.round((Date.now() - t0) / 1000) + ' 秒（不要关页面）'; }, 1000);
-      status.textContent = '分析中…';
-      try {
-        // 填了视觉模型就通过 visionCfg 传给 analyze：它会在出题前先逐张看图（不改协议、
-        // 不新增 action，三端能力清单保持一致）。看图失败自动降级按图注配图，不挡分析。
-        const vm = v.visionModel;
-        if (vm) status.textContent = '正在让视觉模型看图…（看懂才不会被图注带偏）';
-        // 语料上限 12 万字符 + 输出预算 4.8 万 token，真机耗时可能 3-8 分钟（大资料更久）。
-        // 超时失败用户一无所得，比慢更糟；给 600s，宁可等也不失败。
-        const r = await host.action('analyze', {
-          bookId: S.id, cfg: payloadCfg, timeoutMs: 600000,
-          // visionCfg 不带密钥也成立：服务端会把配置里那份补给它
-          visionCfg: vm ? { baseURL: payloadCfg.baseURL, model: vm } : null,
-          deepDive: !!deepDive.checked,
-        });
-        alive = false; clearInterval(tick);
-        if (!r || r.ok === false) throw new Error((r && r.error) || '分析失败');
-        close();
-        toast('分析完成', 'ok');
-        if (vm && r.data && r.data.visionStat) {
-          const vs = r.data.visionStat;
-          toast(vs.error ? ('看图未完成，本次按图注配图：' + vs.error)
-            : ('已看懂 ' + vs.done + ' 张图' + (vs.failed ? '，' + vs.failed + ' 张看图失败' : '') + '，题图已按图内容配对'), vs.error ? 'info' : 'ok');
-        }
-        if (deepDive.checked && r.data && r.data.deepDive) {
-          const dd = r.data.deepDive;
-          toast(dd.status === 'ok' ? ('递进完成：' + (dd.chapters || []).length + ' 章的易错与串联已写入')
-            : ('递进深挖未完成（主分析不受影响）：' + (dd.error || '未知原因')), dd.status === 'ok' ? 'ok' : 'info');
-        }
-        await load();
-        S.tab = 'map';
-        render();
-        // 2026-11-24：分析后不再自动补整理文档——原 digest/syllabus 页签已收敛为「复习总纲」，
-        // 总纲按章分批生成（scripts/build-review-guide.mjs），不塞进分析流程自动跑。
-      } catch (e) {
-        alive = false; clearInterval(tick);
-        status.textContent = '失败：' + String(e.message || e);
+    // 判据（llm-config.js 第 10 行写死，2026-11-24 重写时漏接，2026-11-27 补回）：
+    // 已配置就零表单直接跑——用户原话「保存了使用」。缺配置才弹共用对话框问一次。
+    // 深挖开关从设置页读（s.deepDive），不再塞进分析流程；换模型/视觉模型也在设置页。
+    const r = await readiness();
+    if (r.ok) {
+      // 已就绪：不弹任何表单。cfg 只给地址/模型，密钥由服务端 mergeCfg 补齐。
+      const s = r.settings || {};
+      return runAnalysis({
+        baseURL: s.baseURL,
+        model: s.model,
+        visionModel: s.visionModel || '',
+        deepDive: !!s.deepDive,
+      });
+    }
+    // 缺配置：复用共用对话框，填一次保存后直接跑，不再让用户在分析框里二次确认。
+    const cfg = await credentialDialog({
+      title: S.analysis ? '重新分析 · 先配置模型' : '开始分析 · 先配置模型',
+      sub: '地址、模型与密钥存在本机服务里，填一次以后分析都不用再填。',
+      deepDive: !!(r.settings && r.settings.deepDive),
+    });
+    if (!cfg) return;
+    return runAnalysis(cfg);
+  }
+
+  /** 真正发起分析，两条入口（零表单 / 配置后）共用这一份，不留第二份分叉。 */
+  async function runAnalysis(v) {
+    const payloadCfg = { baseURL: v.baseURL, model: v.model };
+    if (v.apiKey) payloadCfg.apiKey = v.apiKey;
+    const vm = v.visionModel || '';
+    const deep = !!v.deepDive;
+    // 零表单没有对话框可显示进度，统一用 toast 起头（真机验证过：toast 在场、无需额外 DOM）。
+    // 早先试过往 .bs-acts 插一条 .bs-analyzing 状态条，但 railEl 在 render() 时整段重建，
+    // 状态条刚插进去就被冲掉——写了却不生效的死代码，2026-11-27 删掉，只留一条真通道。
+    toast(vm ? '分析中…先让视觉模型看懂配图' : '分析中…（不要关页面）', 'info');
+    try {
+      // 填了视觉模型就通过 visionCfg 传给 analyze：它会在出题前先逐张看图（不改协议、
+      // 不新增 action，三端能力清单保持一致）。看图失败自动降级按图注配图，不挡分析。
+      // 语料上限 12 万字符 + 输出预算 4.8 万 token，真机耗时可能 3-8 分钟（大资料更久）。
+      // 超时失败用户一无所得，比慢更糟；给 600s，宁可等也不失败。
+      const r = await host.action('analyze', {
+        bookId: S.id, cfg: payloadCfg, timeoutMs: 600000,
+        // visionCfg 不带密钥也成立：服务端会把配置里那份补给它
+        visionCfg: vm ? { baseURL: payloadCfg.baseURL, model: vm } : null,
+        deepDive: deep,
+      });
+      if (!r || r.ok === false) throw new Error((r && r.error) || '分析失败');
+      toast('分析完成', 'ok');
+      if (vm && r.data && r.data.visionStat) {
+        const vs = r.data.visionStat;
+        toast(vs.error ? ('看图未完成，本次按图注配图：' + vs.error)
+          : ('已看懂 ' + vs.done + ' 张图' + (vs.failed ? '，' + vs.failed + ' 张看图失败' : '') + '，题图已按图内容配对'), vs.error ? 'info' : 'ok');
       }
+      if (deep && r.data && r.data.deepDive) {
+        const dd = r.data.deepDive;
+        toast(dd.status === 'ok' ? ('递进完成：' + (dd.chapters || []).length + ' 章的易错与串联已写入')
+          : ('递进深挖未完成（主分析不受影响）：' + (dd.error || '未知原因')), dd.status === 'ok' ? 'ok' : 'info');
+      }
+      await load();
+      S.tab = 'map';
+      render();
+      // 2026-11-24：分析后不再自动补整理文档——原 digest/syllabus 页签已收敛为「复习总纲」，
+      // 总纲按章分批生成（scripts/build-review-guide.mjs），不塞进分析流程自动跑。
+    } catch (e) {
+      toast('分析失败：' + String(e.message || e), 'bad');
     }
   }
 

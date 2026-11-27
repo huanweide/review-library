@@ -5,6 +5,19 @@
 DSH 插件与 WorkBuddy 专家的 manifest，以及 README 顶部定位行；`scripts/check-versions.mjs`
 挂在 `pretest` 上做漂移检测。发版 tag 必须与 `package.json` 严格一致（如 `v1.5.0`）。
 
+## v1.7.2 — 2026-11-27（发布）
+
+补回「已配置零表单」——2026-11-24 重写 `openAnalyze()` 时漏接，11-27 验真发现并修正。
+
+- **`openAnalyze()` 改为先 `readiness()`**：已就绪（`hasKey && model`）不弹任何表单，直接 `runAnalysis()`；缺配置才弹一次共用的 `credentialDialog()`，取消即退出。两条入口共用同一份分析体，不留第二份分叉。零表单路径的 cfg 只带地址/模型，密钥由服务端 `mergeCfg` 补——前端协议里没有密钥。
+- **深挖开关挪到设置页**（`views.js#mountLlmSettings`）：原来只在被删掉的分析对话框里，不挪走这个能力就没入口了。保存时写 `deepDive` 到服务端，零表单分析从 `s.deepDive` 读。
+- **删掉一段无效状态条**：曾在 `.bs-acts` 插 `.bs-analyzing` 进度条，但 `render()` 会 `railEl.innerHTML=''` 整段重建，刚插进去就被冲掉。真机探针确认它从来没出现在 DOM 里——这是「写了但没接线」的死代码，删掉，进度反馈统一走 toast（真机在场）。
+- **SW v34 → v35**（前端改动必升版）。
+- 三组判别同步到新契约：`check-compose-chain` T1 改认 `readiness()` + 零表单分支 + 共用对话框 + 共用的分析体（7/7）；`check-settings` E7/E8 改认缺配置复用共用对话框 + 设置页深挖开关（55/55）；`check-flow-fusion` 不变（25/25）。**没降标准**：T1b 断言「已配置分支不构造任何对话框」，回退成弹窗就红。
+- **验证**：`run-tests` 30/30；十组判别全绿；版本 8/8、形态 18/18；Edge headless 真机 7/7（设置页深挖开关在场、已配置点分析不弹窗、analyze 请求真发出、协议不带密钥、toast 进度在场、console 0 error）。analyze 请求用 playwright route mock 拦掉，**没真烧模型**。
+
+**账实闭环**：上一版留红的「已配置零表单体验欠账」本版修掉。仍留红的是 maxloop 报告文件缺失、阶段零对照物缺失、DSH 宿主未点验。
+
 ## v1.7.1 — 2026-11-27（发布）
 
 v1.7.0 tag 之后的收尾 + maxloop 体验满分冲刺。这批工作 11-23 完成但一直没发版；

@@ -579,12 +579,20 @@ async function mountLlmSettings(box) {
   const form = el('form', { class: 'llm-form' });
   form.addEventListener('submit', (e) => e.preventDefault());
   form.appendChild(fields.node);
+  // 递进深挖（2026-11-27）：分析对话框改为「已配置零表单」后，深挖的开关只能放这儿，
+  // 否则这个能力就没入口了。默认按服务端 s.deepDive，不勾选＝主分析够用。
+  const deep = el('input', { class: 'bs-check', type: 'checkbox' });
+  deep.checked = !!s.deepDive;
+  form.appendChild(el('label', { class: 'setting-row' }, [
+    el('span', { text: '分析时递进深挖（多一次请求）' }),
+    el('span', { class: 'bs-check-row' }, [deep, el('span', { class: 'field-hint', text: '按章总结易错点与跨点串联；关掉只做主分析，更快' })]),
+  ]));
   const actions = el('div', { class: 'form-actions' }, [
     btn('保存', async () => {
       const r = fields.read();
       if (!r.model) return fields.setHint('还要选一个对话模型（点「找模型」或手填）', 'bad');
       fields.setHint('正在保存…', '');
-      const saved = await saveSettings({ baseURL: r.baseURL, model: r.model, visionModel: r.visionModel, apiKey: r.apiKey || undefined });
+      const saved = await saveSettings({ baseURL: r.baseURL, model: r.model, visionModel: r.visionModel, apiKey: r.apiKey || undefined, deepDive: deep.checked });
       if (!saved || saved.ok === false) return fields.setHint('保存失败：' + ((saved && saved.error) || '未知原因'), 'bad');
       fields.setHint('已保存。以后分析、生成考点大全都不再问你要密钥。', 'good');
       toast('模型配置已保存', 'ok');
