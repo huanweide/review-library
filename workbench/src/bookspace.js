@@ -22,6 +22,9 @@ const TABS = [
   { id: 'map', label: '思维导图' },
   { id: 'outline', label: '提纲讲解' },
   { id: 'types', label: '题型' },
+  // 作业独立入口（2026-11-27）：22 组作业卡原本只在「题型」页最底部、默认全收起，
+  // 学生看不到。这里加页签并复用 renderCardGroups 的作业过滤，不写第二套渲染。
+  { id: 'assignments', label: '作业' },
   { id: 'review-guide', label: '复习总纲' },
   { id: 'about', label: '概览' },
 ];
@@ -613,6 +616,7 @@ export async function mountBookspace(root, bookId, params) {
     if (S.tab === 'map') return renderMap(body);
     if (S.tab === 'outline') return renderOutline(body);
     if (S.tab === 'types') return renderTypes(body);
+    if (S.tab === 'assignments') return renderAssignments(body);
     if (S.tab === 'review-guide') return renderGuide(body);
     return renderAbout(body);
   }
@@ -751,6 +755,17 @@ export async function mountBookspace(root, bookId, params) {
     renderCardGroups(body);
   }
 
+  // 作业页（2026-11-27）：数据本来就在题型页最底部，但 27 个折叠组里埋着 5 份作业，
+  // 学生点不进去就等于没有。这里给独立页签、默认展开，渲染仍走 renderCardGroups。
+  // 不调 needAnalysis()：题卡来自 cards action，与这本书有没有分析无关。
+  function renderAssignments(body) {
+    const lessons = (S.cards && Array.isArray(S.cards.lessons)) ? S.cards.lessons : [];
+    const has = lessons.some((L) => L && !L.error && L.kind === 'assignment' && Array.isArray(L.content));
+    if (!has) return body.appendChild(empty('这本书还没有作业卡',
+      '导入作业 PDF 并完成题卡批建后，这里会按每份作业列出原题。'));
+    renderCardGroups(body, { onlyAssignment: true });
+  }
+
   // 题卡区块（2026-11-24 两级分组 + 图优先改版）：Core.listCards 的 lessons[].content（knowledgePoints
   // 原数组，cards 挂在 kp.cards 上）。判据：146 张题卡全部无 options → 只能作讲解卡（看思路/看答案），
   // 不进判分练习；可判分练习仍走上面的全局题库 questionIndex。
@@ -759,11 +774,18 @@ export async function mountBookspace(root, bookId, params) {
   //   第二级 = 组内按题型折叠（选择题/填空题/计算题/综合应用题/判断题打头，清单外题型按出现顺序
   //   附后不丢，空题型不显示）。两级组头都可折叠：第一级默认收起，第二级默认展开。
   const CARD_SUB_ORDER = ['选择题', '填空题', '计算题', '综合应用题', '判断题'];
-  function renderCardGroups(body) {
+  // 作业页（2026-11-27）复用本函数：onlyAssignment 时只要 kind=assignment 的组，默认全展开。
+  // 不写第二套渲染——两处展示同一份 S.cards，避免以后改一处漏一处。
+  function renderCardGroups(body, opts) {
+    const onlyAssignment = !!(opts && opts.onlyAssignment);
     const data = S.cards;
     const lessons = (data && Array.isArray(data.lessons)) ? data.lessons : [];
-    const usable = lessons.filter((L) => L && !L.error && Array.isArray(L.content));
-    if (!usable.length) return;
+    const usable = lessons.filter((L) => L && !L.error && Array.isArray(L.content)
+      && (!onlyAssignment || L.kind === 'assignment'));
+    if (!usable.length) {
+      if (onlyAssignment) body.appendChild(empty('这本书还没有作业卡', '导入作业 PDF 并完成题卡批建后，这里会按每份作业列出原题。'));
+      return;
+    }
     const kindLabel = (k) => (k === 'assignment' ? '作业' : '讲次');
     const groups = usable.map((L) => {
       const rows = [];
@@ -797,9 +819,12 @@ export async function mountBookspace(root, bookId, params) {
 
     const wrap = el('div', { class: 'bs-cards' });
     wrap.appendChild(el('div', { class: 'bs-hint bs-cards-note', text:
-      '题卡（逐讲批建）· ' + groups.length + ' 节 ' + totalCards + ' 题 · 题图 ' + totalImgs + ' 张 · 图优先：先看题页原图，题干作定位 · 看思路 / 看答案，不判分' }));
+      (onlyAssignment ? '作业 · ' : '题卡（逐讲批建）· ') + groups.length + (onlyAssignment ? ' 份 ' : ' 节 ') + totalCards
+        + ' 题 · 题图 ' + totalImgs + ' 张 · 图优先：先看题页原图，题干作定位 · 看思路 / 看答案，不判分'
+        + (onlyAssignment ? '。要判分和排程，需先把题卡结构化（补齐选项与答案）。' : '') }));
     groups.forEach((g) => {
-      const open = !!S.openCards[g.key];
+      // 作业页默认展开：学生点开「作业」就要直接看到题，不再一层层点。
+      const open = onlyAssignment ? true : !!S.openCards[g.key];
       const cardEl = el('div', { class: 'bs-tcard' + (open ? ' on' : '') });
       cardEl.appendChild(el('button', {
         class: 'bs-tcard-head',

@@ -175,5 +175,18 @@ ok('F1 list 返回带 dueCount', /dueCount/.test(HOST), 'app-host list 无 dueCo
 ok('F2 书架卡片渲染 dueCount', /dueCount/.test(cardSeg), '书架卡片段内没有 dueCount');
 ok('F3 页头有全局今日复习入口', /待复习|今日/.test(SH), 'shell 页头无入口');
 
+console.log('\n[G] 作业入口独立页签（2026-11-27：数据本在题型页底部，学生找不到）');
+ok('G1 书内有「作业」页签', /\{\s*id:\s*'assignments',\s*label:\s*'作业'\s*\}/.test(BS), 'TABS 无作业页签');
+ok('G2 页签路由到独立渲染', /if \(S\.tab === 'assignments'\) return renderAssignments\(body\)/.test(BS), '无路由分支');
+ok('G3 作业页复用 renderCardGroups 而非另写一套渲染', (function () {
+  const i = BS.indexOf('function renderAssignments');
+  const s = i >= 0 ? BS.slice(i, i + 700) : '';
+  return /renderCardGroups\(body, \{ onlyAssignment: true \}\)/.test(s) && !/bs-tcard-head/.test(s);
+})(), '作业页自己重写了题卡渲染，两处会漂移');
+ok('G4 作业页只收 kind=assignment（讲次不混进来）',
+  /onlyAssignment \|\| L\.kind === 'assignment'/.test(BS), '过滤条件缺失');
+ok('G5 作业页默认展开（点开就见题，不再一层层点）',
+  /onlyAssignment \? true : !!S\.openCards/.test(BS), '未默认展开');
+
 console.log('\n通过 ' + pass + ' / 失败 ' + fail);
 process.exit(fail ? 1 : 0);
