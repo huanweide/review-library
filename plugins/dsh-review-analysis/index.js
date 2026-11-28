@@ -34,22 +34,38 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
  * 写作者本机的 C:/Users/... 路径等于把插件做成只能在我这台机器上跑。
  */
 export function resolveProjectRoot(config) {
+  // 2026-11-28：四级顺序不变，但每一级「为什么没成」都记下来。
+  // 外部基准 Cordis 注册期校验抛带路径的 ValidationError、Koishi Schema 给描述+默认值；
+  // 我们原来静默跳过四级、最后一句笼统 throw，DSH 用户配错只能靠猜。
+  const tried = [];
+  const hasCore = (p) => !!p && fs.existsSync(path.join(p, 'core', 'index.js'));
+
   const fromConfig = String((config && config.projectRoot) || '').trim();
-  if (fromConfig && fromConfig !== '__AUTO__' && fs.existsSync(path.join(fromConfig, 'core', 'index.js'))) {
-    return path.resolve(fromConfig);
-  }
+  if (fromConfig && fromConfig !== '__AUTO__' && hasCore(fromConfig)) return path.resolve(fromConfig);
+  if (fromConfig && fromConfig !== '__AUTO__') tried.push('config.projectRoot=' + fromConfig + '（该目录下没有 core/index.js）');
+  else tried.push('config.projectRoot=' + (fromConfig || '未配置') + (fromConfig === '__AUTO__' ? '（自动解析标记，跳过）' : ''));
+
   const fromEnv = String(process.env.DSH_REVIEW_PROJECT_ROOT || '').trim();
-  if (fromEnv && fs.existsSync(path.join(fromEnv, 'core', 'index.js'))) return path.resolve(fromEnv);
+  if (fromEnv && hasCore(fromEnv)) return path.resolve(fromEnv);
+  tried.push('环境变量 DSH_REVIEW_PROJECT_ROOT=' + (fromEnv || '未设置') + (fromEnv && !hasCore(fromEnv) ? '（该目录下没有 core/index.js）' : ''));
+
   for (const base of [HERE, path.join(HERE, '..', 'source')]) {
+    const stampPath = path.join(base, 'project-root.json');
     try {
-      const stamp = JSON.parse(fs.readFileSync(path.join(base, 'project-root.json'), 'utf8'));
+      const stamp = JSON.parse(fs.readFileSync(stampPath, 'utf8'));
       const root = String(stamp.projectRoot || '').trim();
-      if (root && fs.existsSync(path.join(root, 'core', 'index.js'))) return path.resolve(root);
-    } catch (e) { /* 没有安装戳记是正常情况 */ }
+      if (root && hasCore(root)) return path.resolve(root);
+      tried.push('安装戳记 ' + stampPath + ' → ' + (root || '空') + (root && !hasCore(root) ? '（该目录下没有 core/index.js）' : ''));
+    } catch (e) {
+      tried.push('安装戳记 ' + stampPath + '（' + (e && e.code === 'ENOENT' ? '不存在，正常' : '读取失败：' + String(e.message || e).slice(0, 60)) + '）');
+    }
   }
   const derived = path.resolve(HERE, '..', '..');
-  if (fs.existsSync(path.join(derived, 'core', 'index.js'))) return derived;
-  throw new Error('未找到统一核心目录：请配置 projectRoot / DSH_REVIEW_PROJECT_ROOT，或把插件放在仓库 plugins/dsh-review-analysis/ 下。');
+  if (hasCore(derived)) return derived;
+  tried.push('插件相对推导 ' + derived + '（该目录下没有 core/index.js）');
+
+  throw new Error('未找到统一核心目录（需含 core/index.js）。已依次尝试：\n  - ' + tried.join('\n  - ')
+    + '\n修复：任选一级给出正确路径，或把插件放回仓库 plugins/dsh-review-analysis/ 下。');
 }
 
 export const name = 'dsh-review-analysis';
@@ -80,6 +96,10 @@ const APP_FILES = [
   'src/bookspace.js', 'src/mindmap.js',
   // 2026-11-21 新增：少列一个模块，DSH 侧栏里的应用就是 404 白屏（不是降级，是缺文件）。
   'src/llm-config.js', 'src/overview.mjs',
+  // 2026-11-28：v1.7.0–v1.8.0 新增的五个模块，之前只在 HTTP 形态可访问，DSH 侧栏全是 404。
+  // 判别 tools/check-dsh-adapt.mjs#G2 会逐文件比对 workbench/src/ 目录，漏一个就红。
+  'src/study-hint.mjs', 'src/map-viewport.mjs', 'src/reader.mjs',
+  'src/structure-layer.mjs', 'src/exam-pack.mjs',
 ];
 const APP_MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
@@ -289,7 +309,11 @@ export function apply(ctx, config) {
       '统一复习项目的入口（不是独立引擎）：先建一本书，导入 PDF/PPT/Word/图片等资料，' +
       '再由大模型把整本书当作一个整体分析，产出可层层展开的思维导图、按题型分类的索引与全书概览。' +
       'action 取 list（列书）/ create（建书）/ add（加资料）/ analyze（整体分析）/ get（取分析结果）' +
-      '/ quiz（练习列表）/ due（今日到期）/ attempt（提交作答）/ rate（四档自评）/ practice（读回过程数据）。' +
+      '/ quiz（练习列表）/ due（今日到期）/ attempt（提交作答）/ rate（四档自评）/ practice（读回过程数据）' +
+      '/ cards（题卡只读）/ structure（导图结构，带 layer 才写）/ snapshot（本机快照，带 snapshotId 会恢复）。' +
+      '读写属性：list/get/quiz/due/practice/cards 只读；create/add/analyze/attempt/rate/mark/compose 会写入；' +
+      'structure 带 layer 时写、不带只读；snapshot 带 snapshotId 是不可逆恢复（调用前须向用户确认）、' +
+      '带 label/create 是留档、不带参数是只读列表。analyze/compose 会调用大模型，有费用。' +
       '数据与主程序、专家形态共用同一套 core/，此处不复制引擎、不做离线规则分析。',
     parameters: {
       type: 'object',
@@ -299,7 +323,7 @@ export function apply(ctx, config) {
         bookId: { type: 'string', description: '书 id；除 list/create 外必填' },
         key: { type: 'string', description: '题目 key（取自 quiz 返回）；attempt/rate 必填' },
         given: { type: 'string', description: 'attempt 的作答内容（选择题可填 A/B/C/D）' },
-        rating: { type: 'integer', description: 'rate 的四档自评，1-4（重来/吃力/会了/太简单）' },
+        rating: { type: 'integer', enum: [1, 2, 3, 4], description: 'rate 的四档自评，1-4（重来/吃力/会了/太简单）' },
         title: { type: 'string', description: 'create 时的书名' },
         description: { type: 'string', description: 'create 时的备注（可选）' },
         files: {
@@ -316,7 +340,7 @@ export function apply(ctx, config) {
         fileId: { type: 'string', description: 'mark 的资料 id（取自 get/list 返回的 files）' },
         focus: { type: 'boolean', description: 'mark：是否标为用户重点（语义分层，无需手动整理层级）' },
         note: { type: 'string', description: 'mark：一句话说明这份资料为什么重要' },
-        kind: { type: 'string', description: 'compose 的文档类型：digest=考点大全 / syllabus=考纲' },
+        kind: { type: 'string', enum: ['digest', 'syllabus', 'slides', 'review-guide'], description: 'compose 的文档类型：digest=考点大全 / syllabus=考纲 / slides=考点重要幻灯片 / review-guide=复习总纲' },
         refresh: { type: 'boolean', description: 'compose：true 时忽略缓存强制重生成' },
       },
       required: ['action'],
@@ -429,6 +453,25 @@ export function apply(ctx, config) {
           });
           return Object.assign(base, { bookId: id, kind: d.kind, stats: d.stats, coreVersion: loaded.version });
         }
+        // 2026-11-28：以下三个 action 的 enum 早已从 core/capabilities.js 派生（声明支持），
+        // 但分派漏接——调用直接落到末尾 throw「不支持的 action」（错误信息里还列着它自己）。
+        // 修法照 core/app-host.js:264-284 做协议转换，业务逻辑一律委托 Core，不在插件里复制。
+        if (action === 'cards' || action === 'structure' || action === 'snapshot') {
+          const id = String((args && args.bookId) || '');
+          if (!id) throw new Error(action + ' 需要 bookId');
+          let data;
+          if (action === 'cards') {
+            data = core.listCards(id);
+          } else if (action === 'structure') {
+            // 带 layer 是写（用户改动落 structure.json）；不带是读。analysis.json 永不被写。
+            data = (args && args.layer) ? core.saveStructure(id, args.layer) : core.getStructure(id);
+          } else { // snapshot：snapshotId 恢复（不可逆，调用方须先向用户确认）；否则留档/列表
+            if (args && args.snapshotId) data = core.restoreSnapshot(id, String(args.snapshotId));
+            else if ((args && args.label) || (args && args.create)) data = core.saveSnapshot(id, String((args && args.label) || ''));
+            else data = { items: core.listSnapshots(id) };
+          }
+          return Object.assign(base, { bookId: id, data, coreVersion: loaded.version });
+        }
         throw new Error('不支持的 action：' + action + '（可用 ' + ACTIONS.join('/') + '）');
       } catch (error) {
         // 不回显 args（可能含 apiKey），也不回显上游原始错误体。
@@ -519,7 +562,12 @@ export function apply(ctx, config) {
 
   // 共用导图布局模块：APP 以 ../js/mindmap-layout.js 相对路径加载，
   // 在 DSH 宿主下映射到同一份 renderer/js/mindmap-layout.js（唯一源码，不复制）。
-  const sharedMindmapFile = path.resolve(resolveProjectRoot(config), 'renderer', 'js', 'mindmap-layout.js');
+  // 2026-11-28：与 APP 资源分支同样做 startsWith 校验（外部基准 Koishi 的原则是「无例外分支」）。
+  // 这里路径由代码固定拼出、不含请求输入，穿越风险本就极低；补这道是 defense-in-depth，
+  // 防止将来改成可配置路径时忘记加校验，而不是修已发生的事故。
+  const coreRoot = resolveProjectRoot(config);
+  const sharedMindmapFile = path.resolve(coreRoot, 'renderer', 'js', 'mindmap-layout.js');
+  if (!sharedMindmapFile.startsWith(coreRoot)) throw new Error('共用导图模块路径越界：' + sharedMindmapFile);
   ctx.effect(
     () => ctx.webServer.register({
       kind: 'exact',

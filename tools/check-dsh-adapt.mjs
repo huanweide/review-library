@@ -77,10 +77,12 @@ S.setEnvReader(null);
 
 console.log('[E] 真跑 Host 半边的端点（不是只 grep 源码）');
 const routes = [];
+let registeredTool = null;
 const ctx = {
   get: () => undefined,
   effect: (fn) => { fn(); return () => {}; },
-  tools: { register: () => () => {} },
+  // 2026-11-28：捕获真正注册的 tool，供 [F] 真调每个 action（不再只 grep 声明）。
+  tools: { register: (t) => { registeredTool = t; return () => {}; } },
   webServer: { register: (r) => { routes.push(r); return () => {}; } },
 };
 mod.apply(ctx, { projectRoot: ROOT });
@@ -113,6 +115,67 @@ if (modelsRoute) {
   ok('E5 GET models 真返回模型清单', r.status === 200 && r.data && r.data.ok === true && r.data.count > 0,
     (r.data && r.data.error) || ('status=' + r.status));
 }
+
+console.log('[F] 声明的 15 个 action 个个真能分派（不是只看 enum）');
+// 外部基准：MCP 同一 schema 既注册又运行解析；Anki .proto 各端生成。
+// 我们过去只测「三端集合相等」——声明层绿、行为层断，正是 G1 假绿的根因。
+const declared = require(path.join(ROOT, 'core', 'capabilities.js')).ACTIONS;
+ok('F0 tool 真的注册成功', !!registeredTool && typeof registeredTool.execute === 'function');
+const BOOK_ID = '87763d2d14a660d0'; // 真书，若换库则退化为「书不存在」也不算「不支持的 action」
+// 2026-11-28 判别设计教训：第一版这里对 15 个 action 全部 execute({action})，
+// create 收到空 title 会 fallback 成「未命名书」真建库——测「可分派」却污染了 library（跑两轮建了 4 本垃圾书）。
+// 判别必须零副作用：只读 action 真调（行为层），写 action 只查源码分派分支存在（声明层），
+// 三个新 action 都属只读，仍真调，行为层验证不丢。
+const READONLY_ACTIONS = ['list', 'get', 'practice', 'quiz', 'due', 'cards', 'structure', 'snapshot'];
+const PRACTICE_BRANCH = ['practice', 'quiz', 'due', 'attempt', 'rate'];
+const hasBranch = (a) => new RegExp("action === '" + a + "'").test(SRC)
+  || (PRACTICE_BRANCH.includes(a) && /CAPS\.isPractice\(action\)/.test(SRC));
+const argOf = (a) => ['list'].includes(a) ? {} : { bookId: BOOK_ID };
+let dispatchReached = 0;
+const unsupported = [];
+for (const a of READONLY_ACTIONS) {
+  let r;
+  try { r = await registeredTool.execute({ action: a, ...argOf(a) }); }
+  catch (e) { r = { ok: false, error: String(e && e.message || e) }; }
+  const msg = String((r && r.error) || '');
+  if (/不支持的 action|应用协议未适配/.test(msg)) unsupported.push(a + ': ' + msg.slice(0, 60));
+  else dispatchReached++;
+}
+ok('F1 所有只读 action 真调都不落「不支持的 action」', unsupported.length === 0, unsupported.join(' | '));
+ok('F2 每个声明 action 都有分派分支（写 action 查源码，避免真执行污染数据）',
+  declared.every(hasBranch), '缺分派：' + declared.filter(a => !hasBranch(a)).join(', '));
+// 三个新 action 单独钉住：只读真调，回退到旧版必红。
+for (const a of ['cards', 'structure', 'snapshot']) {
+  let r;
+  try { r = await registeredTool.execute({ action: a, bookId: BOOK_ID }); }
+  catch (e) { r = { ok: false, error: String(e && e.message || e) }; }
+  const msg = String((r && r.error) || '');
+  ok('F3 ' + a + ' 已接分派（不再是不支持的 action）', !/不支持的 action/.test(msg), msg.slice(0, 80));
+}
+// 判别自身不许改数据：跑完确认书库没多出书。
+const booksNow = new (require(path.join(ROOT, 'core', 'bookStore.js')).BookStore)().listBooks();
+ok('F4 判别零副作用：没有意外建书', !booksNow.some(b => b.title === '未命名书'),
+  '未命名书 ' + booksNow.filter(b => b.title === '未命名书').length + ' 本');
+
+console.log('[G] APP_FILES 覆盖 workbench/src 全部源文件（漏一个就 404 白屏）');
+const srcDir = path.join(ROOT, 'workbench', 'src');
+const srcFiles = fs.readdirSync(srcDir).filter(f => /\.(js|mjs|css)$/.test(f)).map(f => 'src/' + f).sort();
+const fileListBlock = (SRC.match(/const APP_FILES = \[([\s\S]*?)\];/) || [])[1] || '';
+const listedSrc = [...fileListBlock.matchAll(/'src\/([^']+)'/g)].map(m => 'src/' + m[1]).sort();
+ok('G1 能读到 APP_FILES 清单', listedSrc.length > 0, '列出 ' + listedSrc.length + ' 项');
+const missing = srcFiles.filter(f => !listedSrc.includes(f));
+ok('G2 workbench/src 每个源文件都在 APP_FILES 里', missing.length === 0,
+  '漏列：' + missing.join(', ') + '（磁盘 ' + srcFiles.length + ' / 清单 ' + listedSrc.length + '）');
+ok('G3 清单没有指向不存在的文件（防写错路径）',
+  listedSrc.filter(f => !srcFiles.includes(f)).length === 0,
+  '多余：' + listedSrc.filter(f => !srcFiles.includes(f)).join(', '));
+
+console.log('[H] 参数契约与安全（外部基准收敛出的低成本改进）');
+ok('H1 rating 限定 1-4 enum', /rating: \{[^}]*enum: \[1, 2, 3, 4\]/.test(SRC));
+ok('H2 kind 限定四种文档 enum', /kind: \{[^}]*enum: \['digest', 'syllabus', 'slides', 'review-guide'\]/.test(SRC));
+ok('H3 tool 描述标了读写属性', /读写属性：/.test(SRC) && /不可逆恢复/.test(SRC));
+ok('H4 resolveProjectRoot 失败给逐路径诊断', /已依次尝试/.test(SRC) && /tried\.push/.test(SRC));
+ok('H5 共用导图模块有 startsWith 越界校验', /sharedMindmapFile\.startsWith\(coreRoot\)/.test(SRC));
 
 console.log('\n通过 ' + pass + ' / 失败 ' + fail);
 process.exit(fail ? 1 : 0);

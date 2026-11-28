@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 /**
  * 考点包 / 备份字段 / 搜索截断 / 本机快照 的判别测试（2026-11-27）。
+ * 2026-11-28：baseline 从 HEAD 改为固定 commit 7876189（v1.7.3），
+ * 避免 v1.8.0 提交后「旧版没有 snapshot action」等断言假红；HEAD 不是历史事实。
  */
 import { createRequire } from 'module';
 import { execFileSync } from 'child_process';
@@ -16,9 +18,9 @@ let pass = 0, fail = 0;
 const ok = (n, c, d) => { if (c) { pass++; console.log('  ✓ ' + n); } else { fail++; console.log('  ✗ ' + n + (d ? ' — ' + d : '')); } };
 
 console.log('\n[BASE] 旧版必须没有这三项');
-const oldCaps = execFileSync('git', ['show', 'HEAD:core/capabilities.js'], { cwd: ROOT, encoding: 'utf8' });
-const oldBackup = execFileSync('git', ['show', 'HEAD:lib/backup.js'], { cwd: ROOT, encoding: 'utf8' });
-const oldSearch = execFileSync('git', ['show', 'HEAD:lib/search.js'], { cwd: ROOT, encoding: 'utf8' });
+const oldCaps = execFileSync('git', ['show', '7876189:core/capabilities.js'], { cwd: ROOT, encoding: 'utf8' });
+const oldBackup = execFileSync('git', ['show', '7876189:lib/backup.js'], { cwd: ROOT, encoding: 'utf8' });
+const oldSearch = execFileSync('git', ['show', '7876189:lib/search.js'], { cwd: ROOT, encoding: 'utf8' });
 ok('B1 旧版没有 snapshot action', !/action: 'snapshot'/.test(oldCaps));
 ok('B2 旧版备份漏三个字段', !/visionModel/.test(oldBackup) && !/deepDive/.test(oldBackup));
 ok('B3 旧版搜索没有 total/truncated', !/searchAllWithMeta/.test(oldSearch));

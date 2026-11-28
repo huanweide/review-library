@@ -2,6 +2,8 @@
 /**
  * 用户结构层判别测试（2026-11-27）。baseline 必红 / candidate 必绿：
  * 旧版导图只能看模型树，节点 id 稳定但人不能改名、不能换父，改动无处落盘。
+ * 2026-11-28：baseline 从 HEAD 改为固定 commit 7876189（v1.7.3），
+ * 避免 v1.8.0 提交后 B1-B3 假红（HEAD 已含 structure action，不再是「旧版」）。
  */
 import { createRequire } from 'module';
 import { execFileSync } from 'child_process';
@@ -16,9 +18,9 @@ let pass = 0, fail = 0;
 const ok = (n, c, d) => { if (c) { pass++; console.log('  ✓ ' + n); } else { fail++; console.log('  ✗ ' + n + (d ? ' — ' + d : '')); } };
 
 console.log('\n[BASE] 旧版必须没有用户结构层');
-const oldCaps = execFileSync('git', ['show', 'HEAD:core/capabilities.js'], { cwd: ROOT, encoding: 'utf8' });
-const oldIndex = execFileSync('git', ['show', 'HEAD:core/index.js'], { cwd: ROOT, encoding: 'utf8' });
-const oldMap = execFileSync('git', ['show', 'HEAD:workbench/src/mindmap.js'], { cwd: ROOT, encoding: 'utf8' });
+const oldCaps = execFileSync('git', ['show', '7876189:core/capabilities.js'], { cwd: ROOT, encoding: 'utf8' });
+const oldIndex = execFileSync('git', ['show', '7876189:core/index.js'], { cwd: ROOT, encoding: 'utf8' });
+const oldMap = execFileSync('git', ['show', '7876189:workbench/src/mindmap.js'], { cwd: ROOT, encoding: 'utf8' });
 ok('B1 旧版没有 structure action', !/action: 'structure'/.test(oldCaps));
 ok('B2 旧版 Core 没有 getStructure', !/getStructure/.test(oldIndex));
 ok('B3 旧版导图没有右键改名/拖拽换父', !/contextmenu/.test(oldMap) && !/mm-drop/.test(oldMap));

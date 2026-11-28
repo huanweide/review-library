@@ -5,6 +5,48 @@
 DSH 插件与 WorkBuddy 专家的 manifest，以及 README 顶部定位行；`scripts/check-versions.mjs`
 挂在 `pretest` 上做漂移检测。发版 tag 必须与 `package.json` 严格一致（如 `v1.5.0`）。
 
+## v1.8.1 — 2026-11-28（发布）
+
+DSH 适配轮。按 maxloop 铁律先做阶段零：真搜 9 个 GitHub 高 star 同类项目
+（Cordis 10,064★ / Koishi 6,361★ / MCP servers 92,294★ / SiYuan 47,432★ / Anki 33,064★ /
+Logseq 45,724★ / Obsidian releases 23,670★ / markmap 13,304★ / mind-elixir 3,211★），
+逐字符锚定 star、README 原文、URL，万字拆解后过 R/C/N，只落地通过的改动。
+拆解与对照见 `PROCESS/research-dsh适配-2026-11-27/`（00 索引 / 01 万字拆解 / 02 对照判据 / 03 真缺口清单）。
+
+**修两个真故障**（都是「声明与行为分叉」，不是新功能）：
+- **G1**：DSH tool 的 `action.enum` 从 v1.8.0 起声明支持 `cards`/`structure`/`snapshot`，
+  但 `execute` 分派是手写的、漏接这三个——调用直接落到末尾 throw「不支持的 action：
+  cards（可用 ...cards...）」，错误信息自己打自己脸。照 `core/app-host.js:264-284`
+  补协议转换，业务逻辑全委托 Core。外部基准 Anki `.proto` 多端生成、MCP 同一 schema
+  注册+parse，核心都是「声明与真实行为必须同一份东西」。
+- **G2**：`APP_FILES` 停在 2026-11-21，漏列 5 个前端模块（study-hint / map-viewport /
+  reader / structure-layer / exam-pack），DSH 侧栏对应功能全是 404，而 HTTP 形态好好的。
+  v1.8.0 真机 14/14 只跑了 HTTP，没覆盖 DSH。外部基准 Koishi 用通配入口+目录解析，
+  新增文件不改路由；我们逐文件写死清单，注释里自己警告过「漏一个就白屏」。
+
+**判别升级**（旧版必红、改后必绿，实测 baseline 26/11 红 → 37/0 绿）：
+- `check-dsh-adapt.mjs` 从 23 项扩到 38 项：真注册 tool 并逐个真调 15 个 action
+  （只读真调、写 action 查分派分支，判别本身零副作用）、APP_FILES 逐文件比对
+  `workbench/src/` 目录、rating/kind enum、读写属性描述、解析诊断、路径越界校验。
+- 修一处判别设计错误：第一版对 `create` 真调、空 title fallback 成「未命名书」，
+  跑两轮建了 4 本垃圾书。改为只读真调 + 写 action 源码断言，并加 F4 断言「判别不建书」。
+- 修三处门禁假红：`check-card-practice` / `check-exam-pack` / `check-structure-layer`
+  的 baseline 从 `git show HEAD:` 改为固定 commit `7876189`（v1.7.3）——
+  HEAD 随发版前移，v1.8.0 提交后「旧版没有 X」集体假红。与 `check-dsh-adapt`
+  固化夹具同一教训：baseline 必须是历史事实，不能跟随 HEAD。
+
+其余改进：G7 tool 描述标读写/破坏性/费用属性；G6 `rating`(1-4)、`kind`(四种文档) 改 enum；
+G5 `resolveProjectRoot` 四级解析失败给逐路径诊断；G4 共用导图模块补 `startsWith` 越界校验
+（defense-in-depth，路径本就固定拼出，非修已发生事故）。SW v37→v38。
+
+验证：run-tests 30/30；十三组判别全绿（4/23/7/38/3/24/30/18/14/17/55/9/22）；
+版本 1.8.1 八处一致、形态 18/18、SW v38，五个新模块经 HTTP 全 200。
+
+诚实边界：DSH 宿主环境未运行，宿主内点验仍卡环境；判别用 Node mock 真跑 Host 半边
+38 项 + HTTP 形态真机验证，未在真实 DSH 侧栏里点验。否决项（通配入口改造 / Cordis replace
+热替换 / required-optional 依赖 / capability 裁剪 / 非本机 Origin 403 / git-like 快照仓 /
+加密 / 导图撤销 / 考点包回导）见 02 对照判据第三节，均有 R/C/N 理由，不为对齐而加。
+
 ## v1.8.0 — 2026-11-27（发布）
 
 三类人群统一计划的**剩余四项全部实施**。命题不变：把「一本书的分析结果」升级成「一份可改、可做、可存、可带的考点资产」。

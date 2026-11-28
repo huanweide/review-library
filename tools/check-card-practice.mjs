@@ -3,6 +3,10 @@
  * 逐讲 / 作业题卡进练习题库的判别测试（2026-11-27）。
  * baseline 必红 / candidate 必绿：旧版 practice.js 没有 flattenCards，
  * Core.getQuiz 只返回 analysis 的 12 道自编题，147 道原题卡「看得到做不了」。
+ *
+ * 2026-11-28：baseline 从 HEAD 改为固定 commit 7876189（v1.7.3）。
+ * HEAD 会随发版前移——v1.8.0 提交后 HEAD 已是新版，「旧版没有 flattenCards」集体假红。
+ * 与 check-dsh-adapt 的固化夹具同一教训：baseline 必须是历史事实，不能跟随 HEAD。
  */
 import { createRequire } from 'module';
 import { execFileSync } from 'child_process';
@@ -19,8 +23,8 @@ const ok = (name, cond, detail) => {
 };
 
 console.log('\n[BASE] 旧版必须没有这条能力');
-const oldPractice = execFileSync('git', ['show', 'HEAD:core/practice.js'], { cwd: ROOT, encoding: 'utf8' });
-const oldIndex = execFileSync('git', ['show', 'HEAD:core/index.js'], { cwd: ROOT, encoding: 'utf8' });
+const oldPractice = execFileSync('git', ['show', '7876189:core/practice.js'], { cwd: ROOT, encoding: 'utf8' });
+const oldIndex = execFileSync('git', ['show', '7876189:core/index.js'], { cwd: ROOT, encoding: 'utf8' });
 ok('B1 旧版没有 flattenCards（baseline 必红）', !/flattenCards/.test(oldPractice));
 ok('B2 旧版 getQuiz 不读 cards', !/flattenCards/.test(oldIndex));
 
