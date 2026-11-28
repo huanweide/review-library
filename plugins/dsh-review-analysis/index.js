@@ -260,6 +260,44 @@ function treePreview(node, depth, out) {
   return out;
 }
 
+// 2026-11-28：DeepSeek Harness 官方文档 docs/user/develop/basic/tool.zh.md 逐字：
+//   "`output.render` 再将该值转换为面向模型的内容。"
+// render 是模型唯一可见面。旧版这里从不读 v.data，导致 quiz/due/practice/attempt/rate/
+// cards/structure/snapshot 八个 action 只回「成功」两个字，数据全不可见——学习闭环在
+// DSH 里等于废掉。补：按 action 给可读摘要，再附一段有上限的规范 JSON（程序化字段不丢）。
+const MAX_DATA_CHARS = 4000; // 防止大题库 JSON 冲爆提示词（官方：中间值不持久化，但提示词有上限）
+function renderData(action, data) {
+  if (data == null) return '';
+  const L = [];
+  if (action === 'quiz' && Array.isArray(data.questions)) {
+    L.push('题目 ' + data.total + ' 道（本页列前 20）');
+    data.questions.slice(0, 20).forEach((q, i) => {
+      L.push('  ' + (i + 1) + '. [' + (q.key || '') + '] [' + (q.type || '题') + '] ' + String(q.stem || '').slice(0, 120));
+    });
+  } else if (action === 'due') {
+    L.push('今日到期 ' + (data.dueCount != null ? data.dueCount : (data.questions || []).length) + ' 题');
+    (data.questions || []).slice(0, 20).forEach((q, i) => L.push('  ' + (i + 1) + '. [' + (q.key || '') + '] ' + String(q.stem || '').slice(0, 120)));
+  } else if (action === 'cards') {
+    L.push('题卡 ' + (data.total != null ? data.total : (data.lessons || []).length) + ' 节');
+  } else if (action === 'structure') {
+    L.push('结构层 renames=' + Object.keys(data.renames || {}).length
+      + ' / moves=' + Object.keys(data.moves || {}).length
+      + ' / deleted=' + Object.keys(data.deleted || {}).length);
+  } else if (action === 'snapshot') {
+    L.push('本机快照 ' + (Array.isArray(data) ? data.length : (data.items || []).length) + ' 份');
+    (Array.isArray(data) ? data : (data.items || [])).slice(0, 10).forEach((s) => L.push('  - ' + (s.id || '') + ' ' + String(s.label || '')));
+  } else if (action === 'practice') {
+    L.push('练习过程数据已读回（卡片 ' + Object.keys(data.cards || {}).length + ' 张）');
+  } else if (action === 'attempt' || action === 'rate') {
+    L.push('结果：' + (data.verdict || data.status || '已记录')
+      + (data.dueAt ? ' · 下次复习 ' + data.dueAt : '')
+      + (data.answer ? ' · 参考答案 ' + String(data.answer).slice(0, 100) : ''));
+  }
+  const full = JSON.stringify(data);
+  L.push('规范数据：' + full.slice(0, MAX_DATA_CHARS) + (full.length > MAX_DATA_CHARS ? '…（截断 ' + full.length + ' 字符）' : ''));
+  return L.join('\n');
+}
+
 function renderResult(v) {
   const L = [];
   L.push(v.ok ? '✅ 统一核心 · ' + v.action + ' 成功' : '❌ 统一核心 · ' + v.action + ' 失败：' + (v.error || ''));
@@ -272,6 +310,7 @@ function renderResult(v) {
     L.push('题型索引：' + v.questionIndex.map((g) => g.type + ' ' + (g.items || []).length + ' 项').join('，'));
   }
   if (v.tree) L.push('思维导图（前 ' + MAX_TREE_PREVIEW + ' 节点）：\n' + treePreview(v.tree, 0, []).join('\n'));
+  if (v.data) L.push(renderData(v.action, v.data));
   return [{ type: 'text', text: L.join('\n') }];
 }
 
@@ -291,7 +330,12 @@ const OUTPUT_SCHEMA = {
     questionIndex: { type: 'array', items: { type: 'object' } },
     summary: { type: 'string' },
     coreVersion: { type: 'string' },
-    data: { type: 'object', description: '学习闭环动作的返回值（quiz/due/attempt/rate/practice）' },
+    // 2026-11-28（官方精读 F）：compose 成功路径 :495 返回 kind: d.kind，
+    // 旧 schema 没有这个字段 + additionalProperties:false → 成功值可能被判无效。补上。
+    kind: { type: 'string', description: 'compose 实际生成的文档类型' },
+    // 2026-11-28：官方 output.schema 要求与实际返回同型。实测 listSnapshots 返 array，
+    // 其余（quiz/cards/structure/attempt/rate）返 object。声明两种都可，避免被判无效值。
+    data: { type: ['object', 'array'], description: '学习闭环/题卡/结构/快照动作的返回值（quiz/due/attempt/rate/practice/cards/structure/snapshot）' },
   },
   required: ['ok', 'action'],
 };

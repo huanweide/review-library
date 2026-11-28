@@ -5,6 +5,40 @@
 DSH 插件与 WorkBuddy 专家的 manifest，以及 README 顶部定位行；`scripts/check-versions.mjs`
 挂在 `pretest` 上做漂移检测。发版 tag 必须与 `package.json` 严格一致（如 `v1.5.0`）。
 
+## v1.8.2 — 2026-11-28（发布）
+
+继续学完 DSH 适配轮。上一轮拆的是通用插件生态，这一轮回到一手源：
+直接精读官方仓库 `deepseek-ai/deepseek-harness`（288,273★，2026-11-27 GitHub API 实取）
+的中文开发文档（basic/index / tool / config、framework/index / events、cookbook/adding-a-tool），
+逐字引述，落 `PROCESS/research-dsh适配-2026-11-27/04-DeepSeekHarness官方文档精读.md`。
+
+**官方原文锚定的两条契约错**：
+1. `docs/user/develop/basic/tool.zh.md` 逐字「`output.render` 再将该值转换为面向模型的内容」——
+   我们旧版 `renderResult()` 从不读 `v.data`，导致 `quiz`/`due`/`practice`/`attempt`/`rate`/
+   `cards`/`structure`/`snapshot` **八个 action 的数据全部对模型不可见**，DSH 里调 quiz
+   只回一句「成功」，连题目都拿不到。这正是项目反复踩的「生产端有数据、渲染端没接」静默失效。
+   修：`renderData(action,data)` 按 action 给人话摘要（quiz 列前 20 题、snapshot 列 ID、
+   structure 给改动计数）+ 规范 JSON，`MAX_DATA_CHARS=4000` 截断防冲爆提示词。
+2. `cookbook/adding-a-tool.zh.md` 逐字「execute 只返回 output.schema 声明的规范值」+
+   `additionalProperties:false`——compose 成功路径返回 `kind: d.kind` 但 schema 没有该字段，
+   成功值可能被判无效。实测 schema 14 字段无 `kind`。修：schema 补 `kind`，并加通用守卫
+   「所有 Object.assign(base,{...}) 返回键都在 schema 声明」。
+   另：`OUTPUT_SCHEMA.data` 原声明 object，实测 `listSnapshots()` 返 array，改为 `['object','array']`。
+
+**判别**：新增 `tools/check-dsh-render.mjs`，旧版 3/4 红 → 修复后 9/0 绿。
+真机验渲染输出：quiz →「题目 156 道（本页列前 20）/ 1. [abc] [选择题] 关于二力平衡的描述 / 规范数据：{...}」。
+
+**按 R/C/N 的 N 关打回（读完判过，不为对齐硬改）**：没用 `defineTool`（官方允许手写 JSON Schema，
+我们已自做参数校验）；没导出 Config schema（四级解析已覆盖可移植性，无实际故障）；
+没用事件/HarnessError（无跨插件通信场景，模型可读文案，改会破坏对外协议）；
+「apply 里读注册表多半是空的」二手说法在官方文档未找到逐字表述，不采信为结论。
+纠正上一版文档的错：官方事件模式是**四种**（emit/bail/serial/waterfall），不是五种。
+
+验证：run-tests 30/30；十四组判别全绿（新增 render 9/0，DSH 38/0）；版本 1.8.2 八处一致、形态 18/18。
+
+诚实边界：DSH 宿主环境未运行，宿主内点验卡环境——render 修复是按官方语义 + 真调
+renderData 输出验证，未在真实 DSH 会话里看模型实际收到的文本。
+
 ## v1.8.1 — 2026-11-28（发布）
 
 DSH 适配轮。按 maxloop 铁律先做阶段零：真搜 9 个 GitHub 高 star 同类项目

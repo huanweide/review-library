@@ -55,3 +55,6 @@ PROCESS/research-workbench整体优化/verification-aligned.html
 # 结论已写进 CHANGELOG 与计划台账；正式演示 GIF 放 docs/screenshots/（入库）。
 PROCESS/maxloop-体验满分/walk/
 PROCESS/体验升级-2026-11-23/gif-frames/
+
+# 2026-11-28 用户「拆解不上线」：官方文档精读/拆解是本地学习材料，不进公开仓库。
+PROCESS/research-dsh适配-2026-11-27/04-DeepSeekHarness官方文档精读.md
